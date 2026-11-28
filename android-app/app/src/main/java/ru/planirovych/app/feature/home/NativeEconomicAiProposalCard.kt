@@ -36,7 +36,7 @@ import java.math.BigDecimal
 
 /** Same owner-scoped server proposal and transaction as the browser chip.
  * A corrected auto-applied proposal updates its original record, not a copy. */
-private val ECON_FIELDS=mapOf(
+internal val ECON_FIELDS=mapOf(
     "name" to "Название","title" to "Название","counterparty" to "Контрагент",
     "kind" to "Тип","direction" to "Направление","balanceMinor" to "Баланс, ₽",
     "openingBalanceMinor" to "Баланс, ₽","amountMinor" to "Сумма, ₽",
@@ -56,7 +56,7 @@ private val ECON_EXPENSE_CATEGORIES=listOf(
 private val ECON_INCOME_CATEGORIES=listOf(
     "Зарплата","Подработка","Бизнес","Подарки","Проценты","Другое")
 
-private fun economicDraft(p:JsonObject):Map<String,String>{
+internal fun economicDraft(p:JsonObject):Map<String,String>{
     val source=p["payload"] as? JsonObject ?:return emptyMap()
     val before=p["before"] as? JsonObject
     val operation=(p["entity"] as? JsonPrimitive)?.contentOrNull=="operation"
@@ -75,19 +75,23 @@ private fun economicDraft(p:JsonObject):Map<String,String>{
         val raw=(value as? JsonPrimitive)?.contentOrNull.orEmpty()
         when{
             key.endsWith("Minor")&&raw.isNotBlank() ->
-                runCatching{BigDecimal(raw).movePointLeft(2).toPlainString()}.getOrDefault(raw)
+                runCatching{ecoInput(raw)}.getOrDefault(raw)
             key in listOf("dueAt","occurredAt","startDate","paymentDate")&&raw.length>=10 ->
                 raw.take(10)
             else->raw
         }
     }
 }
-private fun economicEditedPayload(draft:Map<String,String>,proposal:JsonObject):JsonObject=buildJsonObject{
+internal fun economicEditedPayload(draft:Map<String,String>,proposal:JsonObject):JsonObject=buildJsonObject{
     val source=proposal["payload"] as? JsonObject
     val before=proposal["before"] as? JsonObject
+    // Preserve receipt metadata even though the compact chip only edits core fields.
+    for(key in listOf("positionsJson","calculation")){
+        source?.get(key)?.let{put(key,it)}
+    }
     for((key,raw) in draft){
         if(key !in ECON_FIELDS)continue
-        val value=raw.trim()
+        val value=if(key.endsWith("Minor"))raw.filterNot{it.isWhitespace()||it=='\u00a0'||it=='\u202f'} else raw.trim()
         when{
             key.endsWith("Minor")->{
                 require(Regex("^-?\\d{1,12}(?:[.,]\\d{1,2})?$").matches(value)){
@@ -98,6 +102,10 @@ private fun economicEditedPayload(draft:Map<String,String>,proposal:JsonObject):
                     "Слишком большая сумма"
                 }
                 put(key,amount.toString())
+                if(key=="amountMinor" && source?.get("calculation")!=null &&
+                    amount.toString()!=((source[key]?:before?.get(key)) as? JsonPrimitive)?.contentOrNull){
+                    put("calculation",JsonNull)
+                }
             }
             key in listOf("dueAt","occurredAt","startDate","paymentDate")->
                 if(value.isEmpty())put(key,JsonNull)else{
@@ -297,6 +305,18 @@ internal fun NativeEconomicAiProposalCard(
                         Text(shown,Modifier.weight(.55f),color=ink,fontSize=11.sp,maxLines=2)
                     }
                 }
+                val receipt=(proposal["payload"] as? JsonObject)?.get("positionsJson") as? JsonPrimitive
+                val positions=ecoPositionDrafts(receipt?.contentOrNull.orEmpty())
+                if(positions.isNotEmpty()){
+                    Text("Позиции чека",color=muted,fontSize=11.sp,fontWeight=FontWeight.Bold)
+                    positions.take(30).forEach{position->
+                        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(6.dp)){
+                            Text(position.name,Modifier.weight(1f),color=ink,fontSize=11.sp)
+                            Text(position.amount+" ₽",color=ink,fontSize=11.sp)
+                        }
+                    }
+                    if(positions.size>30)Text("Ещё "+(positions.size-30)+" поз.",color=muted,fontSize=10.sp)
+                }
             }else (proposal["details"] as? JsonArray).orEmpty().take(3).forEach{entry->
                 (entry as? JsonPrimitive)?.contentOrNull?.let{Text(it,color=muted,fontSize=11.sp)}
             }
@@ -396,7 +416,25 @@ internal fun NativeEconomicAiProposalCard(
                             else->null
                         }
                         Box(Modifier.weight(.62f)){
-                        if(selections!=null)EconomicChipSelect(
+                        if(key in listOf("sourceAccountId","targetAccountId","accountId")){
+                            val choices=accountChoices.filter{(code,_)->
+                                when(key){
+                                    "targetAccountId"->code!=draft["sourceAccountId"]
+                                    "sourceAccountId"->kind!="TRANSFER"||code!=draft["targetAccountId"]
+                                    else->true
+                                }
+                            }
+                            Column(verticalArrangement=Arrangement.spacedBy(4.dp)){
+                                (if(key=="accountId")listOf("" to "Без счёта")+choices else choices).forEach{(code,name)->
+                                    Box(Modifier.fillMaxWidth().border(1.dp,if(code==value)amber else tileBorder,RoundedCornerShape(8.dp))
+                                        .background(if(code==value)amber.copy(alpha=.18f) else tile,RoundedCornerShape(8.dp))
+                                        .clickable(enabled=editable&&!busy&&options!=null){draft[key]=code}
+                                        .padding(8.dp)){
+                                        Text(name,color=ink,fontSize=11.sp)
+                                    }
+                                }
+                            }
+                        }else if(selections!=null)EconomicChipSelect(
                             value,selections,editable&&!busy&&
                                 (key !in listOf("sourceAccountId","targetAccountId","accountId")||options!=null)&&
                                 !(key=="category"&&kind=="TRANSFER"),

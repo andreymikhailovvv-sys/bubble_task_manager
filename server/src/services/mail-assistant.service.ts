@@ -1,10 +1,12 @@
+import { effectiveAssistantDailyLimit, validateAssistantDailyPercent } from './assistant-daily-limit.service.js';
+import { requireSubscriptionFeature, SubscriptionAccessError, getSubscriptionRank, modelAccessError, featureAccessError } from './subscription-access.service.js';
 import { randomUUID } from 'node:crypto';
 import { Prisma, type EmailMailbox } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { FixedWindowRateLimiter } from '../lib/security-rate-limiter.js';
 import { mailKeyReady, encryptMailPassword, decryptMailPassword } from '../lib/mail-crypto.js';
 import { ReadOnlyImap, validateMailCredentials, type MailProvider, type MailMessage } from './mail-imap.service.js';
-import { reserveAiCreditsMilli, settleAiCreditReservation, refundAiCreditReservation } from './ai-credit-wallet.service.js';
+import { modelCreditWindowMode, reserveAiCreditsMilli, settleAiCreditReservation, refundAiCreditReservation } from './ai-credit-wallet.service.js';
 import { calculateMaximumRequestCreditsMilli, calculateOpenAiUsageCost, recordOpenAiUsageShadow, recordAiCreditCharge, type OpenAiUsage } from './ai-usage-metering.service.js';
 import { openAiFetch } from '../lib/openai-fetch.js';
 import { normalizeMonitorTaskAction } from './telegram-ai-monitor-summary.service.js';
@@ -65,6 +67,7 @@ function settings(data: Record<string, unknown>) {
     suggestWhen, suggestHow, autoReplyWhen, autoReplyHow,
     monitorModel: String(model),
     dailyCreditLimitMilli: dailyCreditLimitMilli as number | null,
+    ...(data.dailyCreditLimitPercent !== undefined ? {dailyCreditLimitPercent: (() => { try { return validateAssistantDailyPercent(data.dailyCreditLimitPercent); } catch { throw new MailAssistantError(400,'Дневной лимит должен быть от 0 до 100%'); } })()} : {}),
     notifyImportant: data.notifyImportant !== false,
     instructions, enabled: data.enabled
   };
@@ -81,7 +84,7 @@ function publicAccount(a: EmailMailbox) {
     replyIntervalMinutes: a.replyIntervalMinutes, summaryIntervalMinutes: a.summaryIntervalMinutes,
     summaryInstructions: a.summaryInstructions, suggestWhen: a.suggestWhen, suggestHow: a.suggestHow,
     autoReplyWhen: a.autoReplyWhen, autoReplyHow: a.autoReplyHow,
-    monitorModel: a.monitorModel, dailyCreditLimitMilli: a.dailyCreditLimitMilli,
+    monitorModel: a.monitorModel, dailyCreditLimitMilli: a.dailyCreditLimitMilli, dailyCreditLimitPercent: a.dailyCreditLimitPercent,
     notifyImportant: a.notifyImportant, instructions: a.instructions,
     lastSummary: a.lastSummary, lastSummaryAt: a.lastSummaryAt,
     manualDigestRequestedAt: a.manualDigestRequestedAt,
@@ -102,11 +105,14 @@ export const mailAssistant = {
     return { available: mailKeyReady(), accounts: rows.map(publicAccount) };
   },
   async connect(userId: string, data: unknown) {
+    await requireSubscriptionFeature(userId,'mail').catch(error => { if(error instanceof SubscriptionAccessError) throw new MailAssistantError(403,error.message); throw error; });
     checkKey();
     if (!limiter.consume(userId).allowed) throw new MailAssistantError(429, 'Слишком много попыток подключения');
     const payload = data && typeof data === 'object' && !Array.isArray(data) ? data as Record<string, unknown> : {};
     const credentials = validateMailCredentials(payload.provider, payload.email, payload.password);
     const config = settings(payload);
+    const modelError = modelAccessError(await getSubscriptionRank(userId),config.monitorModel);
+    if(modelError) throw new MailAssistantError(403,modelError.message);
     const existing = await prisma.emailMailbox.findUnique({ where: { userId_email: { userId, email: credentials.email } } });
     if (!existing && await prisma.emailMailbox.count({ where: { userId } }) >= 8) {
       throw new MailAssistantError(409, 'Можно подключить не более восьми ящиков');
@@ -149,6 +155,7 @@ export const mailAssistant = {
     await own(userId, id);
     const payload = data && typeof data === 'object' && !Array.isArray(data) ? data as Record<string, unknown> : {};
     const config = settings(payload);
+    if(config.enabled){ const rank=await getSubscriptionRank(userId); const unavailable=featureAccessError(rank,'mail') ?? modelAccessError(rank,config.monitorModel); if(unavailable) throw new MailAssistantError(403,unavailable.message); }
     const account = await prisma.emailMailbox.update({ where: { id }, data: {
       ...config, revision: { increment: 1 }, nextCheckAt: config.enabled ? new Date() : null,
       leaseToken: null, leasedUntil: null, lastError: null,
@@ -162,6 +169,7 @@ export const mailAssistant = {
     return { ok: true };
   },
   async check(userId: string, id: string) {
+    await requireSubscriptionFeature(userId,'mail').catch(error => { if(error instanceof SubscriptionAccessError) throw new MailAssistantError(403,error.message); throw error; });
     const row = await own(userId, id);
     if (!row.enabled) throw new MailAssistantError(409, 'Мониторинг отключён');
     await prisma.emailMailbox.updateMany({ where: { id, userId, enabled: true },
@@ -251,6 +259,9 @@ function normalize(data: Record<string, unknown>) {
     shouldReply: value.shouldReply === true, replyText: typeof value.replyText === 'string' ? value.replyText.trim().slice(0,1500) : '' };
 }
 async function analyze(account: EmailMailbox, message: MailMessage, requestId: string) {
+  const rank = await getSubscriptionRank(account.userId);
+  const unavailable = featureAccessError(rank,'mail') ?? modelAccessError(rank,account.monitorModel);
+  if(unavailable) throw unavailable;
   const timeZone = (await prisma.user.findUnique({ where: { id: account.userId }, select: { timeZone: true } }))?.timeZone || 'Europe/Moscow';
   const request = payload(message, account, timeZone);
   const apiKey = process.env.OPENAI_API_KEY?.trim();
@@ -265,9 +276,11 @@ async function analyze(account: EmailMailbox, message: MailMessage, requestId: s
   if (!latest) throw new Error('Мониторинг остановлен');
   const dayKey = new Date().toISOString().slice(0, 10);
   const daily = latest.creditDayKey === dayKey ? latest.dailySpentMilli : 0;
-  if (latest.dailyCreditLimitMilli !== null && daily + estimate > latest.dailyCreditLimitMilli)
+  const owner = latest.dailyCreditLimitPercent == null ? null : await prisma.user.findUnique({where:{id:account.userId},select:{subscriptionPlan:true,subscriptionExpiresAt:true}});
+  const limit = effectiveAssistantDailyLimit(latest.dailyCreditLimitMilli,latest.dailyCreditLimitPercent,owner);
+  if (limit !== null && daily + estimate > limit)
     throw new Error('Дневной лимит кредитов достигнут');
-  const reservation = await reserveAiCreditsMilli(account.userId, Math.max(1, estimate));
+  const reservation = await reserveAiCreditsMilli(account.userId, Math.max(1, estimate), undefined, modelCreditWindowMode(account.monitorModel));
   let settled = false;
   try {
     const response = await openAiFetch('https://api.openai.com/v1/responses', {
@@ -329,7 +342,7 @@ async function processMessage(account: EmailMailbox, folder: 'INBOX'|'SENT', uid
     const reply = !record.summaryOnly && !summaryOnly && folder === 'INBOX' && result.shouldReply && emailAddress(message.from)
       ? result.replyText : '';
     await prisma.emailAnalysis.update({ where: { id: record.id }, data: {
-      summary: result as unknown as Prisma.InputJsonValue, status: 'DONE',
+      summary: { ...result, ...(reply && message.text.trim() ? { replySourceText: message.text.trim().slice(0,12000) } : {}) } as unknown as Prisma.InputJsonValue, status: 'DONE',
       suggestedReplyText: reply || null,
       botStatus: !record.summaryOnly && !summaryOnly && current.notifyImportant && result.important ? 'PENDING' : 'SKIPPED'
     } });
@@ -404,9 +417,9 @@ async function publishPending(account: EmailMailbox, token: string, manualReady:
     for (const row of rows.filter(x => x.folder === 'INBOX' && !x.summaryOnly && !x.replyPublishedAt).slice(0, 20)) {
       if (row.suggestedReplyText && emailAddress(row.sender) && (latest.replyMode !== 'AUTO' || autoReplyAllowed(row.sender, latest.email))) {
         await prisma.emailAnalysis.updateMany({ where: { id: row.id, userId: account.userId },
-          data: { replyPublishedAt: now, botStatus: 'PENDING',
+          data: { replyPublishedAt: now, botStatus: latest.replyMode === 'AUTO' ? 'SKIPPED' : 'PENDING',
             suggestedReplyStatus: latest.replyMode === 'AUTO' ? 'AUTO_PENDING' : 'PENDING' } });
-        await prisma.systemNotification.upsert({ where: { eventKey: 'mail-ai-reply:' + row.id },
+        if(latest.replyMode === 'SUGGEST') await prisma.systemNotification.upsert({ where: { eventKey: 'mail-ai-reply:' + row.id },
           update: {}, create: { userId: account.userId, eventKey: 'mail-ai-reply:' + row.id,
             content: '✉️ Почтовый ассистент · ' + latest.email + ': предложен ответ на письмо «' + row.subject.slice(0,90) + '»' } });
         if (latest.replyMode === 'AUTO') await deliverMailReply(account.userId, row.id, row.suggestedReplyText, true);

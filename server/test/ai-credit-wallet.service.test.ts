@@ -1,8 +1,10 @@
+import { getSubscriptionWindowLimits, subscriptionWindowBounds } from '../src/services/subscription-window-limits.service.js';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import {
   calculateDebitBreakdown,
+  modelCreditWindowMode,
   creditsToMilli,
   currentAiCreditsPeriod,
   getAiCreditWallet,
@@ -21,6 +23,7 @@ type State = {
   aiCredits: number;
   aiCreditsPeriod: string;
   subscriptionPlan?: string;
+  subscriptionExpiresAt?: Date | null;
   aiIncludedCreditsMilli: number;
   aiBonusCreditsMilli: number;
   aiPurchasedCreditsMilli: number;
@@ -38,11 +41,13 @@ type ReservationRow = AiCreditReservation & {
   refundedMilli: number;
   expiredIncludedMilli: number;
   settledAt: Date | null;
+  createdAt: Date;
 };
 
 class FakeWalletDatabase {
   private queue = Promise.resolve();
   public reservations = new Map<string, ReservationRow>();
+  public notifications = new Map<string, string>();
   constructor(public state: State | null) {}
 
   $transaction<T>(callback: (tx: any) => Promise<T>): Promise<T> {
@@ -55,12 +60,21 @@ class FakeWalletDatabase {
           return { ...this.state };
         }
       },
+      systemNotification: {
+        createMany: async ({ data }: { data: { eventKey: string; content: string }[] }) => {
+          for (const n of data) if (!this.notifications.has(n.eventKey)) this.notifications.set(n.eventKey, n.content);
+        }
+      },
       aiCreditReservationRecord: {
+        findMany: async ({ where }: any) => [...this.reservations.values()].filter(r => r.userId === where.userId && r.period === where.period && r.createdAt >= where.createdAt.gte && where.status.in.includes(r.status)),
+        aggregate: async ({ where }: { where: { userId: string; period: string; status: string } }) => ({
+          _sum: { includedMilli: [...this.reservations.values()].filter(r => r.userId === where.userId && r.period === where.period && r.status === where.status).reduce((sum,r) => sum + r.includedMilli, 0) }
+        }),
         create: async ({ data }: { data: AiCreditReservation }) => {
           if (this.reservations.has(data.id)) throw new Error('duplicate reservation id');
           this.reservations.set(data.id, {
             ...data, status: 'RESERVED', chargedMilli: 0, refundedMilli: 0,
-            expiredIncludedMilli: 0, settledAt: null
+            expiredIncludedMilli: 0, settledAt: null, createdAt: new Date()
           });
         },
         findUnique: async ({ where }: { where: { id: string } }) => {
@@ -297,4 +311,70 @@ test('reservation migration has database-level identity, balance constraints and
   assert.match(sql, /PRIMARY KEY \("id"\)/);
   assert.match(sql, /"totalMilli" = "includedMilli" \+ "bonusMilli" \+ "purchasedMilli"/);
   assert.match(sql, /ON DELETE CASCADE/);
+});
+
+
+test('subscription daily cap includes concurrent reservations and refunds release capacity', async () => {
+  const db = wallet({ subscriptionPlan: 'start', subscriptionExpiresAt: new Date(Date.now() + 86400000), aiCreditsPeriod: 'subscription:test', aiCredits: 3000, aiIncludedCreditsMilli: 3000000 });
+  const first = await reserveAiCreditsMilli('user-1', 100000, db as any);
+  const second = await reserveAiCreditsMilli('user-1', 50000, db as any);
+  await assert.rejects(reserveAiCreditsMilli('user-1', 1, db as any), /Недостаточно/);
+  await settleAiCreditReservation(first, 60000, db as any);
+  await refundAiCreditReservation(second, db as any);
+  const third = await reserveAiCreditsMilli('user-1', 90000, db as any);
+  await settleAiCreditReservation(third, 90000, db as any);
+  await assert.rejects(reserveAiCreditsMilli('user-1', 1, db as any), /Недостаточно/);
+  assert.equal(db.state?.aiIncludedCreditsMilli, 2850000);
+});
+
+test('subscription limit never consumes additional balance until eligible included credits are spent', async () => {
+  const db = wallet({ subscriptionPlan: 'start', subscriptionExpiresAt: new Date(Date.now() + 86400000), aiCreditsPeriod: 'subscription:test', aiCredits: 3100, aiIncludedCreditsMilli: 3000000, aiPurchasedCreditsMilli: 100000 });
+  const debit = await reserveAiCreditsMilliUpTo('user-1', 1000, 300000, db as any);
+  assert.equal(debit.includedMilli, 150000);
+  assert.equal(debit.purchasedMilli, 100000);
+  assert.equal(db.state?.aiIncludedCreditsMilli, 2850000);
+});
+
+test('weekly UTC boundary and remaining budget constrain each new day', async () => {
+  const now = new Date('2026-11-27T12:00:00.000Z');
+  assert.equal(subscriptionWindowBounds(now).weekStart.toISOString(), '2026-11-23T00:00:00.000Z');
+  const records = Array.from({length:4}, (_, day) => ({
+    createdAt: new Date(Date.UTC(2026,10,23+day)), status:'SETTLED', includedMilli:150000, chargedMilli:150000
+  }));
+  const db = { aiCreditReservationRecord: { findMany: async () => [...records, { createdAt: now, status:'RESERVED', includedMilli:100000, chargedMilli:0 }] } } as any;
+  const limit = await getSubscriptionWindowLimits(db, { id:'user', subscriptionPlan:'start', subscriptionExpiresAt:new Date('2026-12-20'), aiCreditsPeriod:'subscription:1', aiIncludedCreditsMilli:2300000 }, now);
+  assert.equal(limit?.weekly.capMilli,750000);
+  assert.equal(limit?.weekly.remainingMilli,50000);
+  assert.equal(limit?.daily.capMilli,150000);
+  assert.equal(limit?.daily.remainingMilli,50000);
+  assert.equal(limit?.weekly.resetsAt,'2026-11-30T00:00:00.000Z');
+});
+
+test('short subscription limits block costly reservations but keep Luna and nano on the real monthly balance', async () => {
+  const db = wallet({ subscriptionPlan: 'start', subscriptionExpiresAt: new Date(Date.now() + 86400000), aiCreditsPeriod: 'subscription:test', aiCredits: 3100, aiIncludedCreditsMilli: 3000000, aiPurchasedCreditsMilli: 100000 });
+  const first = await reserveAiCreditsMilli('user-1', 150000, db as any, 'premium');
+  await settleAiCreditReservation(first, 150000, db as any);
+  await assert.rejects(reserveAiCreditsMilli('user-1', 1, db as any, 'premium'), /Недостаточно/);
+  await assert.rejects(reserveAiCreditsMilliUpTo('user-1', 1, 1000, db as any, 'premium'), /Недостаточно/);
+  const luna = await reserveAiCreditsMilliUpTo('user-1', 1000, 2000, db as any, modelCreditWindowMode('gpt-6-luna'));
+  await settleAiCreditReservation(luna, 2000, db as any);
+  const nano = await reserveAiCreditsMilli('user-1', 1000, db as any, modelCreditWindowMode('gpt-5-nano'));
+  await settleAiCreditReservation(nano, 1000, db as any);
+  assert.equal(db.state?.aiIncludedCreditsMilli, 2847000);
+  assert.equal(db.state?.aiPurchasedCreditsMilli, 100000);
+  assert.equal(modelCreditWindowMode('gpt-6.1-terra'), 'premium');
+  assert.equal(modelCreditWindowMode('gpt-6.1-sol'), 'premium');
+  assert.equal(modelCreditWindowMode('unknown'), 'premium');
+  await assert.rejects(reserveAiCreditsMilli('user-1', 3000000, db as any, 'basic'), /Недостаточно/);
+});
+
+test('weekly window exhaustion still allows Luna on a new day', async () => {
+  const now = new Date();
+  const {weekStart} = subscriptionWindowBounds(now);
+  const db = wallet({ subscriptionPlan:'start', subscriptionExpiresAt:new Date(Date.now()+86400000), aiCreditsPeriod:'subscription:test', aiCredits:2250, aiIncludedCreditsMilli:2250000 });
+  db.reservations.set('week-spend',{ id:'week-spend', userId:'user-1', period:'subscription:test', includedMilli:750000, bonusMilli:0, purchasedMilli:0, totalMilli:750000, status:'SETTLED', chargedMilli:750000, refundedMilli:0, expiredIncludedMilli:0, settledAt:weekStart, createdAt:weekStart });
+  await assert.rejects(reserveAiCreditsMilli('user-1', 1000, db as any, 'premium'), /Недостаточно/);
+  const basic=await reserveAiCreditsMilli('user-1', 1000, db as any, 'basic');
+  await settleAiCreditReservation(basic,1000,db as any);
+  assert.equal(db.state?.aiIncludedCreditsMilli,2249000);
 });

@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Optional user-granted permission for opening the assistant from background. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <!-- Chromium WebView uses the communication audio route for Realtime capture. -->
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.INTERNET" />
@@ -18,7 +22,24 @@
         </provider>
         <!-- Same Planik realtime frontend as Mini App, authenticated and private. -->
         <activity android:name=".planik.PlanikLiveActivity"
+            android:theme="@style/Theme.Planirovych.LiveOverlay"
             android:exported="false" android:windowSoftInputMode="adjustResize" />
+        <service android:name=".planik.PlanikWakeBackgroundService" android:exported="false"
+            android:foregroundServiceType="microphone" android:stopWithTask="true" />
+        <!-- User-selected assistant, not an ordinary exported microphone service. -->
+        <service android:name=".planik.PlanikVoiceInteractionService"
+            android:exported="true" android:permission="android.permission.BIND_VOICE_INTERACTION"
+            android:label="Планик">
+            <intent-filter><action android:name="android.service.voice.VoiceInteractionService" /></intent-filter>
+            <meta-data android:name="android.voice_interaction" android:resource="@xml/planik_voice_interaction" />
+        </service>
+        <service android:name=".planik.PlanikVoiceSessionService"
+            android:exported="true" android:permission="android.permission.BIND_VOICE_INTERACTION" />
+        <service android:name=".planik.PlanikAssistantRecognitionService"
+            android:exported="true" android:permission="android.permission.BIND_VOICE_INTERACTION">
+            <intent-filter><action android:name="android.speech.RecognitionService" /></intent-filter>
+            <meta-data android:name="android.speech" android:resource="@xml/planik_recognition_service" />
+        </service>
         <activity android:name=".MainActivity" android:exported="true"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
@@ -26,6 +47,7 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <receiver android:name=".notifications.NotificationActionReceiver" android:exported="false" />
         <service android:name=".notifications.PlanirovychFirebaseMessagingService"
             android:exported="false">
             <intent-filter>

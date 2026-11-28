@@ -1,3 +1,9 @@
+import { getAssistantSettingsProposal, applyAssistantSettingsProposal } from '../services/assistant-settings-proposal.service.js';
+import { getSubscriptionWindowLimits } from '../services/subscription-window-limits.service.js';
+import { getMascotWardrobe, equipMascotSkin } from '../services/mascot-wardrobe.service.js';
+import { requireSubscriptionFeature, SubscriptionAccessError, type PremiumFeature } from '../services/subscription-access.service.js';
+import { setAdminSubscription, AdminSubscriptionError } from '../services/admin-subscription.service.js';
+import { getSubscriptionPlanByKey as getLimitPlan } from '../config/subscription-plans.js';
 import { createLiveVoiceTicket } from '../services/ai-live-voice.service.js';
 import { mergeChatProjectSnapshots, canonicalizeTelegramAssistantProjects, canonicalizeMailAssistantProjects } from '../lib/ai-chat-project-sync.js';
 import { aiAssistantService } from '../services/ai-assistant.service.js';
@@ -17,6 +23,10 @@ import { monitoringIntroEventKey } from '../services/task-monitoring-schedule.se
 import { taskParticipantMessageController } from '../controllers/task-participant-message.controller.js';
 import { taskCommentController } from '../controllers/task-comment.controller.js';
 import { habitController } from '../controllers/habit.controller.js';
+import { habitService } from '../services/habit.service.js';
+import { taskService } from '../services/task.service.js';
+import { describeAndroidNotification, currentNotificationTask, originalAndroidEventKey, notificationReplyHash } from '../services/android-notification-actions.service.js';
+import { applyEconomicProposal, rejectEconomicProposal } from '../services/economic-ai-proposals.service.js';
 import { standaloneNoteController, sendNoteInputError } from '../controllers/standalone-note.controller.js';
 import { standaloneNoteGroupController, sendGroupConflict } from '../controllers/standalone-note-group.controller.js';
 import { taskAttachmentController } from '../controllers/task-attachment.controller.js';
@@ -53,6 +63,9 @@ import { FixedWindowRateLimiter, type RateLimitDecision } from '../lib/security-
 import { validateAndroidPushRegistration } from '../lib/android-push-payload.js';
 import { CREDIT_PACKS, type CreditPackKey } from '../config/credit-packs.js';
 import { creditPacksResponse, yookassaPaymentsRouter } from './yookassa-payments.js';
+import { subscriptionPaymentsRouter } from './subscription-payments.js';
+import { SUBSCRIPTION_PLANS } from '../config/subscription-plans.js';
+import { isYooKassaConfigured } from '../services/yookassa.service.js';
 import { buildCreditUsageExcelXml, getCreditUsageStatistics, getMonthlyCreditUsageExport } from '../services/ai-credit-statistics.service.js';
 import { telegramUserClientAuth, TelegramUserClientError } from '../services/telegram-user-client-auth.service.js';
 import { TelegramUserProxyConfigurationError } from '../lib/telegram-user-client-network.js';
@@ -108,11 +121,33 @@ const mailOrigin = (req: Request, res: Response, next: NextFunction) => {
   }
   next();
 };
+const enforcePremium = (feature: PremiumFeature) => asyncHandler(async (req, res, next) => {
+  try { await requireSubscriptionFeature(req.user!.id, feature); next(); }
+  catch (error) {
+    if (error instanceof SubscriptionAccessError) { res.status(403).json({error:error.message,code:error.code,requiredPlan:error.requiredPlan}); return; }
+    throw error;
+  }
+});
 const mailFailure = (res: Response, error: unknown) => {
-  if (error instanceof MailAssistantError) res.status(error.statusCode).json({ error: error.message });
+  if (error instanceof SubscriptionAccessError) res.status(403).json({error:error.message,code:error.code,requiredPlan:error.requiredPlan});
+  else if (error instanceof MailAssistantError) res.status(error.statusCode).json({ error: error.message });
   else res.status(500).json({ error: 'Не удалось выполнить действие с почтой' });
 };
 
+apiRouter.get('/assistant-settings-proposals/:id',requireAuth,asyncHandler(async(req,res)=>{
+  res.set('Cache-Control','no-store, private');
+  const proposal=await getAssistantSettingsProposal(req.user!.id,req.params.id);
+  if(!proposal){res.status(404).json({error:'Предложение не найдено'});return;}
+  res.json(proposal);
+}));
+apiRouter.post('/assistant-settings-proposals/:id/apply',requireAuth,mailOrigin,asyncHandler(async(req,res)=>{
+  res.set('Cache-Control','no-store, private');
+  try{
+    const proposal=await applyAssistantSettingsProposal(req.user!.id,req.params.id);
+    if(!proposal){res.status(404).json({error:'Предложение не найдено'});return;}
+    res.json(proposal);
+  }catch(error){res.status(409).json({error:error instanceof Error?error.message:'Не удалось применить настройки'});}
+}));
 apiRouter.get('/mail-assistant/recent-recipients', requireAuth, async(req,res)=>{
   res.set('Cache-Control','no-store, private');
   const rows=await prisma.emailAnalysis.findMany({where:{userId:req.user!.id,folder:'INBOX'},
@@ -124,7 +159,7 @@ apiRouter.get('/mail-assistant/recent-recipients', requireAuth, async(req,res)=>
   }).filter((x):x is string=>Boolean(x)))].slice(0,40);
   res.json({addresses});
 });
-apiRouter.post('/mail-assistant/quick-rewrite',requireAuth,mailOrigin,async(req,res)=>{
+apiRouter.post('/mail-assistant/quick-rewrite',requireAuth, mailOrigin, enforcePremium('mail'),async(req,res)=>{
   res.set('Cache-Control','no-store, private');
   try {
     const data = await rewriteMailQuickText(req.user!.id,req.body?.text,req.body?.instruction);
@@ -139,7 +174,7 @@ apiRouter.get('/mail-assistant/drafts/:id', requireAuth, async (req,res)=>{
   if (!draft) { res.status(404).json({error:'Черновик не найден'}); return; }
   res.json({draft});
 });
-apiRouter.post('/mail-assistant/drafts/:id/send', requireAuth, mailOrigin, async (req,res)=>{
+apiRouter.post('/mail-assistant/drafts/:id/send', requireAuth, mailOrigin, enforcePremium('mail'), async (req,res)=>{
   res.set('Cache-Control','no-store, private');
   try {
     const result=await sendOwnerMailDraft(req.user!.id,req.params.id,req.body);
@@ -153,7 +188,7 @@ apiRouter.get('/mail-assistant/inbox', requireAuth, async (req, res) => {
   res.set('Cache-Control', 'no-store');
   try { res.json(await mailAssistantInboxFeed(req.user!.id)); } catch { res.status(500).json({ error: 'Не удалось загрузить почтовые сводки' }); }
 });
-apiRouter.post('/mail-assistant/inbox/:eventId/send-reply', requireAuth, mailOrigin, async (req, res) => {
+apiRouter.post('/mail-assistant/inbox/:eventId/send-reply', requireAuth, mailOrigin, enforcePremium('mail'), async (req, res) => {
   res.set('Cache-Control', 'no-store');
   try {
     if (typeof req.body?.text !== 'string') { res.status(400).json({ error: 'Укажите текст ответа' }); return; }
@@ -165,7 +200,7 @@ apiRouter.get('/mail-assistant/accounts', requireAuth, async (req, res) => {
   res.set('Cache-Control', 'no-store');
   try { res.json(await mailAssistant.list(req.user!.id)); } catch (error) { mailFailure(res, error); }
 });
-apiRouter.post('/mail-assistant/accounts', requireAuth, mailOrigin, async (req, res) => {
+apiRouter.post('/mail-assistant/accounts', requireAuth, mailOrigin, enforcePremium('mail'), async (req, res) => {
   res.set('Cache-Control', 'no-store');
   try { res.status(201).json(await mailAssistant.connect(req.user!.id, req.body)); } catch (error) { mailFailure(res, error); }
 });
@@ -177,7 +212,7 @@ apiRouter.delete('/mail-assistant/accounts/:id', requireAuth, mailOrigin, async 
   res.set('Cache-Control', 'no-store');
   try { res.json(await mailAssistant.disconnect(req.user!.id, req.params.id)); } catch (error) { mailFailure(res, error); }
 });
-apiRouter.post('/mail-assistant/accounts/:id/check', requireAuth, mailOrigin, async (req, res) => {
+apiRouter.post('/mail-assistant/accounts/:id/check', requireAuth, mailOrigin, enforcePremium('mail'), async (req, res) => {
   res.set('Cache-Control', 'no-store');
   try { res.json(await mailAssistant.check(req.user!.id, req.params.id)); } catch (error) { mailFailure(res, error); }
 });
@@ -192,6 +227,7 @@ apiRouter.use('/business/organizations', workProjectsRouter);
 apiRouter.use('/business/organizations', workCompanyRouter);
 apiRouter.use('/business/organizations', businessOrganizationsRouter);
 apiRouter.use('/payments/yookassa', yookassaPaymentsRouter);
+apiRouter.use('/payments/yookassa', subscriptionPaymentsRouter);
 const ADMIN_PANEL_PASSWORD_ENV = 'ADMIN_PANEL_PASSWORD';
 const SUBSCRIPTION_PLAN_KEYS = ['start', 'pro', 'max'] as const;
 const ADMIN_SUBSCRIPTION_PLAN_KEYS = ['free', ...SUBSCRIPTION_PLAN_KEYS] as const;
@@ -264,10 +300,11 @@ const EFFICIENCY_BONUSES = {
   completedHabit: 20.1,
   createdTask: 1
 } as const;
-const TRAINING_LESSON_IDS = ['workspace', 'tasks', 'ai', 'features'] as const;
+const TRAINING_LESSON_IDS = ['workspace', 'tasks', 'basic', 'ai', 'features'] as const;
+const BASIC_TRAINING_OFFER_MARKER = 'basic-onboarding-v1-seen';
 const TRAINING_LESSON_REWARD = 5;
 
-const toAuthUser = (user: {
+const toAuthUser = async (user: {
   id: string;
   email?: string | null;
   emailVerifiedAt?: Date | null;
@@ -279,6 +316,9 @@ const toAuthUser = (user: {
   deviceId?: string | null;
   aiCredits?: number;
   aiCreditsPeriod?: string;
+  subscriptionPlan?: string;
+  subscriptionExpiresAt?: Date | null;
+  subscriptionAllowanceMilli?: number;
   aiIncludedCreditsMilli?: number;
   aiBonusCreditsMilli?: number;
   aiPurchasedCreditsMilli?: number;
@@ -304,6 +344,14 @@ const toAuthUser = (user: {
   const aiCreditsMilli = isGuestAccount(user) ? 0 : (user.aiIncludedCreditsMilli ?? creditsToMilli(user.aiCredits ?? 100))
     + (user.aiBonusCreditsMilli ?? 0)
     + (user.aiPurchasedCreditsMilli ?? 0);
+  const plan = getLimitPlan(user.subscriptionPlan ?? 'free');
+  const active = plan && user.subscriptionExpiresAt && user.subscriptionExpiresAt.getTime() > Date.now() && !isGuestAccount(user);
+  const allowanceMilli = user.subscriptionAllowanceMilli || (plan?.creditsAmount ?? 0) * 1000;
+  const windows = active ? await getSubscriptionWindowLimits(prisma, user) : null;
+  const subscriptionLimit = active && plan && user.subscriptionExpiresAt && user.aiIncludedCreditsMilli != null ? {
+    usedPercent: Math.max(0, Math.min(100, Math.floor((1 - user.aiIncludedCreditsMilli / allowanceMilli) * 100 + 1e-9))),
+    expiresAt: user.subscriptionExpiresAt.toISOString(), planName: plan.name, allowanceMilli, ...windows,
+  } : null;
   return ({
   id: user.id,
   email: user.email,
@@ -318,6 +366,9 @@ const toAuthUser = (user: {
   aiCredits: Math.floor(aiCreditsMilli / 1000),
   aiCreditsMilli,
   aiCreditsPeriod: user.aiCreditsPeriod ?? '',
+  subscriptionPlan: user.subscriptionPlan ?? 'free',
+  subscriptionExpiresAt: user.subscriptionExpiresAt ?? null,
+  subscriptionLimit,
   aiEfficiencyCreditsSpent: user.aiEfficiencyCreditsSpent ?? 0,
   aiEfficiencyCreditsPeriod: user.aiEfficiencyCreditsPeriod ?? '',
   timeZone: user.timeZone ?? DEFAULT_TIMEZONE,
@@ -678,7 +729,7 @@ apiRouter.post('/auth/register', async (req, res) => {
     }
   }
   console.info(`[Auth] register success userId=${user.id} ${authRequestContext(req)}`);
-  res.json({ user: toAuthUser(user), emailDelivery });
+  res.json({ user: await toAuthUser(user), emailDelivery });
 });
 
 
@@ -798,7 +849,7 @@ apiRouter.post('/auth/login', async (req, res) => {
   accountLoginLimiter.reset(accountRateLimitKey(login));
   setAuthCookies(res, user);
   console.info(`[Auth] login success userId=${user.id} login=${login} ${authRequestContext(req)}`);
-  res.json({ user: toAuthUser(user) });
+  res.json({ user: await toAuthUser(user) });
 });
 
 apiRouter.get('/auth/google', (req, res, next) => {
@@ -850,6 +901,15 @@ apiRouter.get('/subscription-links', async (_req, res) => {
     select: { planKey: true, url: true }
   });
   res.json({ links: Object.fromEntries(SUBSCRIPTION_PLAN_KEYS.map((key) => [key, links.find((link) => link.planKey === key)?.url ?? ''])) });
+});
+
+apiRouter.get('/subscription-plans', (_req, res) => {
+  res.json({
+    plans: SUBSCRIPTION_PLANS.map(({ amountKopecks: _, ...plan }) => plan),
+    paymentProvider: isYooKassaConfigured() ? 'yookassa' : null,
+    purchaseAvailable: isYooKassaConfigured(),
+    automaticRenewal: false
+  });
 });
 
 apiRouter.get('/credit-packs', async (_req, res) => {
@@ -958,7 +1018,7 @@ apiRouter.patch('/user/profile', requireAuth, async (req, res) => {
         console.warn('[AuthEmail] profile verification mail delivery failed; ' + accountMailFailureDiagnostic(error));
       }
     }
-    res.json({ user: toAuthUser(updatedUser), emailDelivery });
+    res.json({ user: await toAuthUser(updatedUser), emailDelivery });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
       const fields = Array.isArray(error.meta?.target) ? error.meta.target : [];
@@ -1044,7 +1104,9 @@ apiRouter.post('/admin/users', async (req, res) => {
       email: true,
       username: true,
       telegramChatId: true,
+      deviceId: true, passwordHash: true, googleSub: true,
       subscriptionPlan: true,
+      subscriptionExpiresAt: true,
       aiCredits: true,
       aiCreditsPeriod: true,
       aiIncludedCreditsMilli: true,
@@ -1055,15 +1117,17 @@ apiRouter.post('/admin/users', async (req, res) => {
   });
 
   res.set('Cache-Control', 'no-store');
-  res.json({ users: users.map(({ telegramChatId, ...user }) => ({
+  res.json({ users: users.map(({ telegramChatId, deviceId, passwordHash, googleSub, ...user }) => ({
     ...user,
+    isGuest: isGuestAccount({ ...user, telegramChatId, deviceId, passwordHash, googleSub }),
     telegramLinked: Boolean(telegramChatId)
   })) });
 });
 
 
 const telegramAuthError = (res: Response, error: unknown) => {
-  if (error instanceof TelegramUserClientError) {
+  if (error instanceof SubscriptionAccessError) res.status(403).json({error:error.message,code:error.code,requiredPlan:error.requiredPlan});
+  else if (error instanceof TelegramUserClientError) {
     res.status(error.statusCode).json({ error: error.message });
   } else if (error instanceof TelegramUserProxyConfigurationError) {
     console.error('[TelegramUserClient] invalid MTProto proxy configuration');
@@ -1119,32 +1183,38 @@ apiRouter.post('/admin/credit-packs', async (req, res) => {
   res.json({ links });
 });
 
-apiRouter.post('/admin/users/:userId/subscription', async (req, res) => {
+apiRouter.post('/admin/users/:userId/subscription', asyncHandler(async (req, res) => {
   if (!requireAdminPassword(req, res)) return;
   const userId = String(req.params.userId ?? '').trim();
   const subscriptionPlan = String(req.body?.subscriptionPlan ?? '').trim() as AdminSubscriptionPlanKey;
-  if (!userId) {
-    res.status(400).json({ error: 'Не указан пользователь' });
+  if (!userId || !(ADMIN_SUBSCRIPTION_PLAN_KEYS as readonly string[]).includes(subscriptionPlan)) {
+    res.status(400).json({ error: 'Не указан пользователь или неизвестный тариф' });
     return;
   }
-  if (!(ADMIN_SUBSCRIPTION_PLAN_KEYS as readonly string[]).includes(subscriptionPlan)) {
-    res.status(400).json({ error: 'Неизвестный тариф' });
-    return;
-  }
-  const user = await prisma.user.update({
-    where: { id: userId },
-    data: { subscriptionPlan },
-    select: { id: true, subscriptionPlan: true }
-  }).catch((error) => {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') return null;
+  try {
+    const result = await setAdminSubscription({
+      userId, subscriptionPlan, requestId: String(req.body?.requestId ?? ''),
+      expectedPeriod: req.body?.expectedPeriod, expectedPlan: req.body?.expectedPlan,
+      expectedExpiresAt: req.body?.expectedExpiresAt, reason: req.body?.reason ?? ''
+    });
+    res.set('Cache-Control', 'no-store');
+    res.json(result);
+  } catch (error) {
+    if (error instanceof AdminSubscriptionError) {
+      res.status(error.status).json({ error: error.message }); return;
+    }
     throw error;
-  });
-  if (!user) {
-    res.status(404).json({ error: 'Пользователь не найден' });
-    return;
   }
-  res.json({ user });
-});
+}));
+
+apiRouter.post('/admin/users/:userId/subscription-history', asyncHandler(async (req, res) => {
+  if (!requireAdminPassword(req, res)) return;
+  const history = await prisma.adminSubscriptionChange.findMany({
+    where: { userId: req.params.userId }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 50
+  });
+  res.set('Cache-Control', 'no-store');
+  res.json({ history });
+}));
 
 apiRouter.post('/admin/broadcasts', async (req, res) => {
   if (!requireAdminPassword(req, res)) return;
@@ -1214,9 +1284,9 @@ apiRouter.post('/admin/broadcasts', async (req, res) => {
   const where: Prisma.UserWhereInput = target === 'user'
     ? { id: userId, telegramChatId: { not: null } }
     : target === 'paid'
-      ? { telegramChatId: { not: null }, subscriptionPlan: { in: [...SUBSCRIPTION_PLAN_KEYS] } }
+      ? { telegramChatId: { not: null }, subscriptionPlan: { in: [...SUBSCRIPTION_PLAN_KEYS] }, subscriptionExpiresAt: { gt: new Date() } }
       : target === 'free'
-        ? { telegramChatId: { not: null }, subscriptionPlan: 'free' }
+        ? { telegramChatId: { not: null }, OR: [{ subscriptionPlan: 'free' }, { subscriptionExpiresAt: null }, { subscriptionExpiresAt: { lte: new Date() } }] }
         : { telegramChatId: { not: null } };
 
   const recipients = await prisma.user.findMany({
@@ -1316,7 +1386,12 @@ apiRouter.post('/admin/users/:userId/credits', async (req, res) => {
     id: updatedUser.id,
     aiCredits: updatedUser.aiCredits,
     aiCreditsMilli: updatedUser.aiIncludedCreditsMilli + updatedUser.aiBonusCreditsMilli + updatedUser.aiPurchasedCreditsMilli,
-    aiCreditsPeriod: updatedUser.aiCreditsPeriod
+    aiCreditsPeriod: updatedUser.aiCreditsPeriod,
+    subscriptionPlan: updatedUser.subscriptionPlan,
+    subscriptionExpiresAt: updatedUser.subscriptionExpiresAt,
+    aiIncludedCreditsMilli: updatedUser.aiIncludedCreditsMilli,
+    aiBonusCreditsMilli: updatedUser.aiBonusCreditsMilli,
+    aiPurchasedCreditsMilli: updatedUser.aiPurchasedCreditsMilli
   } });
 });
 
@@ -1386,6 +1461,9 @@ apiRouter.patch('/user/settings', requireAuth, async (req, res) => {
       deviceId: true,
       aiCredits: true,
       aiCreditsPeriod: true,
+      subscriptionPlan: true,
+      subscriptionExpiresAt: true,
+      subscriptionAllowanceMilli: true,
       aiIncludedCreditsMilli: true,
       aiBonusCreditsMilli: true,
       aiPurchasedCreditsMilli: true,
@@ -1407,7 +1485,7 @@ apiRouter.patch('/user/settings', requireAuth, async (req, res) => {
     }
   });
 
-  res.json({ user: toAuthUser(updatedUser) });
+  res.json({ user: await toAuthUser(updatedUser) });
 });
 
 
@@ -1431,6 +1509,19 @@ apiRouter.post('/efficiency/events', requireAuth, async (req, res) => {
   }
 
   res.json(efficiencyState);
+});
+
+// Claim once per account, including existing accounts. This is not a completed
+// lesson and never changes credits, ratings, or task data.
+apiRouter.post('/training/basic/claim', requireAuth, async (req, res) => {
+  const show = await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${req.user!.id}))`;
+    const user = await tx.user.findUnique({ where: { id: req.user!.id }, select: { completedLessonIds: true } });
+    if (!user || user.completedLessonIds.includes(BASIC_TRAINING_OFFER_MARKER)) return false;
+    await tx.user.update({ where: { id: req.user!.id }, data: { completedLessonIds: [...user.completedLessonIds, BASIC_TRAINING_OFFER_MARKER] } });
+    return true;
+  });
+  res.json({ show });
 });
 
 apiRouter.post('/training/lessons/:lessonId/complete', requireAuth, async (req, res) => {
@@ -1463,7 +1554,7 @@ apiRouter.post('/training/lessons/:lessonId/complete', requireAuth, async (req, 
     res.status(404).json({ error: 'Пользователь не найден' });
     return;
   }
-  res.json({ awarded: result.awarded, reward: result.awarded ? TRAINING_LESSON_REWARD : 0, user: toAuthUser(result.user) });
+  res.json({ awarded: result.awarded, reward: result.awarded ? TRAINING_LESSON_REWARD : 0, user: await toAuthUser(result.user) });
 });
 
 apiRouter.get('/auth/me', async (req, res) => {
@@ -1481,20 +1572,20 @@ apiRouter.get('/auth/me', async (req, res) => {
         }
       }
       console.info(`[Auth] me success userId=${freshUser.id} source=cookie ${authRequestContext(req)}`);
-      res.json({ user: toAuthUser(freshUser) });
+      res.json({ user: await toAuthUser(freshUser) });
       return;
     }
   }
 
   if (req.user) {
     console.warn(`[Auth] me stale user userId=${req.user.id} ${authRequestContext(req)}`);
-    res.json({ user: toAuthUser(req.user) });
+    res.json({ user: await toAuthUser(req.user) });
     return;
   }
 
   const user = await ensureDeviceUser(req, res);
   console.info(`[Auth] me created_or_loaded_device_user userId=${user.id} ${authRequestContext(req)}`);
-  res.json({ user: toAuthUser(user) });
+  res.json({ user: await toAuthUser(user) });
 });
 
 
@@ -1552,7 +1643,7 @@ apiRouter.post('/auth/telegram-miniapp', async (req, res) => {
 
   setAuthCookies(res, user);
   console.info(`[MiniApp] auth success userId=${user.id} telegramChatId=${telegramUserId}`);
-  res.json({ user: toAuthUser(user) });
+  res.json({ user: await toAuthUser(user) });
 });
 
 apiRouter.post('/auth/telegram-web-login', async (req, res) => {
@@ -1590,7 +1681,7 @@ apiRouter.post('/auth/telegram-web-login', async (req, res) => {
   await telegramService.completeWebLogin(telegramChatId, user);
   setAuthCookies(res, user);
   console.info(`[TelegramWebLogin] success chatId=${telegramChatId} userId=${user.id}`);
-  res.json({ user: toAuthUser(user) });
+  res.json({ user: await toAuthUser(user) });
 });
 
 apiRouter.post('/auth/telegram-web-register', async (req, res) => {
@@ -1661,16 +1752,16 @@ apiRouter.post('/auth/telegram-web-register', async (req, res) => {
     console.warn('[AuthEmail] telegram registration mail delivery failed; ' + accountMailFailureDiagnostic(error));
   }
   console.info(`[TelegramWebRegister] success chatId=${telegramChatId} userId=${user.id}`);
-  res.json({ user: toAuthUser(user), emailDelivery });
+  res.json({ user: await toAuthUser(user), emailDelivery });
 });
 
 apiRouter.get('/spheres', requireAuth, sphereController.list);
 apiRouter.post('/spheres', requireAuth, sphereController.create);
 apiRouter.patch('/spheres/:id', requireAuth, sphereController.update);
 apiRouter.delete('/spheres/:id', requireAuth, sphereController.remove);
-apiRouter.get('/tasks', requireAuth, taskController.list);
-apiRouter.post('/tasks', requireAuth, taskController.create);
-apiRouter.patch('/tasks/:id', requireAuth, taskController.update);
+apiRouter.get('/tasks', requireAuth, asyncHandler(taskController.list));
+apiRouter.post('/tasks', requireAuth, asyncHandler(taskController.create));
+apiRouter.patch('/tasks/:id', requireAuth, asyncHandler(taskController.update));
 apiRouter.post('/tasks/:id/bubble-action', requireAuth, asyncHandler(async (req, res) => {
   if (!telegramChatRequestIsSameOrigin(req.get('origin'), req.get('host'), req.get('sec-fetch-site'))) {
     res.status(403).json({ error: 'Недопустимый источник запроса' });
@@ -1690,7 +1781,7 @@ apiRouter.post('/tasks/:id/completion-report', requireAuth, asyncHandler(async (
   const result = await generateTaskCompletionReport({ userId: req.user!.id, taskId: req.params.id });
   res.json(result);
 }));
-apiRouter.delete('/tasks/:id', requireAuth, taskController.remove);
+apiRouter.delete('/tasks/:id', requireAuth, asyncHandler(taskController.remove));
 apiRouter.get('/tasks/:id/comments', requireAuth, taskCommentController.list);
 apiRouter.post('/tasks/:id/comments', requireAuth, taskCommentController.create);
 apiRouter.post('/tasks/:id/comments/read', requireAuth, taskCommentController.markRead);
@@ -1837,12 +1928,12 @@ apiRouter.get('/telegram-user-client/assistant/inbox', requireAuth, async (req, 
   try { res.json(await telegramAiInboxFeed(req.user!.id)); }
   catch (error) { telegramAuthError(res, error); }
 });
-apiRouter.post('/telegram-user-client/assistant/inbox/:eventId/send-reply', requireAuth, requireTelegramChatOrigin, async (req, res) => {
+apiRouter.post('/telegram-user-client/assistant/inbox/:eventId/send-reply', requireAuth, requireTelegramChatOrigin, enforcePremium('telegram'), async (req, res) => {
   setTelegramChatNoCache(res);
   try { res.json(await sendTelegramAiSuggestedReply(req.user!.id, req.params.eventId, req.body?.text)); }
   catch (error) { telegramAuthError(res, error); }
 });
-apiRouter.post('/telegram-user-client/assistant/inbox/:eventId/tasks/:index', requireAuth, requireTelegramChatOrigin, async (req, res) => {
+apiRouter.post('/telegram-user-client/assistant/inbox/:eventId/tasks/:index', requireAuth, requireTelegramChatOrigin, enforcePremium('telegram'), async (req, res) => {
   setTelegramChatNoCache(res);
   try { res.json(await approveTelegramAiSuggestedTask(req.user!.id, req.params.eventId, Number(req.params.index))); }
   catch (error) { telegramAuthError(res, error); }
@@ -1863,7 +1954,7 @@ apiRouter.delete('/telegram-user-client/assistant/chats/:chatId', requireAuth, r
   catch (error) { telegramAuthError(res, error); }
 });
 
-apiRouter.post('/telegram-user-client/assistant/chats/:chatId/start', requireAuth, requireTelegramChatOrigin, async (req, res) => {
+apiRouter.post('/telegram-user-client/assistant/chats/:chatId/start', requireAuth, requireTelegramChatOrigin, enforcePremium('telegram'), async (req, res) => {
   setTelegramChatNoCache(res);
   try { res.json(await telegramAiMonitorControl.start(req.user!.id, req.params.chatId)); }
   catch (error) { telegramAuthError(res, error); }
@@ -1873,7 +1964,7 @@ apiRouter.post('/telegram-user-client/assistant/chats/:chatId/stop', requireAuth
   try { res.json(await telegramAiMonitorControl.stop(req.user!.id, req.params.chatId)); }
   catch (error) { telegramAuthError(res, error); }
 });
-apiRouter.post('/telegram-user-client/assistant/chats/:chatId/summarize', requireAuth, requireTelegramChatOrigin, async (req, res) => {
+apiRouter.post('/telegram-user-client/assistant/chats/:chatId/summarize', requireAuth, requireTelegramChatOrigin, enforcePremium('telegram'), async (req, res) => {
   setTelegramChatNoCache(res);
   try { res.status(202).json(await telegramAiMonitorControl.requestSummary(req.user!.id, req.params.chatId)); }
   catch (error) { telegramAuthError(res, error); }
@@ -1882,6 +1973,7 @@ apiRouter.post('/telegram-user-client/assistant/chats/:chatId/summarize', requir
 apiRouter.post('/telegram-user-client/chat/quick-send', requireAuth, requireTelegramChatOrigin, async (req, res) => {
   setTelegramChatNoCache(res);
   try {
+    if (req.body?.mode === 'REWRITE_AND_SEND') await requireSubscriptionFeature(req.user!.id,'telegram');
     const result = await telegramQuickShare.enqueue(req.user!.id, {
       recipientIds: req.body?.recipientIds, text: req.body?.text,
       instruction: req.body?.instruction, mode: req.body?.mode, requestId: req.body?.requestId
@@ -1894,7 +1986,7 @@ apiRouter.get('/telegram-user-client/chat/quick-send/:jobId', requireAuth, async
   try { res.json(await telegramQuickShare.status(req.user!.id, req.params.jobId)); }
   catch (error) { telegramAuthError(res, error); }
 });
-apiRouter.post('/telegram-user-client/chat/quick-rewrite', requireAuth, requireTelegramChatOrigin, async (req, res) => {
+apiRouter.post('/telegram-user-client/chat/quick-rewrite', requireAuth, requireTelegramChatOrigin, enforcePremium('telegram'), async (req, res) => {
   setTelegramChatNoCache(res);
   try {
     res.json(await telegramQuickShare.rewritePreview(req.user!.id, req.body?.text, req.body?.instruction));
@@ -1923,7 +2015,7 @@ apiRouter.post('/telegram-user-client/chat/history', requireAuth, requireTelegra
   try { res.json(await telegramUserClientRead.history(req.user!.id, req.body?.dialogId)); }
   catch (error) { telegramAuthError(res, error); }
 });
-apiRouter.post('/telegram-user-client/chat/analyze', requireAuth, requireTelegramChatOrigin, async (req, res) => {
+apiRouter.post('/telegram-user-client/chat/analyze', requireAuth, requireTelegramChatOrigin, enforcePremium('telegram'), async (req, res) => {
   setTelegramChatNoCache(res);
   try {
     res.json(await telegramUserClientDialogAssistant.analyze(req.user!.id, {
@@ -1979,12 +2071,6 @@ apiRouter.get('/ai-chat/projects/:projectId/chats/:chatId/messages', requireAuth
     res.json({ messages, projectsOutline: outline });
     return;
   }
-  if (projectId === 'mail-ai-assistant-project' && chatId.startsWith('mail-ai-assistant:')) {
-    const inbox = await mailAssistantInboxFeed(userId);
-    if (!inbox.chats.some(x => x.id === chatId)) { res.status(404).json({ error: 'Диалог не найден' }); return; }
-    res.json({ messages: inbox.messages.filter(m => m.chatId === chatId), projectsOutline: outline });
-    return;
-  }
   const project = projects.find((entry: unknown) =>
     entry !== null && typeof entry === 'object' && !Array.isArray(entry) &&
     (entry as { id?: unknown }).id === projectId) as { chats?: unknown } | undefined;
@@ -1996,7 +2082,15 @@ apiRouter.get('/ai-chat/projects/:projectId/chats/:chatId/messages', requireAuth
     res.status(404).json({ error: 'Диалог не найден' });
     return;
   }
-  res.json({ messages: chat.messages.slice(-300), projectsOutline: outline });
+  let messages = chat.messages as Array<{id?:string;createdAt?:string}>;
+  if(projectId==='mail-ai-assistant-project'||projectId==='telegram-ai-assistant-project'){
+    const inbox=projectId==='mail-ai-assistant-project'?await mailAssistantInboxFeed(userId):await telegramAiInboxFeed(userId);
+    if(!inbox.chats.some(x=>x.id===chatId)){res.status(404).json({error:'Диалог не найден'});return;}
+    const merged=new Map(messages.map(m=>[m.id,m]));
+    for(const m of inbox.messages.filter(m=>m.chatId===chatId))merged.set(m.id,m);
+    messages=[...merged.values()].sort((a,b)=>(a.createdAt??'').localeCompare(b.createdAt??''));
+  }
+  res.json({ messages: messages.slice(-300), projectsOutline: outline });
 }));
 
 apiRouter.get('/ai-chat/projects', requireAuth, asyncHandler(async (req, res) => {
@@ -2104,18 +2198,126 @@ apiRouter.get('/system-notifications', requireAuth, asyncHandler(async (req, res
   }
   const [notifications, unreadCount] = await Promise.all([
     prisma.systemNotification.findMany({
-      where: { userId: req.user!.id },
+      where: { userId: req.user!.id, createdAt: { lte: new Date() } },
       orderBy: { createdAt: 'desc' },
       take: 50
     }),
-    prisma.systemNotification.count({ where: { userId: req.user!.id, readAt: null } })
+    prisma.systemNotification.count({ where: { userId: req.user!.id, readAt: null, createdAt: { lte: new Date() } } })
   ]);
+  if (req.query.android === '1') {
+    const enriched = await Promise.all(notifications.map(async event => ({ ...event, androidActions: event.readAt ? undefined : JSON.stringify(await describeAndroidNotification(event)) })));
+    res.json({ notifications: enriched.reverse(), unreadCount }); return;
+  }
   res.json({ notifications: notifications.reverse(), unreadCount });
+}));
+
+// Only the owner's persisted notification can authorize an Android action.
+apiRouter.post('/system-notifications/:id/android-action', requireAuth, asyncHandler(async (req, res) => {
+  if (!telegramChatRequestIsSameOrigin(req.get('origin') || undefined, req.get('host') || undefined, req.get('sec-fetch-site') || undefined)) {
+    res.status(403).json({ error: 'Недопустимый источник запроса' }); return;
+  }
+  const userId = req.user!.id;
+  if (req.body?.account !== userId) { res.status(403).json({ error: 'Аккаунт изменился' }); return; }
+  const event = await prisma.systemNotification.findFirst({ where: { id: req.params.id, userId, createdAt: { lte: new Date() } } });
+  if (!event) { res.status(404).json({ error: 'Уведомление недоступно' }); return; }
+  const key = originalAndroidEventKey(event.eventKey);
+  const parts = key.split(':');
+  const isHabit = parts[0] === 'habit-reminder' && parts.length >= 3;
+  const isTask = Boolean(event.taskId && (key.startsWith('reminder:') || key.endsWith(':upcoming') || key.endsWith(':overdue')));
+  const isLoan = key.startsWith('economic-loan:');
+  const command = req.body?.command;
+  const finish = async (message: string) => {
+    await prisma.systemNotification.updateMany({ where: { id: event.id, userId }, data: { readAt: new Date() } });
+    res.json({ message });
+  };
+  if (command === 'habit_done' && isHabit) {
+    const completionId = 'android-notification-' + event.id;
+    const existing = await prisma.habitCompletion.findFirst({ where: { id: completionId, userId, habitId: parts[1] } });
+    if (existing) { await finish('Привычка уже отмечена'); return; }
+    try {
+      await habitService.complete(parts[1], userId, { dateKey: parts[2], amount: 1 }, completionId);
+    } catch (error) {
+      if (!(error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002' &&
+        await prisma.habitCompletion.findFirst({ where: { id: completionId, userId, habitId: parts[1] } }))) throw error;
+    }
+    const spec = await describeAndroidNotification(event);
+    await prisma.systemNotification.updateMany({ where: { id: event.id, userId }, data: { readAt: new Date() } });
+    res.json({ message: 'Привычка отмечена', progress: spec.progress, max: spec.max }); return;
+  }
+  if (command === 'task_done' && isTask && event.taskId) {
+    if (event.androidActionTaken) { await finish('Действие уже обработано'); return; }
+    const task = await currentNotificationTask(event);
+    if (!task) { res.status(409).json({ error: 'Задача изменилась или уже выполнена' }); return; }
+    const claimed = await prisma.systemNotification.updateMany({ where: { id: event.id, userId, androidActionTaken: null }, data: { androidActionTaken: 'task_done' } });
+    if (!claimed.count) { res.status(409).json({ error: 'Действие уже обработано' }); return; }
+    // On an uncertain failure, do not advance a recurring task twice.
+    await taskService.update(task.id, userId, { status: 'DONE', collaborationScope: 'me' }, { source: 'api:android-notification', requestId: event.id });
+    await finish('Задача выполнена'); return;
+  }
+  if (command === 'snooze' && (isHabit || isTask || isLoan)) {
+    if (isHabit) {
+      const habit = await prisma.habit.findFirst({ where: { id: parts[1], userId, isArchived: false, isAutoCompleted: false } });
+      if (!habit) { res.status(409).json({ error: 'Привычка недоступна' }); return; }
+    }
+    if (isLoan && !(await describeAndroidNotification(event)).commands.includes('snooze')) { res.status(409).json({ error: 'Кредит недоступен' }); return; }
+    if (isTask && !await currentNotificationTask(event)) { res.status(409).json({ error: 'Задача изменилась или уже выполнена' }); return; }
+    const at = new Date(Date.now() + 30 * 60_000);
+    // Defer a new notification, never alter the task's real deadline.
+    await prisma.systemNotification.upsert({
+      where: { eventKey: 'android-snooze:' + event.id + ':' + key },
+      update: {},
+      create: { userId, taskId: event.taskId, eventKey: 'android-snooze:' + event.id + ':' + key,
+        androidActionRef: event.androidActionRef, content: event.content, createdAt: at, pushNextAttemptAt: at }
+    });
+    await finish('Напомним через 30 минут'); return;
+  }
+  if ((command === 'proposal_approve' || command === 'proposal_reject') && (key.startsWith('telegram-ai-task:') || key.startsWith('mail-ai-task:') || key.startsWith('ai-checkup:') || key.startsWith('android-ai-proposal:'))) {
+    const telegram = key.startsWith('telegram-ai-task:');
+    const assistant = telegram || key.startsWith('mail-ai-task:');
+    const report = key.startsWith('ai-checkup:') ? await prisma.generalAiMessage.findFirst({ where: { id: parts[1], userId }, select: { aiTaskProposalId: true } }) : null;
+    const ref = event.androidActionRef ?? report?.aiTaskProposalId;
+    const proposal = assistant ? await prisma.aiTaskProposal.findFirst({ where: { userId, requestId: key.substring(key.indexOf(':') + 1), source: telegram ? 'telegram_assistant' : 'email_assistant' } }) :
+      ref ? await prisma.aiTaskProposal.findFirst({ where: { id: ref, userId } }) : null;
+    if (!proposal) { res.status(404).json({ error: 'Предложение недоступно' }); return; }
+    if (proposal.status === 'APPLIED') { await finish('Изменения уже применены'); return; }
+    if (proposal.status !== 'PENDING') { res.status(409).json({ error: 'Предложение уже обработано' }); return; }
+    const spec = await describeAndroidNotification(event);
+    if (!spec.commands.includes(command) || !spec.actionHash || req.body?.actionHash !== spec.actionHash) { res.status(409).json({ error: 'Предложение или настройки изменились. Откройте чат.' }); return; }
+    const result = command === 'proposal_approve' ? await applyTaskProposal(userId, proposal.id) : await rejectTaskProposal(userId, proposal.id);
+    if (result.status !== (command === 'proposal_approve' ? 'APPLIED' : 'REJECTED')) { res.status(409).json({ error: 'Не удалось обработать предложение' }); return; }
+    await finish(command === 'proposal_approve' ? 'Изменения применены' : 'Предложение отклонено'); return;
+  }
+  if (command === 'reply_send' && key.startsWith('telegram-ai-reply:')) {
+    const row = await prisma.telegramAiInboxEvent.findFirst({ where: { id: key, userId } });
+    if (!row?.suggestedReplyText || row.suggestedReplyStatus !== 'PENDING') { res.status(409).json({ error: 'Ответ уже обработан или недоступен' }); return; }
+    const spec = await describeAndroidNotification(event);
+    if (!spec.commands.includes(command) || req.body?.replyHash !== notificationReplyHash(row.suggestedReplyText)) { res.status(409).json({ error: 'Ответ изменился. Откройте чат для проверки.' }); return; }
+    const result = await sendTelegramAiSuggestedReply(userId, key, row.suggestedReplyText);
+    if (!result.ok) { res.status(409).json({ error: 'Статус отправки требует проверки' }); return; }
+    await finish('Ответ отправлен'); return;
+  }
+  if (command === 'reply_send' && key.startsWith('mail-ai-reply:') && !key.endsWith(':sent')) {
+    const row = await prisma.emailAnalysis.findFirst({ where: { id: parts[1], userId, suggestedReplyStatus: 'PENDING' } });
+    if (!row?.suggestedReplyText) { res.status(409).json({ error: 'Ответ недоступен' }); return; }
+    const spec = await describeAndroidNotification(event);
+    if (!spec.commands.includes(command) || req.body?.replyHash !== notificationReplyHash(row.suggestedReplyText)) { res.status(409).json({ error: 'Ответ изменился. Откройте чат для проверки.' }); return; }
+    const result = await deliverMailReply(userId, row.id, row.suggestedReplyText);
+    if (!result.ok) { res.status(409).json({ error: 'Статус отправки требует проверки' }); return; }
+    await finish('Ответ отправлен'); return;
+  }
+  if ((command === 'economic_approve' || command === 'economic_reject') && key.startsWith('economic-repeat:') && event.androidActionRef) {
+    const spec = await describeAndroidNotification(event);
+    if (!spec.commands.includes(command) || !spec.actionHash || req.body?.actionHash !== spec.actionHash) { res.status(409).json({ error: 'Предложение изменилось. Откройте чат.' }); return; }
+    const result = command === 'economic_approve' ? await applyEconomicProposal(userId, event.androidActionRef) : await rejectEconomicProposal(userId, event.androidActionRef);
+    if (result.status !== (command === 'economic_approve' ? 'APPLIED' : 'REJECTED')) { res.status(409).json({ error: 'Не удалось обработать операцию' }); return; }
+    await finish(command === 'economic_approve' ? 'Операция записана' : 'Операция пропущена'); return;
+  }
+  res.status(400).json({ error: 'Действие недоступно для этого уведомления' });
 }));
 
 apiRouter.post('/system-notifications/read', requireAuth, asyncHandler(async (req, res) => {
   await prisma.systemNotification.updateMany({
-    where: { userId: req.user!.id, readAt: null },
+    where: { userId: req.user!.id, readAt: null, createdAt: { lte: new Date() } },
     data: { readAt: new Date() }
   });
   res.json({ ok: true });
@@ -2185,8 +2387,43 @@ const taskProposalSameOrigin = (req: Request, res: Response, next: NextFunction)
   }
   next();
 };
+// The order is owned by the authenticated account, not a browser or device.
+const primarySidebarWidgetIds = ['upcoming', 'completed', 'habits', 'progress', 'sectors', 'notes'];
+apiRouter.get('/user/primary-sidebar-order', requireAuth, asyncHandler(async (req, res) => {
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: req.user!.id }, select: { primarySidebarOrder: true } });
+  res.set('Cache-Control', 'private, no-store').json({ order: user.primarySidebarOrder });
+}));
+apiRouter.put('/user/primary-sidebar-order', requireAuth, taskProposalSameOrigin, asyncHandler(async (req, res) => {
+  const order: unknown = req.body?.order;
+  if (!Array.isArray(order) || order.length !== primarySidebarWidgetIds.length ||
+      new Set(order).size !== primarySidebarWidgetIds.length ||
+      !order.every(id => typeof id === 'string' && primarySidebarWidgetIds.includes(id))) {
+    res.status(400).json({ error: 'Некорректный порядок блоков.' }); return;
+  }
+  if (req.body?.initialize === true) {
+    await prisma.user.updateMany({ where: { id: req.user!.id, primarySidebarOrder: { equals: [] } }, data: { primarySidebarOrder: order } });
+  } else {
+    await prisma.user.update({ where: { id: req.user!.id }, data: { primarySidebarOrder: order } });
+  }
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: req.user!.id }, select: { primarySidebarOrder: true } });
+  res.set('Cache-Control', 'private, no-store').json({ order: user.primarySidebarOrder });
+}));
 // A deliberately independent, user-initiated checkup. It neither requires
 // automatic checkups to be enabled nor consumes their daily scheduling slot.
+apiRouter.get('/mascot-wardrobe', requireAuth, asyncHandler(async (req,res) => {
+  res.set('Cache-Control','private, no-store').json(await getMascotWardrobe(req.user!.id));
+}));
+apiRouter.put('/mascot-wardrobe', requireAuth, taskProposalSameOrigin, asyncHandler(async (req,res) => {
+  try {
+    const state = await equipMascotSkin(req.user!.id,req.body?.variant,req.body?.skinId);
+    if (!state) { res.status(409).json({error:'Подписка изменилась. Откройте гардероб заново.'}); return; }
+    res.set('Cache-Control','private, no-store').json(state);
+  } catch(error) {
+    if(error instanceof TypeError) { res.status(400).json({error:error.message}); return; }
+    throw error;
+  }
+}));
+
 // The same-origin check protects the authenticated cookie from cross-site POSTs.
 apiRouter.post('/ai/checkup/generate', requireAuth, taskProposalSameOrigin, asyncHandler(async (req, res) => {
   try {
@@ -2254,6 +2491,7 @@ apiRouter.post('/ai/audio/live/ticket', requireAuth, taskProposalSameOrigin, asy
     res.set('Cache-Control', 'private, no-store').json(await createLiveVoiceTicket(req.user!.id, req.body?.context, req.body?.voice));
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Не удалось открыть голосовой диалог.';
+    if (error instanceof SubscriptionAccessError) { res.status(403).json({error:message,code:error.code,requiredPlan:error.requiredPlan}); return; }
     res.status(429).json({ error: message });
   }
 }));

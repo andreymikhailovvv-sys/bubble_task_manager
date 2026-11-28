@@ -39,11 +39,13 @@ export async function mailAssistantInboxFeed(userId: string) {
   const messages = [
     ...rows.map(row => {
       const summary = row.summary && typeof row.summary === 'object'
-        ? row.summary as { summary?: string; important?: boolean; obligations?: string[]; risks?: string[]; creditsSpentMilli?: number } : null;
+        ? row.summary as { summary?: string; important?: boolean; obligations?: string[]; risks?: string[]; creditsSpentMilli?: number; replySourceText?: string } : null;
       const heading = '📨 ' + safe(row.subject, 140) + '\n' + safe(row.sender, 150);
       const content = heading + (summary?.summary ? '\n\n' + safe(summary.summary, 1000) : '') +
         (typeof summary?.creditsSpentMilli === 'number' && summary.creditsSpentMilli > 0
-          ? '\n\nИИ-анализ: ' + (summary.creditsSpentMilli / 1000).toLocaleString('ru-RU',{maximumFractionDigits:3}) + ' кр.' : '');
+          ? '\n\nИИ-анализ: ' + (summary.creditsSpentMilli / 1000).toLocaleString('ru-RU',{maximumFractionDigits:3}) + ' кр.' : '') +
+        (row.suggestedReplyText && row.replyPublishedAt && row.suggestedReplyStatus !== 'NONE' && typeof summary?.replySourceText === 'string'
+          ? '\n\nВ ответ на письмо:\n' + safe(summary.replySourceText,12000) : '');
       return { id: row.id, chatId: mailAiChatId(row.mailboxId), role: 'assistant' as const,
         createdAt: row.createdAt.toISOString(), content, taskProposal: byRequestId.get(row.id) ?? null,
         mailSuggestedReply: row.suggestedReplyText && row.replyPublishedAt && row.suggestedReplyStatus !== 'NONE'
@@ -87,7 +89,8 @@ export async function deliverMailReply(userId: string, eventId: string, text: st
     await smtpReply({ provider: latest.provider as 'yandex'|'mailru', email: latest.email,
       password, from: row.sender, subject: row.subject, text: text.trim() });
     await prisma.emailAnalysis.updateMany({ where: { id: eventId, userId, suggestedReplyStatus: 'SENDING' },
-      data: { suggestedReplyStatus: 'SENT', suggestedReplyText: text.trim() } });
+      data: { suggestedReplyStatus: 'SENT', suggestedReplyText: text.trim(), ...(automated ? {botStatus:'PENDING'} : {}) } });
+    if (automated) await prisma.systemNotification.upsert({ where:{eventKey:'mail-ai-reply:'+eventId+':sent'}, update:{}, create:{userId,eventKey:'mail-ai-reply:'+eventId+':sent',content:'✉️ ИИ ответил на письмо «'+safe(row.subject,90)+'» · '+row.mailbox.email} }).catch(()=>{});
     return { ok: true, status: 'SENT' as const };
   } catch {
     await prisma.emailAnalysis.updateMany({ where: { id: eventId, userId, suggestedReplyStatus: 'SENDING' },
@@ -124,7 +127,7 @@ export async function deliverMailAiBotNotifications() {
           const message = useDigest ? (digest!.content) :
             '📨 Почтовый ассистент · ' + mail!.mailbox.email + '\n' +
             safe(mail!.subject, 110) + (mail!.taskPublishedAt ? '\n📌 Предложены задачи' : '') +
-            (mail!.replyPublishedAt ? '\n✉️ Предложен ответ' : '');
+            (mail!.replyPublishedAt ? (mail!.suggestedReplyStatus === 'SENT' ? '\n✉️ ИИ отправил ответ' : mail!.suggestedReplyStatus === 'PENDING' ? '\n✉️ Предложен ответ' : '\n✉️ Статус ответа: '+mail!.suggestedReplyStatus) : '');
           // Telegram daily-checkup delivery already targets the owner's linked bot DM
           // and includes a button to open the AI chat.
           await telegramService.notifyDailyAiCheckup({ userId: item.userId, text: safe(message, 1600) });

@@ -20,6 +20,7 @@ final class ChatVoiceRecorder: NSObject, ObservableObject {
                 continuation.resume(returning: allowed)
             }
         }
+        guard !Task.isCancelled else { return }
         guard granted else {
             errorMessage = "Разреши доступ к микрофону в настройках iPhone."
             return
@@ -55,7 +56,7 @@ final class ChatVoiceRecorder: NSObject, ObservableObject {
                     let decibels = recorder.averagePower(forChannel: 0)
                     let normalized = max(0, min(1, (Double(decibels) + 47) / 43))
                     self.level = CGFloat(pow(normalized, 1.4))
-                    try? await Task.sleep(nanoseconds: 80_000_000)
+                    try? await Task.sleep(nanoseconds: 40_000_000)
                 }
             }
         } catch {
@@ -308,6 +309,11 @@ struct NativeChatView: View {
                         await session.continueTelegramRead(approval)
                     }
                 }
+                if !mine, let id = message.assistantSettingsProposalId {
+                    NativeAssistantSettingsCard(id: id)
+                }
+                if !mine, let reply = message.telegramSuggestedReply { NativeAssistantReplyCard(reply: reply, mail: false) }
+                if !mine, let reply = message.mailSuggestedReply { NativeAssistantReplyCard(reply: reply, mail: true) }
                 if !mine, let proposal = message.taskProposal {
                     NativeAIProposalChip(session: session, proposal: proposal, economic: false)
                 }
@@ -536,5 +542,56 @@ struct NativeChatView: View {
         } catch {
             localVoiceError = error.localizedDescription
         }
+    }
+}
+
+private struct NativeAssistantSettingsCard: View {
+    let id: String
+    @State private var proposal: NativeAssistantSettingsProposal?
+    @State private var busy = false
+    @State private var error = ""
+    private let labels = ["summaryInstructions":"Правила сводок","suggestWhen":"Когда предлагать ответы","suggestHow":"Как предлагать ответы","autoReplyWhen":"Когда отвечать автоматически","autoReplyHow":"Как отвечать автоматически","taskCreationWhen":"Когда создавать задачи","replyMode":"Режим ответов"]
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Настройки ассистента").font(.headline)
+            if let proposal {
+                Text(proposal.targetLabel).font(.caption)
+                ForEach(proposal.changes, id: \.field) { change in
+                    Text(labels[change.field] ?? change.field).font(.caption.bold())
+                    Text("Было: " + change.before).font(.caption).foregroundStyle(.secondary)
+                    Text("Станет: " + change.after).font(.caption)
+                }
+                Button(proposal.status == "APPLIED" ? "✓ Применено" : proposal.status == "CONFLICT" ? "Настройки уже изменились" : "Подтвердить изменения") {
+                    busy = true
+                    Task { defer { busy = false }; do { self.proposal = try await NativeAPI().assistantSettingsProposal(id: id, apply: true) } catch { self.error = error.localizedDescription } }
+                }.buttonStyle(.bordered).disabled(busy || proposal.status != "PENDING")
+            }
+            if !error.isEmpty { Text(error).font(.caption).foregroundStyle(.red) }
+        }.padding(8).background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .task(id: id) { do { proposal = try await NativeAPI().assistantSettingsProposal(id: id) } catch { self.error = error.localizedDescription } }
+    }
+}
+private struct NativeAssistantReplyCard: View {
+    let reply: NativeAssistantReply
+    let mail: Bool
+    @State private var text = ""
+    @State private var status = ""
+    @State private var busy = false
+    @State private var error = ""
+    private var pending: Bool { status == "PENDING" || (!mail && status == "FAILED") }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(mail ? "Ответ на письмо" : "Ответ в Telegram").font(.headline)
+            if let recipient = reply.recipient { Text(recipient).font(.caption) }
+            if let subject = reply.subject { Text(subject).font(.caption) }
+            if pending { TextField("Ответ", text: $text, axis: .vertical).textFieldStyle(.roundedBorder) } else { Text(text).font(.caption) }
+            Button(status == "SENT" ? "✓ Отправлено" : status == "UNKNOWN" ? "Статус неизвестен" : "Принять и отправить") {
+                busy = true
+                Task { defer { busy = false }; do { status = try await NativeAPI().sendAssistantReply(id: reply.eventId, text: text, mail: mail) } catch { self.error = error.localizedDescription; status = "UNKNOWN" } }
+            }.buttonStyle(.bordered).disabled(!pending || busy || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            if !error.isEmpty { Text(error).font(.caption).foregroundStyle(.red) }
+        }.padding(8).background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .onAppear { text = reply.text; status = reply.status }
+        .onChange(of: reply.status) { _, newValue in status = newValue }
     }
 }

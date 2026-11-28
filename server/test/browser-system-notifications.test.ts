@@ -42,7 +42,11 @@ test('browser delivery mirrors the existing system notification feed, not a sepa
     readFile(new URL('../src/routes/api.ts', import.meta.url), 'utf8')
   ]);
   assert.match(app, /api\.getSystemNotifications\(\)/);
-  assert.match(app, /if \(baselineLoaded\) deliverBrowserSystemNotifications\(newNotifications\)/);
+  // Only after the initial feed baseline may polling deliver OS alerts or play send gestures.
+  assert.match(app, /if \(baselineLoaded\)\s*\{\s*deliverBrowserSystemNotifications\(newNotifications\);[\s\S]*?\n\s*\}\s*\n\s*baselineLoaded = true;/);
+  assert.match(app, /if \(baselineLoaded\)\s*\{\s*deliverBrowserSystemNotifications\(newNotifications\);\s*announceConfirmedNotificationSends\(newNotifications\)/);
+  assert.equal((app.match(/announceConfirmedNotificationSends\(newNotifications\)/g) ?? []).length, 2);
+  assert.match(app, /if \(document\.visibilityState !== 'visible'\) return;/);
   assert.match(app, /deliverBrowserSystemNotifications\(newNotifications\)/);
   assert.match(app, /document\.visibilityState !== 'hidden'/);
   assert.match(app, /setBrowserPermission\(browserNotificationPermission\(\)\)/);

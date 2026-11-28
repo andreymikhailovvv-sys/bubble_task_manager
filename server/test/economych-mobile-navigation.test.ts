@@ -38,7 +38,7 @@ test('Android and Mini App have 4 labeled tabs, with the warm Economic tab last'
   assert.match(home,/Spacer\(Modifier\.windowInsetsBottomHeight\(WindowInsets\.navigationBars\)\)/);
   assert.match(home,/selectedIconColor=if\(index==3\)/);
   assert.match(workspace,/3 -> NativeEconomicPage\(userId=state\.user\?\.id,dark=dark,active=pagerState\.currentPage==3,/);
-  assert.match(androidVersion,/versionCode = 24/);
+  assert.match(androidVersion,/versionCode = 28/);
 });
 
 test('both mobile surfaces reuse the actual responsive financial overview and editor',()=>{
@@ -150,8 +150,8 @@ test('Economic mobile polish archives closed obligations and animates tab change
   assert.match(native,/height\(IntrinsicSize\.Max\)/);
   assert.match(native,/Arrangement\.spacedBy\(0\.dp\)/);
   assert.match(native,/Text\("Последние операции",fontSize=15\.sp/);
-  assert.match(androidVersion,/versionCode = 24/);
-  assert.match(androidVersion,/versionName = "1\.0\.22"/);
+  assert.match(androidVersion,/versionCode = 28/);
+  assert.match(androidVersion,/versionName = "1\.0\.26"/);
 });
 
 test('native Economic overview reuses the Accounts tab card contents without actions',()=>{
@@ -178,8 +178,8 @@ test('native Economic overview tiles are compact and category amount is prominen
   assert.match(native,/foreground=if\(dark\)Color\(0xFF2B1B08\) else Color\.White/);
   assert.match(report,/if\(!preview\)\s*\{/);
   assert.match(report,/Text\(ecoWholeRubles\(total\.toString\(\)\)/);
-  assert.match(androidVersion,/versionCode = 24/);
-  assert.match(androidVersion,/versionName = "1\.0\.22"/);
+  assert.match(androidVersion,/versionCode = 28/);
+  assert.match(androidVersion,/versionName = "1\.0\.26"/);
 });
 
 test('Economic preview report follows accounts and starts collapsed on Android and Mini App',()=>{
@@ -210,8 +210,8 @@ test('Economych Android summary sizes naturally, bright add button, normal accou
   assert.match(accountSummary,/fontWeight=FontWeight\.Normal,fontSize=13\.sp/);
   assert.match(home,/selectedIconColor=if\(index==3\) \(if\(dark\) Color\(0xFFF6B95F\) else Color\(0xFF9B5200\)\)/);
   assert.match(report,/fontSize=if\(compact\) 15\.sp else 23\.sp/);
-  assert.match(androidVersion,/versionCode = 24/);
-  assert.match(androidVersion,/versionName = "1\.0\.22"/);
+  assert.match(androidVersion,/versionCode = 28/);
+  assert.match(androidVersion,/versionName = "1\.0\.26"/);
 });
 
 test('Native finance matches Mini App mobile visual tokens and compact hierarchy',()=>{
@@ -241,8 +241,8 @@ test('Native finance matches Mini App mobile visual tokens and compact hierarchy
   assert.match(native,/EcoEditorRequest\("accounts",account\)/);
   assert.match(report,/Text\("Финансовый отчёт",color=colors\.text,fontWeight=FontWeight\.SemiBold,fontSize=15\.sp\)/);
   assert.match(editor,/height\(stableSheetHeight\)/);
-  assert.match(androidVersion,/versionCode = 24/);
-  assert.match(androidVersion,/versionName = "1\.0\.22"/);
+  assert.match(androidVersion,/versionCode = 28/);
+  assert.match(androidVersion,/versionName = "1\.0\.26"/);
 });
 
 test('Mini App native parity also covers editors, loan metrics and loading surfaces',()=>{
@@ -256,8 +256,8 @@ test('Mini App native parity also covers editors, loan metrics and loading surfa
   assert.match(native,/\.padding\(horizontal=10\.dp,vertical=7\.dp\)/);
   assert.match(financeData,/bannerStart = Color\.White/);
   assert.match(report,/EcoReportDonut\(total,selection,colors,210\.dp\)/);
-  assert.match(androidVersion,/versionCode = 24/);
-  assert.match(androidVersion,/versionName = "1\.0\.22"/);
+  assert.match(androidVersion,/versionCode = 28/);
+  assert.match(androidVersion,/versionName = "1\.0\.26"/);
 });
 
 test('Android Economic dashboard follows Mini App spatial rhythm and warm summary tiles',()=>{
@@ -283,8 +283,8 @@ test('Android Economic dashboard follows Mini App spatial rhythm and warm summar
   assert.match(native,/val tile=if\(light&&primary\)Color\(0xFFFFF9F2\)/);
   assert.match(native,/val edge=if\(light&&primary\)Color\(0xFFEFD3B1\)/);
   assert.match(native,/internal fun EcoPanel\(colors: EcoColors, modifier: Modifier = Modifier,/);
-  assert.match(androidVersion,/versionCode = 24/);
-  assert.match(androidVersion,/versionName = "1\.0\.22"/);
+  assert.match(androidVersion,/versionCode = 28/);
+  assert.match(androidVersion,/versionName = "1\.0\.26"/);
 });
 
 test('Native Economic CRUD retains server-side origin protection and marks each native write same-origin',()=>{
@@ -308,3 +308,37 @@ test('Native Economic bottom sheets swipe away without a second dismissal button
   assert.match(native,/sheetGesturesEnabled=true/);
 });
 
+
+test('operation editor uses monthly date defaults, shared icons, a separate scroll area and docked sheets',()=>{
+  const web=read('../../client/src/EconomicApp.tsx');
+  const css=read('../../client/src/EconomicApp.css');
+  const native=read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/NativeEconomicEditor.kt');
+  const overview=read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/NativeEconomicCompose.kt');
+  assert.ok(web.includes('defaultEconomicRecurrence(form.date'));
+  assert.ok(web.includes('useScrollFade(formScrollRef'));
+  assert.ok(web.includes('top: node.scrollHeight'));
+  assert.ok(css.includes(':is(.econ-operation-modal,.econ-obligation-modal) .econ-form-scroll::-webkit-scrollbar{display:none}'));
+  assert.ok(css.includes('--econ-miniapp-nav-height'));
+  assert.ok(css.includes('.econ-recent-results{overflow:visible;overscroll-behavior:auto'));
+  assert.ok(web.includes('className="econ-recent-show-all"'));
+  assert.ok(native.includes('put("rrule","FREQ=MONTHLY")'));
+  assert.ok(native.includes('put("monthDay",day)'));
+  assert.ok(native.includes('Icons.Default.SouthWest'));
+  assert.ok(overview.includes('EcoInlineAction("Показать все операции",colors){section="operations"}'));
+  assert.ok(!overview.includes('val recentHeight='));
+});
+
+test('operation form has a shrinking native scroller with blur and a fixed sibling footer',()=>{
+  const web=read('../../client/src/EconomicApp.tsx');
+  const css=read('../../client/src/EconomicApp.css');
+  assert.ok(web.includes('className="econ-form-viewport"'));
+  assert.ok(web.includes('className="econ-form-scroll overflow-y-auto"'));
+  assert.match(web, /<\/div>\s*<\/div>\s*<div className="econ-form-actions">/);
+  assert.ok(!css.includes('.econ-form > div:not(.econ-form-actions)'));
+  assert.match(css,/\.econ-form-viewport\s*\{[^}]*flex:1 1 auto;min-height:0/);
+  assert.match(css,/\.econ-form-viewport>\.econ-form-scroll\s*\{[^}]*overflow-y:auto/);
+  assert.ok(css.includes('backdrop-filter:blur(5px)'));
+  assert.ok(css.includes('body:has(.econ-miniapp-dialog-layer) .miniapp-shell .miniapp-bottom-navigation'));
+  assert.ok(css.includes('border-top-color:transparent;box-shadow:none'));
+  assert.ok(css.includes('.econ-operation-row[role=button]{cursor:pointer}'));
+});

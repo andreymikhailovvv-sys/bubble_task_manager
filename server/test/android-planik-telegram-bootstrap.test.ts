@@ -60,8 +60,8 @@ test('Native Planik rests without arms; activity artwork appears only during wor
   assert.ok(launcher.includes('planikActionSvg(mode, alternate)'));
   assert.match(source, /M129 194Q141 219 170 224/);
   assert.match(source, /M303 194Q283 218 254 225/);
-  assert.match(launcher, /Bitmap\.createBitmap\(full, 80, 12, 280, 300\)/);
-  assert.match(launcher, /size\(width = 84\.dp, height = 90\.dp\)/);
+  assert.ok(launcher.includes('Bitmap.createBitmap(420,375,Bitmap.Config.ARGB_8888)'));
+  assert.match(launcher, /size\(width = 150\.dp, height = 154\.dp\)/);
   assert.match(activity, /"html" -> "HTML Планика получен, но JavaScript не запустился/);
   assert.match(activity, /"script-load-failed" -> "Не удалось загрузить основной JavaScript/);
 });

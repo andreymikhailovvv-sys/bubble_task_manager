@@ -15,6 +15,10 @@ import okhttp3.ResponseBody
 import ru.planirovych.app.data.model.*
 
 interface PlanirovychApi {
+    @GET("api/mascot-wardrobe") suspend fun mascotWardrobe():MascotWardrobeState
+    @Headers("Sec-Fetch-Site: same-origin")
+    @PUT("api/mascot-wardrobe") suspend fun equipMascotSkin(@Body payload:JsonObject):MascotWardrobeState
+    @retrofit2.http.Headers("Cache-Control: no-cache, no-store")
     @GET("api/auth/me") suspend fun me(): UserResponse
     @POST("api/auth/login") suspend fun login(@Body request: LoginRequest): UserResponse
     @POST("api/auth/register") suspend fun register(@Body request: RegisterRequest): UserResponse
@@ -57,7 +61,10 @@ interface PlanirovychApi {
         @Path("attachmentId") attachmentId: String): TaskAttachmentLink
     // The native general chat uses the exact same project tree and thread API
     // as the web client and Telegram Mini App.
-    @GET("api/system-notifications")
+    @Headers("Sec-Fetch-Site: same-origin")
+    @POST("api/system-notifications/{id}/android-action")
+    suspend fun androidNotificationAction(@Path("id") id:String,@Body body:JsonObject):JsonObject
+    @GET("api/system-notifications?android=1")
     suspend fun systemNotifications():AndroidSystemNotificationFeed
     @POST("api/system-notifications/android-devices")
     suspend fun registerAndroidPushDevice(@Body data: JsonObject):OkResponse
@@ -165,6 +172,15 @@ interface PlanirovychApi {
     suspend fun telegramQuickSend(@Body payload:JsonObject):JsonObject
     @GET("api/telegram-user-client/chat/quick-send/{requestId}")
     suspend fun telegramQuickSendStatus(@Path("requestId") requestId:String):JsonObject
+
+    @GET("api/assistant-settings-proposals/{id}")
+    suspend fun assistantSettingsProposal(@Path("id") id:String):JsonObject
+    @POST("api/assistant-settings-proposals/{id}/apply")
+    suspend fun applyAssistantSettingsProposal(@Path("id") id:String):JsonObject
+    @POST("api/telegram-user-client/assistant/inbox/{id}/send-reply")
+    suspend fun sendTelegramSuggestedReply(@Path("id") id:String,@Body payload:JsonObject):JsonObject
+    @POST("api/mail-assistant/inbox/{id}/send-reply")
+    suspend fun sendMailSuggestedReply(@Path("id") id:String,@Body payload:JsonObject):JsonObject
 
     @GET("api/mail-assistant/accounts")
     suspend fun mailAccounts():JsonObject

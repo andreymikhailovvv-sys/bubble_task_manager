@@ -82,7 +82,7 @@ test('Android planner and Economic share the minimal recording window and instan
   const rich=read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/NativeRichTextEditor.kt');
   assert.match(home,/quickAiMode=="voice"/);
   assert.match(home,/vm\.sendGeneralAi\(quick\.id,QUICK_AI_THREAD_ID/);
-  assert.match(home,/onDone=\{[\s\S]*?pagerState\.animateScrollToPage\(2\)/);
+  assert.match(home,/vm\.sendGeneralAi\(quick\.id,QUICK_AI_THREAD_ID[\s\S]*?onDone=\{voiceAwaiting=false\}[\s\S]*?pagerState\.scrollToPage\(2\)/);
   assert.match(home,/onQuickVoice=\{voiceFromFinance=true;voiceInput\(\)\}/);
   assert.match(home,/onVoice=\{voiceFromFinance=false;voiceInput\(\)\}/);
   assert.match(home,/onProcessingStart=\{voiceAwaiting=true\}/);

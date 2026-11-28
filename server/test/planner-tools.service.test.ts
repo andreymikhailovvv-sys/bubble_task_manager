@@ -92,3 +92,21 @@ test('участник совместной задачи может измени
   assert.equal(result.ok, true);
   assert.deepEqual(applied, { id: 'item-1', userId: 'member-1', patch: { title: 'Новое название' } });
 });
+
+
+test('saving AI-edited task and subtask descriptions never truncates the original or appended HTML', async () => {
+  const description = '<p>' + 'Старый текст '.repeat(1500) + '</p><br><p>Новый пункт</p>';
+  for (const parentTaskId of [null, 'parent']) {
+    let applied: unknown;
+    const service = createPlannerToolsService({
+      task: { findFirst: async () => ({ id: 'item-1', title: 'Описание', parentTaskId, status: 'TODO', dueDate: null }) }
+    }, {
+      create: async () => { throw new Error('not expected'); },
+      update: async (_id: string, _userId: string, patch: unknown) => { applied = patch; return { id: 'item-1' } as never; },
+      remove: async () => undefined
+    });
+    const result = await service.action('owner', action({ operation: 'set_description', description, dueDate: null }), new Set(['item-1']), new Set(), 'Europe/Moscow');
+    assert.equal(result.ok, true);
+    assert.deepEqual(applied, { description });
+  }
+});

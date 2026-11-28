@@ -1,3 +1,5 @@
+import { SubscriptionAccessError } from './services/subscription-access.service.js';
+import { startSubscriptionWelcomeWorker } from './services/subscription-welcome-worker.service.js';
 import 'dotenv/config';
 import './lib/timestamp-console.js';
 import cookieParser from 'cookie-parser';
@@ -12,10 +14,13 @@ import { dispatchOneLegacyVerificationReminder } from './services/legacy-email-o
 import { dispatchOneTelegramEmailVerificationOutreach } from './services/telegram-email-outreach.service.js';
 import { passport } from './auth/passport.js';
 import { telegramService } from './services/telegram.service.js';
+import { dispatchEconomicOperationRepeats } from './services/economic-operation-recurrence.service.js';
 import { sendEconomicLoanPaymentReminders } from './services/economic-loan-reminder.service.js';
 import { prisma } from './db/prisma.js';
 import { reconcilePendingCreditPurchases } from './services/credit-purchase-recovery.service.js';
+import { reconcilePendingSubscriptionPurchases } from './services/subscription-purchase-recovery.service.js';
 import { createAiCheckup } from './services/ai-checkup-delivery.service.js';
+import { taskAccessWhere } from './lib/task-access.js';
 import { resolveAiCheckupSchedules } from './lib/ai-checkup-schedules.js';
 import { Prisma } from '@prisma/client';
 import { telegramUpdateQueue, TelegramUpdateWorker } from './services/telegram-update-queue.service.js';
@@ -87,6 +92,7 @@ app.use(authSession);
 app.use('/api', apiRouter);
 
 app.use('/api', (error: unknown, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  if (error instanceof SubscriptionAccessError) { res.status(403).json({error:error.message,code:error.code,requiredPlan:error.requiredPlan}); return; }
   const errorCode = typeof error === 'object' && error !== null && 'code' in error
     ? String(error.code)
     : '';
@@ -112,6 +118,12 @@ app.use(createPublicSeoPagesMiddleware(clientDist));
 app.get(['/economic', '/economic/'], (_req, res) => {
   res.setHeader('Cache-Control', 'no-store, must-revalidate');
   res.sendFile(path.join(clientDist, 'economic.html'));
+});
+
+app.get(['/android-mascot', '/android-mascot/'], (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store, must-revalidate');
+  res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+  res.sendFile(path.join(clientDist, 'android-mascot.html'));
 });
 
 app.get('/auth/email', (_req, res) => {
@@ -141,7 +153,11 @@ const runPaymentRecovery = async () => {
   if (paymentRecoveryRunning) return;
   paymentRecoveryRunning = true;
   try {
-    const result = await measureBackground('payments.recovery', () => reconcilePendingCreditPurchases());
+    const result = await measureBackground('payments.recovery', async () => {
+      const packs = await reconcilePendingCreditPurchases();
+      const subscriptions = await reconcilePendingSubscriptionPurchases();
+      return { scanned: packs.scanned + subscriptions.scanned, confirmed: packs.confirmed + subscriptions.confirmed, failed: packs.failed + subscriptions.failed };
+    });
     if (result.scanned) console.info('[Payments] pending purchase recovery cycle', result);
   } catch (error) {
     console.error('[Payments] pending purchase recovery cycle failed', {
@@ -165,6 +181,9 @@ const runEconomicReminders = async () => {
 };
 setTimeout(runEconomicReminders, 15_000).unref();
 setInterval(runEconomicReminders, 60_000).unref();
+const runOperationRepeats = () => { void measureBackground('economic.operation_repeats', () => dispatchEconomicOperationRepeats()).catch(err => console.error('[Economic] operation repeat scheduler failed', err)); };
+setTimeout(runOperationRepeats, 20_000).unref();
+setInterval(runOperationRepeats, 60_000).unref();
 
 const telegramPollIntervalMs = Number(process.env.TELEGRAM_POLL_INTERVAL_MS ?? 60_000);
 setInterval(() => {
@@ -177,6 +196,7 @@ setInterval(() => {
 // A lightweight safety tick watches the queue, never scans all overdue tasks.
 startTaskMonitoringWorker();
 startAndroidPushWorker();
+startSubscriptionWelcomeWorker();
 
 const CHECKUP_POLL_INTERVAL_MS = Number(process.env.AI_CHECKUP_POLL_INTERVAL_MS ?? 60_000);
 const formatLocalCheckupSlot = (date: Date, timeZone: string) => {
@@ -230,6 +250,13 @@ setInterval(() => {
           throw error;
         }
         try {
+          // Skip scheduled reports without active tasks on the user's local calendar day.
+          const candidates = await prisma.task.findMany({
+            where: { AND: [taskAccessWhere(user.id)], taskType: 'TASK', status: { not: 'DONE' },
+              dueDate: { gte: new Date(now.getTime() - 36 * 60 * 60_000), lt: new Date(now.getTime() + 36 * 60 * 60_000) } },
+            select: { dueDate: true }
+          });
+          if (!candidates.some(task => task.dueDate && formatLocalCheckupSlot(task.dueDate, timeZone).dateKey === local.dateKey)) continue;
           await createAiCheckup({
             userId: user.id,
             requestId: 'daily-checkup:' + local.dateKey + ':' + schedule.id,

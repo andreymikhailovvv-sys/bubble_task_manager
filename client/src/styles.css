@@ -17053,3 +17053,230 @@ body[data-theme='light'] .fullscreen-mode-picker-menu {
 .miniapp-unified-modal-backdrop.miniapp-light .miniapp-unified-sector-edit-row {
   border-color:#d8e2ef;
 }
+
+/* Period budgets and workspace placement, scoped to the desktop workbench. */
+.subscription-daily-ring{display:inline-flex;align-items:center;gap:7px;white-space:nowrap;font-size:13px;font-weight:650;font-variant-numeric:tabular-nums}
+.subscription-daily-ring__indicator{width:17px;height:17px;border-radius:50%;background:conic-gradient(currentColor var(--daily-remaining),var(--panel-border,rgba(148,163,184,.25)) 0);mask:radial-gradient(farthest-side,transparent 56%,#000 59%);flex:none}
+.subscription-daily-ring__text{white-space:nowrap}
+.subscription-daily-ring--compact{font-size:12px;gap:4px}
+.subscription-daily-ring--compact .subscription-daily-ring__indicator{width:14px;height:14px}
+.subscription-daily-ring--compact .subscription-daily-ring__label{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+.subscription-modal{overflow:hidden!important}
+.subscription-modal-scroll{overflow-y:auto;scrollbar-width:none}
+.subscription-modal-scroll::-webkit-scrollbar{display:none}
+.workspace-block-submenu{position:absolute;z-index:100;top:0;left:100%;width:min(272px,calc(100vw - 28px));max-height:min(65dvh,430px);overflow-y:auto;scrollbar-width:none;background:var(--popover-bg)}
+.workspace-block-submenu::-webkit-scrollbar{display:none}
+.workspace-block-option{display:flex;width:100%;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;border-radius:10px;text-align:left;color:var(--text-primary)}
+.workspace-block-option[draggable=true]{cursor:grab}
+.workspace-block-option[draggable=true]:active{cursor:grabbing}
+.workspace-block-option strong{display:block;font-size:13px}
+.workspace-block-option small{display:block;font-size:11px;color:var(--text-muted)}
+.workspace-block-option svg{flex:none;color:var(--text-muted)}
+.workspace-block-option:hover,.workspace-block-option:focus-visible{background:var(--accent-soft)}
+.fullscreen-workspace-single,.fullscreen-workspace-single-content,.fullscreen-workspace-pane{position:relative}
+.fullscreen-workspace-single-content,.fullscreen-workspace-pane{isolation:isolate}
+.workspace-block-target{position:absolute;inset:2px;z-index:115;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;border:2px dashed var(--accent-strong);border-radius:16px;color:var(--accent-strong);background:color-mix(in srgb,var(--card-bg) 52%,transparent);backdrop-filter:blur(8px);font-size:13px;font-weight:700;text-align:center;padding:8px;transition:background .18s,border-color .18s}
+.workspace-block-target:is(:hover,:focus-visible,.is-over){background:color-mix(in srgb,var(--accent-soft) 76%,var(--card-bg));border-style:solid}
+.workspace-block-target-plus{display:grid;place-items:center;width:45px;height:45px;border:1px solid currentColor;border-radius:50%}
+.fullscreen-workspace-single-rail.workspace-placement-rail{position:absolute;z-index:116;top:0;bottom:0;width:17%;padding:0;min-width:74px}
+.fullscreen-workspace-single-rail.workspace-placement-rail::before{display:none}
+.fullscreen-workspace-single-rail--left.workspace-placement-rail{left:0}
+.fullscreen-workspace-single-rail--right.workspace-placement-rail{right:0}
+.fullscreen-workspace-single:has(.workspace-placement-rail) .fullscreen-workspace-single-content>.workspace-block-target{left:18%;right:18%}
+.fullscreen-overlay-active .workspace-block-target{visibility:hidden;pointer-events:none}
+@media(max-width:1050px){.workspace-block-submenu{left:auto;right:100%}}
+@media(max-width:600px){.workspace-block-submenu{position:relative;left:auto;right:auto;width:100%;max-height:45dvh}.workspace-block-target{font-size:11px}.workspace-placement-rail .workspace-block-target{padding:4px}}
+.fullscreen-workspace-single-content .notes-editor-backdrop.notes-editor-inline,.fullscreen-workspace-pane .notes-editor-backdrop.notes-editor-inline{padding:0!important;backdrop-filter:none}
+.fullscreen-workspace-single-content .notes-editor-inline .notes-editor-panel,.fullscreen-workspace-pane .notes-editor-inline .notes-editor-panel{width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;border-radius:0!important;box-shadow:none!important;border:0!important}
+.fullscreen-workspace-single-content *, .fullscreen-workspace-pane *{scrollbar-width:none}
+.fullscreen-workspace-single-content *::-webkit-scrollbar,.fullscreen-workspace-pane *::-webkit-scrollbar{display:none}
+[data-scroll-fade="bottom"]{mask-image:linear-gradient(to bottom,#000 0,#000 calc(100% - 58px),transparent 100%)}
+[data-scroll-fade="top"]{mask-image:linear-gradient(to bottom,transparent 0,#000 46px,#000 100%)}
+[data-scroll-fade="both"]{mask-image:linear-gradient(to bottom,transparent 0,#000 46px,#000 calc(100% - 58px),transparent 100%)}
+
+.subscription-modal-scroll[data-scroll-fade]{mask-image:none}
+.subscription-modal:has(.subscription-modal-scroll:is([data-scroll-fade="bottom"],[data-scroll-fade="both"]))::after,
+.subscription-modal:has(.subscription-modal-scroll:is([data-scroll-fade="top"],[data-scroll-fade="both"]))::before{content:"";position:absolute;left:0;right:0;height:62px;z-index:5;pointer-events:none;backdrop-filter:blur(5px)}
+.subscription-modal:has(.subscription-modal-scroll:is([data-scroll-fade="bottom"],[data-scroll-fade="both"]))::after{bottom:0;background:linear-gradient(transparent,var(--card-bg));mask-image:linear-gradient(transparent,#000)}
+.subscription-modal:has(.subscription-modal-scroll:is([data-scroll-fade="top"],[data-scroll-fade="both"]))::before{top:0;background:linear-gradient(var(--card-bg),transparent);mask-image:linear-gradient(#000,transparent)}
+.fullscreen-workspace-single-content .workspace-block-target,.fullscreen-workspace-pane .workspace-block-target{min-width:0}
+.fullscreen-workspace-toolbar--one-row .add-menu-popover{overflow:visible!important}
+
+/* Dropdowns sit above the split track, including its oversized grip hit area.
+   A contiguous hover path connects the trigger, menu and submenu. */
+.bubble-fullscreen-shell > .fullscreen-workspace-toolbar:has(.add-menu-popover) { z-index: 125 !important; overflow: visible; }
+.fullscreen-workspace-toolbar .add-menu-popover { top: 100% !important; }
+.bubble-fullscreen-shell:has(.add-menu-popover) .fullscreen-workspace-divider,
+.bubble-fullscreen-shell:has(.add-menu-popover) .fullscreen-focus-inner-divider { pointer-events: none; }
+/* Keep the inline timeline flush with the clipped outer pane. */
+.fullscreen-workspace-pane .fullscreen-mode-surface[data-fullscreen-mode='timeline'],
+.fullscreen-workspace-pane .fullscreen-mode-surface[data-fullscreen-mode='timeline'] .fullscreen-mode-surface-content { padding: 0 !important; margin: 0 !important; border-radius: inherit; }
+.fullscreen-workspace-pane .fullscreen-mode-surface[data-fullscreen-mode='timeline'] .timeline-canvas { padding: 0 !important; margin: 0 !important; border-radius: inherit; width: 100%; height: 100%; }
+.fullscreen-workspace-pane .fullscreen-mode-surface[data-fullscreen-mode='timeline'] .timeline-toolbar { border-radius: inherit; }
+
+.fullscreen-workspace-pane:has([data-fullscreen-mode='timeline']){padding:0!important}
+.fullscreen-workspace-pane [data-fullscreen-mode='timeline'] .timeline-canvas-inner{padding:0!important;margin:0!important;min-width:0;width:100%;display:flex;flex-direction:column;gap:0}
+.fullscreen-workspace-pane [data-fullscreen-mode='timeline'] .timeline-canvas-inner>*{margin:0!important}
+.fullscreen-workspace-pane [data-fullscreen-mode='timeline'] .timeline-panel{border:0!important;border-radius:0!important;width:100%;margin:0!important;box-shadow:none}
+.fullscreen-workspace-pane [data-fullscreen-mode='timeline'] .timeline-toolbar{border-width:0 0 1px!important;border-radius:0!important;margin:0!important}
+.fullscreen-workspace-pane [data-fullscreen-mode='timeline'] .timeline-canvas{border:0!important;border-radius:0!important;box-sizing:border-box}
+
+/* Shared Mini App and desktop habit calendar: the habit color is the only
+   progress color. The filled area is the actual number of repetitions. */
+.miniapp-habit-tracker .miniapp-habit-tracker-day:is(.miniapp-habit-tracker-day-done,.miniapp-habit-tracker-day-partial),
+.miniapp-light .miniapp-habit-tracker .miniapp-habit-tracker-day:is(.miniapp-habit-tracker-day-done,.miniapp-habit-tracker-day-partial) {
+  background: linear-gradient(to top,var(--tracker-accent) 0%,var(--tracker-accent) var(--day-fill),transparent var(--day-fill));
+  border: 0;
+  box-shadow: none;
+}
+.miniapp-habit-tracker .miniapp-habit-tracker-day-today { outline: none; font-weight: 800; }
+.miniapp-habit-tracker .miniapp-habit-tracker-legend-dot-done { background:var(--tracker-accent); border-color:var(--tracker-accent); }
+.miniapp-habit-tracker .miniapp-habit-tracker-legend-dot-partial { background:linear-gradient(to top,var(--tracker-accent) 33%,transparent 33%);border-color:var(--tracker-accent); }
+
+
+/* Inline note editor owns its scroll area without a scrollbar gutter; retain dynamic top/bottom scroll fading. */
+.notes-editor-inline{inset:0!important;padding:0!important;overflow:hidden!important;box-sizing:border-box}
+.notes-editor-inline .notes-editor-panel{box-sizing:border-box;min-width:0;max-width:100%;overflow:hidden}
+.notes-editor-inline .notes-editor-content{scrollbar-width:none!important;scrollbar-gutter:auto!important;overflow-x:hidden;min-width:0;box-sizing:border-box;padding-bottom:calc(1.25rem + 1.5rem);scroll-padding-bottom:1.5rem}
+.notes-editor-inline .notes-editor-content::-webkit-scrollbar{display:none!important;width:0;height:0}
+
+.fullscreen-workspace-pane:has(.notes-editor-inline){padding:0!important;scrollbar-gutter:auto!important}.fullscreen-workspace-pane:has(.notes-editor-inline)>.standalone-notes-inline-mount{width:100%!important;max-width:none!important;margin:0!important;padding:0!important;scrollbar-gutter:auto!important}
+
+/* A single notes pane follows the same rounded workspace shell. */
+.fullscreen-workspace-single:has(.standalone-notes-inline-mount) {
+  padding: 0 !important;
+}
+.fullscreen-workspace-single-content:has(> .standalone-notes-inline-mount) {
+  width: 100%;
+  height: 100%;
+  border-radius: 18px !important;
+  padding: 0 !important;
+  overflow: hidden;
+}
+.fullscreen-workspace-single-content > .standalone-notes-inline-mount {
+  width: 100% !important;
+  max-width: none !important;
+  height: 100% !important;
+  min-width: 0;
+  margin: 0 !important;
+  padding: 0 !important;
+  border-radius: 18px !important;
+  overflow: hidden;
+}
+.fullscreen-workspace-single-content .standalone-notes-backdrop.standalone-notes-inline,
+.fullscreen-workspace-single-content .standalone-notes-inline .standalone-notes-board {
+  border-radius: 18px !important;
+}
+.fullscreen-workspace-single-content .standalone-notes-inline .standalone-notes-board {
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+/* The inline editor must cover the complete notes mount, without a visible
+   right-side gutter or neighboring strip. The content itself keeps its
+   existing scroll-fade mask on both vertical edges. */
+.fullscreen-workspace-single-content .notes-editor-backdrop.notes-editor-inline,
+.fullscreen-workspace-pane .notes-editor-backdrop.notes-editor-inline {
+  left: 0 !important;
+  right: 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+  box-sizing: border-box;
+}
+.fullscreen-workspace-single-content .notes-editor-inline .notes-editor-panel,
+.fullscreen-workspace-pane .notes-editor-inline .notes-editor-panel {
+  margin: 0 !important;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.fullscreen-workspace-single-content:has(.notes-editor-inline),
+.fullscreen-workspace-pane:has(.notes-editor-inline) {
+  scrollbar-gutter: auto !important;
+  overflow: hidden;
+}
+
+/* An editor opened from the split Focus pane covers only its own slot and
+   sits above the pane-local subtask dialog (z-index 220). */
+.fullscreen-embedded-focus > .notes-editor-backdrop.notes-editor-inline {
+  z-index: 240 !important;
+}
+.bubble-sector-label {
+  border-color: color-mix(in srgb, var(--text-muted) 40%, var(--badge-border));
+  color: var(--text-primary);
+}
+
+.telegram-ai-settings-scroll,.bubble-compact-hover-scroll{scrollbar-width:none;-ms-overflow-style:none;overscroll-behavior:contain}
+.telegram-ai-settings-scroll::-webkit-scrollbar,.bubble-compact-hover-scroll::-webkit-scrollbar{display:none}
+.bubble-compact-hover-scroll[data-scroll-fade=top]{mask-image:linear-gradient(to bottom,transparent,#000 16px,#000)}
+.bubble-compact-hover-scroll[data-scroll-fade=bottom]{mask-image:linear-gradient(to bottom,#000,#000 calc(100% - 20px),transparent)}
+.bubble-compact-hover-scroll[data-scroll-fade=both]{mask-image:linear-gradient(to bottom,transparent,#000 16px,#000 calc(100% - 20px),transparent)}
+.fullscreen-mode-picker [data-view-mode=bubbles]{--view-accent:#67c9e6}
+.fullscreen-mode-picker [data-view-mode=list]{--view-accent:#c4b5fd}
+.fullscreen-mode-picker [data-view-mode=timeline]{--view-accent:#fcd34d}
+
+
+
+body[data-theme=light] .fullscreen-mode-picker [data-view-mode=bubbles]{--view-accent:#187d9c}
+body[data-theme=light] .fullscreen-mode-picker [data-view-mode=list]{--view-accent:#7654bd}
+body[data-theme=light] .fullscreen-mode-picker [data-view-mode=timeline]{--view-accent:#a36510}
+
+/* Real blur overlay for settings, using the same non-interactive technique
+   as the subscription modal. The underlying scroller keeps native input. */
+.telegram-integrations-modal__panel:has(>.telegram-ai-settings-scroll){position:relative}
+.telegram-ai-settings-scroll[data-scroll-fade]{mask-image:none;-webkit-mask-image:none}
+.telegram-integrations-modal__panel:has(>.telegram-ai-settings-scroll:is([data-scroll-fade=top],[data-scroll-fade=both]))::before,
+.telegram-integrations-modal__panel:has(>.telegram-ai-settings-scroll:is([data-scroll-fade=bottom],[data-scroll-fade=both]))::after{
+  content:"";position:absolute;left:0;right:0;height:54px;z-index:5;pointer-events:none;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(5px)
+}
+.telegram-integrations-modal__panel:has(>.telegram-ai-settings-scroll:is([data-scroll-fade=top],[data-scroll-fade=both]))::before{top:0;mask-image:linear-gradient(#000,transparent);-webkit-mask-image:linear-gradient(#000,transparent)}
+.telegram-integrations-modal__panel:has(>.telegram-ai-settings-scroll:is([data-scroll-fade=bottom],[data-scroll-fade=both]))::after{bottom:0;mask-image:linear-gradient(transparent,#000);-webkit-mask-image:linear-gradient(transparent,#000)}
+
+.bubble-compact-hover-shell{display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box}
+.bubble-compact-hover-shell>.bubble-compact-hover-scroll{min-height:0;flex:1 1 auto;overflow-y:auto;touch-action:pan-y}
+.bubble-compact-hover-shell>.bubble-compact-hover-scroll[data-scroll-fade]{mask-image:none;-webkit-mask-image:none}
+.bubble-compact-hover-shell:has(>.bubble-compact-hover-scroll:is([data-scroll-fade=top],[data-scroll-fade=both]))::before,
+.bubble-compact-hover-shell:has(>.bubble-compact-hover-scroll:is([data-scroll-fade=bottom],[data-scroll-fade=both]))::after{
+  content:"";position:absolute;left:0;right:0;height:20px;z-index:1;pointer-events:none;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)
+}
+.bubble-compact-hover-shell:has(>.bubble-compact-hover-scroll:is([data-scroll-fade=top],[data-scroll-fade=both]))::before{top:0;mask-image:linear-gradient(#000,transparent);-webkit-mask-image:linear-gradient(#000,transparent)}
+.bubble-compact-hover-shell:has(>.bubble-compact-hover-scroll:is([data-scroll-fade=bottom],[data-scroll-fade=both]))::after{bottom:0;mask-image:linear-gradient(transparent,#000);-webkit-mask-image:linear-gradient(transparent,#000)}
+
+.fullscreen-mode-picker-option[data-view-mode]{position:relative}
+.fullscreen-mode-picker-option .fullscreen-mode-color-icon{color:var(--view-accent)}
+.fullscreen-mode-picker-option .fullscreen-mode-grip{position:absolute;right:1px;top:1px;opacity:0;pointer-events:none;color:var(--text-muted);transition:opacity .12s}
+.fullscreen-mode-picker-option:hover .fullscreen-mode-grip,.fullscreen-mode-picker-option:focus-visible .fullscreen-mode-grip{opacity:1}
+
+/* Same neutral limit pill geometry as Economych, in Planner's own cyan accent. */
+body[data-theme] .light-credit-badge[data-subscription-limit] {
+  display:inline-flex;align-items:center;justify-content:center;gap:7px;white-space:nowrap;
+  color:var(--accent-strong)!important;border:1px solid var(--panel-border,rgba(148,163,184,.25));
+  border-radius:12px;padding:9px 11px;min-height:40px;background:transparent!important;
+  font-size:13px;font-weight:650;box-shadow:none!important;flex:none;font-variant-numeric:tabular-nums;
+}
+body[data-theme] .light-credit-badge[data-subscription-limit]:hover {
+  border-color:var(--accent-strong);background:transparent!important;transform:none;
+}
+body[data-theme] .light-credit-badge[data-subscription-limit]:focus-visible {
+  outline:2px solid var(--accent-strong);outline-offset:2px;
+}
+body[data-theme] .miniapp-shell .miniapp-credit-badge[data-subscription-limit],
+.miniapp-shell.miniapp-light .miniapp-credit-badge[data-subscription-limit]{
+  color:var(--accent-strong)!important;border:1px solid var(--panel-border,rgba(148,163,184,.25))!important;
+  border-radius:12px;background:transparent!important;box-shadow:none!important;max-width:none;
+  min-width:0;width:auto;padding:0 6px;overflow:visible;
+}
+.miniapp-shell .miniapp-unified-topbar-row .miniapp-credit-badge[data-subscription-limit]{max-width:none;padding:0 5px}
+
+/* Keep onboarding unobstructed until its automatic offer resolves and the guide ends. */
+body[data-defer-training-notices] .cookie-banner { display:none!important; }
+.fullscreen-mode-window-close {position:absolute;z-index:35;top:10px;right:10px;width:32px;height:32px;display:grid;place-items:center;border:1px solid var(--panel-border);border-radius:10px;background:var(--popover-bg,var(--panel-bg));color:var(--text-muted)}
+.fullscreen-mode-window-close:hover,.fullscreen-mode-window-close:focus-visible{color:var(--text-primary);border-color:var(--accent-strong)}
+ .fullscreen-mode-surface:has(.fullscreen-mode-window-close) .fullscreen-pane-filters-anchor{right:50px!important}
+.fullscreen-mode-surface:has(.fullscreen-mode-window-close) .timeline-toolbar{padding-right:100px!important}
+.fullscreen-workspace-pane:has(.notes-editor-inline),.fullscreen-workspace-single-content:has(.notes-editor-inline){padding:0!important;scrollbar-width:none!important;scrollbar-gutter:auto!important}
+.fullscreen-workspace-pane:has(.notes-editor-inline) :is(.standalone-notes-inline-mount,.fullscreen-embedded-focus),.fullscreen-workspace-single-content:has(.notes-editor-inline) :is(.standalone-notes-inline-mount,.fullscreen-embedded-focus){position:relative;display:block;width:100%!important;height:100%!important;min-width:0;max-width:none!important;min-height:0;margin:0!important;padding:0!important;overflow:hidden!important;scrollbar-gutter:auto!important}
+.notes-editor-backdrop.notes-editor-inline{display:block!important;position:absolute!important;inset:0!important;width:auto!important;height:auto!important;max-width:none!important;max-height:none!important;margin:0!important;padding:0!important;overflow:hidden!important}
+.notes-editor-inline .notes-editor-panel{position:absolute!important;inset:0!important;width:auto!important;height:auto!important;max-width:none!important;max-height:none!important;min-width:0;min-height:0;margin:0!important;box-sizing:border-box;overflow:hidden}
+.notes-editor-inline .notes-editor-content{width:100%;max-width:100%;min-width:0;overflow-wrap:anywhere}

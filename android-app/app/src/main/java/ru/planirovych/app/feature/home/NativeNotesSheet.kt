@@ -453,7 +453,14 @@ private fun NoteEditorDialog(note:StandaloneNote?,groups:List<StandaloneNoteGrou
     val selectedGroup=groups.firstOrNull{it.id==group}
     val ink=if(dark)Color(0xFFF0F4FF) else Color(0xFF17223A)
     val muted=if(dark)Color(0xFFA5B4CA) else Color(0xFF64748B)
-    androidx.compose.ui.window.Dialog(onDismissRequest=onClose,
+    val closeAndSave:()->Unit = {
+        if(!busy) {
+            val changed=title.trim()!=note?.title.orEmpty().trim() || text!=original ||
+                group!=(note?.groupId?:initialGroup)
+            if(changed) onSave(title.trim(),text,group) else onClose()
+        }
+    }
+    androidx.compose.ui.window.Dialog(onDismissRequest=closeAndSave,
         properties=androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth=false)){
         Surface(Modifier.fillMaxWidth().fillMaxHeight(.94f).imePadding()
             .padding(horizontal=8.dp,vertical=8.dp),
@@ -461,25 +468,44 @@ private fun NoteEditorDialog(note:StandaloneNote?,groups:List<StandaloneNoteGrou
             border=BorderStroke(1.dp,colors.panelBorder)){
             // Same hierarchy as the Mini App: title and group on one line,
             // explanatory copy, formatting toolbar, then full-height editable page.
-            Column(Modifier.fillMaxSize()){
-                Row(Modifier.fillMaxWidth().padding(start=16.dp,end=7.dp,top=12.dp,bottom=7.dp),
+            if(busy) {
+                Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center) {
+                    Column(horizontalAlignment=Alignment.CenterHorizontally,
+                        verticalArrangement=Arrangement.spacedBy(10.dp)) {
+                        CircularProgressIndicator(Modifier.size(28.dp),color=colors.purple)
+                        Text("Сохраняем…",color=muted,fontSize=13.sp)
+                    }
+                }
+            } else Column(Modifier.fillMaxSize()){
+                Row(Modifier.fillMaxWidth().padding(start=16.dp,end=7.dp,top=5.dp,bottom=2.dp),
                     verticalAlignment=Alignment.CenterVertically){
                     Text(if(note==null)"Новая заметка" else "Редактирование заметки",
                         modifier=Modifier.weight(1f),fontSize=17.sp,
                         fontWeight=FontWeight.Bold,color=ink)
-                    IconButton(onClick=onClose){
-                        Icon(Icons.Default.Close,"Закрыть",tint=ink)
+                    IconButton(onClick=closeAndSave){
+                        Icon(Icons.Default.Close,"Сохранить и закрыть",tint=ink)
                     }
                 }
                 Row(Modifier.fillMaxWidth().padding(horizontal=14.dp),
                     horizontalArrangement=Arrangement.spacedBy(8.dp),
                     verticalAlignment=Alignment.CenterVertically){
-                    OutlinedTextField(value=title,onValueChange={title=it},
-                        placeholder={Text("Название заметки",maxLines=1)},
-                        singleLine=true,modifier=Modifier.weight(1f),
+                    BasicTextField(value=title,onValueChange={title=it},
+                        singleLine=true,modifier=Modifier.weight(1f)
+                            .height(40.dp).clip(RoundedCornerShape(12.dp))
+                            .background(colors.field)
+                            .border(1.dp,colors.panelBorder,RoundedCornerShape(12.dp)),
+                        textStyle=TextStyle(color=ink,fontSize=13.sp),
+                        cursorBrush=SolidColor(colors.purple),
                         keyboardOptions=KeyboardOptions(
                             capitalization=KeyboardCapitalization.Sentences),
-                        shape=RoundedCornerShape(14.dp))
+                        decorationBox={inner->
+                            Box(Modifier.fillMaxSize().padding(horizontal=10.dp),
+                                contentAlignment=Alignment.CenterStart){
+                                if(title.isEmpty()) Text("Название заметки",color=muted,
+                                    fontSize=13.sp,maxLines=1,overflow=TextOverflow.Ellipsis)
+                                inner()
+                            }
+                        })
                     Box(Modifier.widthIn(min=108.dp,max=157.dp)){
                         OutlinedButton(onClick={groupsOpen=true},
                             contentPadding=PaddingValues(horizontal=9.dp,vertical=10.dp),
@@ -508,7 +534,7 @@ private fun NoteEditorDialog(note:StandaloneNote?,groups:List<StandaloneNoteGrou
                 Text("Выделите текст для форматирования или добавьте список/чекбоксы в текущую позицию курсора.",
                     color=muted,fontSize=11.sp,lineHeight=16.sp,
                     modifier=Modifier.fillMaxWidth().padding(
-                        start=16.dp,end=16.dp,top=9.dp,bottom=12.dp))
+                        start=16.dp,end=16.dp,top=5.dp,bottom=6.dp))
                 HorizontalDivider(color=colors.panelBorder)
                 NativeRichTextEditor(value=text,onChange={text=it},
                     dark=dark,modifier=Modifier.fillMaxWidth().weight(1f),
@@ -517,12 +543,7 @@ private fun NoteEditorDialog(note:StandaloneNote?,groups:List<StandaloneNoteGrou
                     Text(it,color=MaterialTheme.colorScheme.error,fontSize=12.sp,
                         modifier=Modifier.padding(horizontal=16.dp,vertical=5.dp))
                 }
-                Button(onClick={onSave(title.trim(),text,group)},
-                    modifier=Modifier.fillMaxWidth().padding(
-                        start=14.dp,end=14.dp,top=8.dp,bottom=12.dp),
-                    enabled=!busy,shape=RoundedCornerShape(13.dp)){
-                    Text(if(busy)"Сохраняем…" else "Сохранить")
-                }
+                Spacer(Modifier.height(6.dp))
             }
         }
     }

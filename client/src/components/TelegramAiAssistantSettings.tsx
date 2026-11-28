@@ -1,11 +1,12 @@
-import { useEffect, useId, useState, type CSSProperties } from 'react';
+import { useScrollFade } from '../hooks/useScrollFade';
+import { useRef, useEffect, useId, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { Bot, Check, CheckCircle2, ChevronDown, Loader2, MessageCircle, Plus, Search, ShieldCheck, Trash2, X } from 'lucide-react';
 import { api, type TelegramAiChatPolicy, type TelegramAiChatSettings, type TelegramChatCapability, type TelegramSendTargetList } from '../lib/api';
 import './TelegramIntegrationsMenu.css';
 import './TelegramMessageQuickShare.css';
 
-type Props = { onClose: () => void };
+type Props = { onClose: () => void; trainingSection?: string };
 
 const MODES = ['OBSERVE', 'SUGGEST', 'AUTO'] as const;
 const TASK_MODES = ['NONE', 'SUGGEST', 'AUTO'] as const;
@@ -77,10 +78,11 @@ type SliderProps = {
   index: number;
   options: readonly string[];
   shortLabels?: readonly string[];
+  markEvery?: number;
   onChange: (index: number) => void;
 };
 
-export function SettingSlider({ title, description, index, options, shortLabels, onChange }: SliderProps) {
+export function SettingSlider({ title, description, index, options, shortLabels, markEvery = 1, onChange }: SliderProps) {
   const id = useId();
   const progress = options.length > 1 ? (index / (options.length - 1)) * 100 : 0;
   return (
@@ -98,10 +100,10 @@ export function SettingSlider({ title, description, index, options, shortLabels,
         onChange={event => onChange(Number(event.currentTarget.value))}
       />
       <div className="telegram-ai-slider-setting__marks" aria-hidden="true">
-        {options.map((option, i) => (
+        {options.map((option, i) => (i % markEvery === 0 || i === options.length - 1) ? (
           <span key={option} style={{ left: `${i / Math.max(1, options.length - 1) * 100}%` }}
             className={i <= index ? 'telegram-ai-slider-setting__mark--active' : ''}/>
-        ))}
+        ) : null)}
       </div>
       {shortLabels ? (
         <div className={`telegram-ai-slider-setting__labels ${shortLabels.length >= 8 ? 'telegram-ai-slider-setting__labels--dense' : ''}`} aria-hidden="true">
@@ -213,13 +215,40 @@ export function CreditLimitSlider({ value, onChange }: { value: number | null; o
   </div>;
 }
 
-export function TelegramAiAssistantSettings({ onClose }: Props) {
-  const [policies, setPolicies] = useState<TelegramAiChatPolicy[]>([]);
-  const [capability, setCapability] = useState<TelegramChatCapability | null>(null);
+export function useAssistantDailyCap() {
+  const [cap,setCap] = useState<number | null>(null);
+  useEffect(() => { let alive = true; void api.getMe().then(({user}) => { if(alive) setCap(user.subscriptionLimit?.daily?.capMilli ?? null); }).catch(()=>undefined); return () => { alive=false; }; }, []);
+  return cap;
+}
+const ASSISTANT_PERCENT_OPTIONS = Array.from({length:101},(_,percent)=>`${percent}%`);
+const ASSISTANT_PERCENT_LABELS = ['0%', '25%', '50%', '75%', '100%'] as const;
+export function AssistantPercentSlider({value,legacy,cap,onChange}:{value?:number|null;legacy:number|null;cap:number;onChange:(percent:number)=>void}) {
+  const percent = value ?? (legacy === null ? 100 : Math.min(100,Math.max(0,Math.floor(legacy*100/cap))));
+  return <div className="telegram-ai-custom-control">
+    <SettingSlider title="Доля дневного лимита" description="0% запрещает расход. 100% разрешает использовать весь дневной лимит подписки, с учётом общего остатка."
+      index={percent} options={ASSISTANT_PERCENT_OPTIONS} shortLabels={ASSISTANT_PERCENT_LABELS} markEvery={25} onChange={onChange}/>
+  </div>;
+}
+export function TelegramAiAssistantSettings({ onClose, trainingSection }: Props) {
+  const dailyCap = useAssistantDailyCap();
+  const settingsScrollRef = useRef<HTMLDivElement>(null);
+  useScrollFade(settingsScrollRef);
+  const training = trainingSection !== undefined;
+  useEffect(() => {
+    if (!training) return;
+    // The accordion is normally uncontrolled and initially closed.
+    // Only the isolated tutorial profile opens the section being explained.
+    const root = document.querySelector('[data-guided-assistant="telegram"]');
+    root?.querySelectorAll<HTMLDetailsElement>('details.telegram-ai-settings-section').forEach(section => {
+      section.open = section.classList.contains('telegram-ai-settings-section--' + trainingSection);
+    });
+  }, [training, trainingSection]);
+  const [policies, setPolicies] = useState<TelegramAiChatPolicy[]>(() => training ? [{ ...DEFAULTS, id: 'training-chat', userId: 'training', chatId: 'training-chat', chatKind: 'group', chatTitle: 'Учебная переписка · Проект', isEnabled: false, historyImportCursor: null, historyImportedCount: 0, spentTodayMilli: 0, reservedTodayMilli: 0, totalSpentMilli: 0, lastCheckedAt: null, lastSummaryAt: null, lastSummary: null, lastError: null, nextCheckAt: null, createdAt: '', updatedAt: '' }] : []);
+  const [capability, setCapability] = useState<TelegramChatCapability | null>(training ? { connected: true, readEnabled: true, analyzeEnabled: true, sendEnabled: true } : null);
   const [available, setAvailable] = useState<TelegramSendTargetList | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(training ? 'training-chat' : null);
   const [draft, setDraft] = useState<TelegramAiChatSettings>({ ...DEFAULTS });
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!training);
   const [busy, setBusy] = useState(false);
   const [loadingChats, setLoadingChats] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -231,6 +260,7 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
   const [notice, setNotice] = useState('');
 
   useEffect(() => {
+    if (training) return;
     let live = true;
     Promise.all([api.telegramAssistantPolicies(), api.telegramChatCapability()])
       .then(([list, access]) => {
@@ -255,6 +285,7 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
   }, [onClose, pickerOpen, pickerBusy]);
 
   useEffect(() => {
+    if (training) return;
     const timer = window.setInterval(() => {
       void api.telegramAssistantPolicies().then(data => setPolicies(data.policies)).catch(() => {});
     }, 30_000);
@@ -285,6 +316,7 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
       suggestHow: existing.suggestHow ?? '',
       monitorModel: existing.monitorModel,
       dailyCreditLimitMilli: existing.dailyCreditLimitMilli,
+      dailyCreditLimitPercent: existing.dailyCreditLimitPercent ?? null,
        autoReplyWhen: existing.autoReplyWhen ?? '',
       autoReplyHow: existing.autoReplyHow ?? '',
       notifyImportant: existing.notifyImportant,
@@ -314,7 +346,7 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
     try {
       // The add button is an explicit opt-in. Use the same save+start path
       // as the existing settings form, not an unsaved placeholder profile.
-      await api.telegramAssistantSavePolicy(pickerChoice, { ...DEFAULTS });
+      await api.telegramAssistantSavePolicy(pickerChoice, { ...DEFAULTS, ...(dailyCap?{dailyCreditLimitPercent:Math.min(100,Math.floor((DEFAULTS.dailyCreditLimitMilli??dailyCap)/dailyCap*100))}:{}) });
       try {
         await api.telegramAssistantStart(pickerChoice);
       } catch (startError) {
@@ -366,7 +398,7 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
     try {
       // The explicit Save/Add click also grants monitoring consent. Do not
       // require a second "Start" action after creating or editing a policy.
-      await api.telegramAssistantSavePolicy(selectedId, draft);
+      await api.telegramAssistantSavePolicy(selectedId, dailyCap ? {...draft,dailyCreditLimitPercent:draft.dailyCreditLimitPercent??(draft.dailyCreditLimitMilli==null?100:Math.max(0,Math.min(100,Math.floor(draft.dailyCreditLimitMilli/dailyCap*100))))}:draft);
       window.dispatchEvent(new Event('telegram-ai-assistant-updated'));
       try {
         await api.telegramAssistantStart(selectedId);
@@ -404,15 +436,15 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
   return <>
     {createPortal(
     <div className="telegram-integrations-modal fixed inset-0 z-[1100] flex items-center justify-center bg-slate-950/70 p-3 backdrop-blur-sm" onClick={onClose}>
-      <section role="dialog" aria-modal="true" aria-label="ИИ-ассистент Telegram"
+      <section role="dialog" aria-modal="true" aria-label="ИИ-ассистент Telegram" data-guided-assistant={training ? "telegram" : undefined}
         className="telegram-integrations-modal__panel flex max-h-[92dvh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border shadow-2xl"
         onClick={e => e.stopPropagation()}>
-        <div className="telegram-ai-settings-scroll min-h-0 overflow-y-auto px-5 py-5">
+        <div ref={settingsScrollRef} className="telegram-ai-settings-scroll min-h-0 overflow-y-auto px-5 py-5">
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="telegram-integrations-modal__accent flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider"><Bot size={15}/> Интеграции</p>
             <h2 className="mt-1 text-xl font-bold">ИИ-ассистент в Telegram</h2>
-            <p className="integration-menu__muted mt-1 text-sm">Настройки отдельно для каждого чата или группы.</p>
+            <p className="integration-menu__muted mt-1 text-sm">{training ? 'Учебный профиль · настройки не сохраняются' : 'Настройки отдельно для каждого чата или группы.'}</p>
           </div>
           <button aria-label="Закрыть" type="button" className="integration-menu__icon-button rounded-xl p-2" onClick={onClose}><X size={18}/></button>
         </div>
@@ -654,10 +686,9 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
                       <option value="gpt-6.1-sol">GPT-6.1 Sol</option>
                     </select>
                   </label>
-                  <CreditLimitSlider key={selectedId + '-credits'} value={draft.dailyCreditLimitMilli}
-                    onChange={value => update('dailyCreditLimitMilli', value)}/>
+                  {dailyCap ? <AssistantPercentSlider cap={dailyCap} legacy={draft.dailyCreditLimitMilli} value={draft.dailyCreditLimitPercent} onChange={value=>update('dailyCreditLimitPercent',value)}/> : <CreditLimitSlider key={selectedId + '-credits'} value={draft.dailyCreditLimitMilli} onChange={value => { update('dailyCreditLimitMilli', value); update('dailyCreditLimitPercent', null); }}/>}
                   <p className="integration-menu__muted text-xs leading-relaxed">
-                    «Без ограничения» отменяет только дневной предел для этого чата. Расходы учитываются по фактическим токенам модели и списываются из общего баланса. При нехватке кредитов новые анализы не выполняются.
+                    Расходы учитываются по фактическим токенам модели и списываются из общего баланса. При исчерпании лимита новые анализы не выполняются.
                   </p>
                   <label className="flex items-start gap-2 text-sm">
                     <input type="checkbox" checked={draft.notifyImportant} onChange={e => update('notifyImportant', e.target.checked)} className="mt-1"/>

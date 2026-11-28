@@ -71,6 +71,7 @@ export async function createAiCheckup(input: {
       data: {
         userId: input.userId,
         eventKey: 'ai-checkup:' + stored.id,
+        androidActionRef: proposalId,
         content: '🤖 Новый ИИ-чекап готов. Откройте «Быстрые запросы», чтобы прочитать отчёт.'
       }
     }).catch((error: unknown) => {

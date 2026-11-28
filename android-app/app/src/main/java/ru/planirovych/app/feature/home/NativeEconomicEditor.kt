@@ -12,6 +12,9 @@ import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.NorthEast
+import androidx.compose.material.icons.filled.SouthWest
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -26,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.serialization.json.*
 import java.time.LocalDate
+import java.time.ZoneId
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -61,7 +65,7 @@ internal fun EcoEditorSheet(
                 "operations" -> {
                     put("kind",item.ecoText("kind").ifBlank{"EXPENSE"})
                     put("title",item.ecoText("title"))
-                    put("amount",if(editing)ecoInput(item.ecoText("amountMinor")) else "")
+                    put("amount",if(editing)item.ecoText("calculation").ifBlank{ecoInput(item.ecoText("amountMinor"))} else "")
                     put("sourceAccountId",item.ecoText("sourceAccountId").ifBlank{account})
                     put("targetAccountId",item.ecoText("targetAccountId"))
                     put("category",item.ecoText("category"))
@@ -102,10 +106,13 @@ internal fun EcoEditorSheet(
         }
     }
     fun value(key:String)=form[key].orEmpty()
-    fun change(key:String,new:String){ form[key]=new }
+    fun change(key:String,new:String){ form[key]=if(key in listOf("amount","balance","paid","creditLimit","monthlyOverride"))ecoGroupMoney(new) else new }
+    val positions=remember(request){mutableStateListOf<EcoPositionDraft>().apply{addAll(ecoPositionDrafts(item.ecoText("positionsJson")))}}
     val accountOptions = snapshot.ecoItems("accounts").map {
         it.ecoText("id") to it.ecoText("name")
     }
+    var repeatRule by remember(request) { mutableStateOf(item?.get("recurrenceJson") as? JsonObject) }
+    var repeatEnabled by remember(request) { mutableStateOf(repeatRule!=null) }
     var localError by remember(request) { mutableStateOf("") }
     var newCategoryOpen by remember(request) { mutableStateOf(false) }
     var newCategoryName by remember(request) { mutableStateOf("") }
@@ -144,8 +151,17 @@ internal fun EcoEditorSheet(
                             value("targetAccountId")!=value("sourceAccountId")) {
                             "Укажите другой счёт для перевода"
                         }
+                        require(!repeatEnabled || repeatRule!=null) { "Настройте расписание повторений" }
+                        put("recurrenceJson",if(repeatEnabled)repeatRule ?: JsonNull else JsonNull)
                         put("kind",kind); put("title",value("title").trim())
-                        put("amountMinor",ecoParseMoney(value("amount")))
+                        put("amountMinor",ecoCalculateMoney(value("amount")))
+                        put("calculation",if(ecoIsExpression(value("amount")))JsonPrimitive(value("amount")) else JsonNull)
+                        put("positionsJson",buildJsonArray {
+                            positions.filter{it.name.isNotBlank()||it.amount.isNotBlank()}.forEach{p->
+                                require(p.name.isNotBlank()){"Укажите название позиции"}
+                                add(buildJsonObject{put("name",p.name.trim());put("amountMinor",ecoParseMoney(p.amount,true))})
+                            }
+                        }.toString())
                         put("sourceAccountId",value("sourceAccountId"))
                         put("targetAccountId",if(kind=="TRANSFER")
                             JsonPrimitive(value("targetAccountId")) else JsonNull)
@@ -265,23 +281,42 @@ internal fun EcoEditorSheet(
                 .padding(vertical=12.dp),verticalArrangement=Arrangement.spacedBy(11.dp)) {
                 when(type) {
                     "operations" -> {
-                        EcoSelect("Тип операции",value("kind"),
+                        EcoOperationChoices("Тип операции",value("kind"),
                             listOf("EXPENSE" to "Расход","INCOME" to "Доход",
-                                "TRANSFER" to "Перевод между счетами"),colors) {
+                                "TRANSFER" to "Перевод"),colors,true) {
                             change("kind",it);change("category","");newCategoryOpen=false
                         }
                         EcoInput("Название",value("title"),colors,160,
                             placeholder="Что купили или получили") {change("title",it)}
-                        EcoInput("Сумма, ₽",value("amount"),colors,40,decimal=true,
-                            placeholder="0,00"){change("amount",it)}
-                        EcoSelect(if(value("kind")=="TRANSFER")"Счёт списания" else "Счёт",
+                        EcoInput("Сумма, ₽",value("amount"),colors,240,
+                            placeholder="0,00 или 1 000 + 200"){change("amount",it)}
+                        if(ecoIsExpression(value("amount")))Text(
+                            runCatching{"= "+ecoRubles(ecoCalculateMoney(value("amount")))}.getOrDefault("Введите корректное выражение"),
+                            color=colors.gold,fontSize=13.sp)
+                        Text("Позиции",color=colors.text,fontWeight=FontWeight.SemiBold,fontSize=13.sp)
+                        positions.forEachIndexed{index,p->
+                            Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(6.dp)){
+                                Box(Modifier.weight(1f)){EcoInput("Название",p.name,colors,160){positions[index]=p.copy(name=it)}}
+                                Box(Modifier.weight(.75f)){EcoInput("Сумма, ₽",p.amount,colors,40,decimal=true){positions[index]=p.copy(amount=ecoGroupMoney(it))}}
+                                IconButton(onClick={positions.removeAt(index)}){Icon(Icons.Default.Close,"Удалить позицию",tint=colors.muted)}
+                            }
+                        }
+                        if(positions.size<100)EcoInlineAction("+ Добавить позицию",colors){positions.add(EcoPositionDraft("",""))}
+                        if(positions.isNotEmpty())EcoInlineAction("Использовать сумму позиций",colors){
+                            runCatching{
+                                val total=positions.fold(java.math.BigInteger.ZERO){acc,p->acc+ecoParseMoney(p.amount,true).toBigInteger()}
+                                require(total.signum()>0){"Сумма позиций должна быть положительной"}
+                                change("amount",ecoInput(total.toString()));localError=""
+                            }.onFailure{localError=it.message.orEmpty()}
+                        }
+                        EcoOperationChoices(if(value("kind")=="TRANSFER")"Счёт списания" else "Счёт",
                             value("sourceAccountId"),accountOptions,colors){
                             change("sourceAccountId",it)
+                            if(value("targetAccountId")==it)change("targetAccountId","")
                         }
                         if(value("kind")=="TRANSFER"){
-                            EcoSelect("Счёт зачисления",value("targetAccountId"),
-                                listOf("" to "Выберите счёт")+accountOptions.filter {
-                                    it.first!=value("sourceAccountId") },colors){
+                            EcoOperationChoices("Счёт зачисления",value("targetAccountId"),
+                                accountOptions.filter { it.first!=value("sourceAccountId") },colors){
                                 change("targetAccountId",it)
                             }
                         } else {
@@ -319,6 +354,25 @@ internal fun EcoEditorSheet(
                         EcoDate("Дата",value("date"),colors){change("date",it)}
                         EcoInput("Примечание",value("note"),colors,500,placeholder="Необязательно") {
                             change("note",it)
+                        }
+                        Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
+                            Checkbox(checked=repeatEnabled,onCheckedChange={checked->
+                                if(checked && repeatRule==null){
+                                    val day=runCatching{LocalDate.parse(value("date")).dayOfMonth}.getOrDefault(LocalDate.now().dayOfMonth)
+                                    repeatRule=buildJsonObject{
+                                        put("rrule","FREQ=MONTHLY")
+                                        put("timezone",user.ecoText("timeZone").ifBlank{ZoneId.systemDefault().id})
+                                        put("until",JsonNull)
+                                        put("slots",buildJsonArray{add(buildJsonObject{put("time","09:00");put("monthDay",day)})})
+                                    }
+                                }
+                                repeatEnabled=checked
+                            },colors=CheckboxDefaults.colors(checkedColor=colors.gold))
+                            Text("Повторять",color=colors.text,fontSize=13.sp)
+                        }
+                        if(repeatEnabled){
+                            NativeTaskRecurrenceEditor(rule=repeatRule,summary=null,prompt="",onPrompt={},onManual={rule,_->repeatRule=rule},onParse={},parsing=false,dark=androidx.compose.foundation.isSystemInDarkTheme(),manualOnly=true,accent=colors.gold,timeZone=user.ecoText("timeZone"))
+                            Text("В назначенное время придёт чип. Запись только после подтверждения.",color=colors.muted,fontSize=11.sp)
                         }
                     }
                     "accounts" -> {
@@ -361,7 +415,7 @@ internal fun EcoEditorSheet(
                             change("postedToAccount",if(it)"yes" else "no")
                         }
                         if(value("postedToAccount")=="yes"){
-                            EcoSelect("Счёт для учёта долга",value("accountId"),accountOptions,colors){
+                            EcoOperationChoices("Счёт для учёта долга",value("accountId"),accountOptions,colors){
                                 change("accountId",it)
                             }
                         }
@@ -538,4 +592,39 @@ private fun EcoCheck(text:String,checked:Boolean,colors:EcoColors,onChange:(Bool
 @Composable
 private fun EcoHint(text:String,colors:EcoColors) {
     Text(text,fontSize=11.sp,lineHeight=16.sp,color=colors.muted)
+}
+
+@Composable
+internal fun EcoOperationChoices(label:String,value:String,options:List<Pair<String,String>>,colors:EcoColors,oneRow:Boolean=false,onChange:(String)->Unit){
+    Column(verticalArrangement=Arrangement.spacedBy(6.dp)){
+        Text(label,fontSize=11.sp,color=colors.muted)
+        val rows=if(oneRow)listOf(options) else options.chunked(2)
+        rows.forEach{row->
+            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(6.dp)){
+                row.forEach{(id,name)->
+                    val selected=id==value
+                    Box(Modifier.weight(1f).clip(RoundedCornerShape(10.dp))
+                        .background(if(selected)colors.gold.copy(alpha=.18f) else colors.field)
+                        .border(1.dp,if(selected)colors.gold else colors.outline,RoundedCornerShape(10.dp))
+                        .clickable{onChange(id)}.padding(horizontal=if(oneRow)4.dp else 8.dp,vertical=12.dp),contentAlignment=Alignment.Center){
+                        Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(4.dp)){
+                            if(oneRow){
+                                val light=colors.background==Color(0xFFF7F8FA)
+                                val icon=when(id){"INCOME"->Icons.Default.SouthWest;"EXPENSE"->Icons.Default.NorthEast;else->Icons.Default.SwapHoriz}
+                                val tint=if(light)when(id){"INCOME"->Color(0xFF23824C);"EXPENSE"->Color(0xFFB16D22);else->Color(0xFF5755A0)}
+                                    else when(id){"INCOME"->Color(0xFF9CE0B0);"EXPENSE"->Color(0xFFF4B58B);else->Color(0xFFB3BDFA)}
+                                val iconBackground=if(light)when(id){"INCOME"->Color(0xFFE3F6E9);"EXPENSE"->Color(0xFFFFF0DF);else->Color(0xFFE9ECF8)}
+                                    else when(id){"INCOME"->Color(0xFF263B34);"EXPENSE"->Color(0xFF383038);else->Color(0xFF353747)}
+                                Box(Modifier.size(23.dp).clip(RoundedCornerShape(7.dp)).background(iconBackground),contentAlignment=Alignment.Center){
+                                    Icon(icon,null,tint=tint,modifier=Modifier.size(15.dp))
+                                }
+                            }
+                            Text(name,color=colors.text,fontSize=12.sp,fontWeight=if(selected)FontWeight.SemiBold else FontWeight.Normal,maxLines=if(oneRow)1 else 2)
+                        }
+                    }
+                }
+                if(!oneRow&&row.size==1)Spacer(Modifier.weight(1f))
+            }
+        }
+    }
 }

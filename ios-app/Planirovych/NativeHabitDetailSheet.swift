@@ -172,7 +172,7 @@ struct NativeHabitDetailSheet: View {
                 }
             }
             HStack(spacing: 14) {
-                Label("Выполнено", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                Label("Выполнено", systemImage: "checkmark.circle.fill").foregroundStyle(tint)
                 Label("Частично", systemImage: "circle.lefthalf.filled").foregroundStyle(tint)
             }
             .font(.caption2)
@@ -190,7 +190,7 @@ struct NativeHabitDetailSheet: View {
         let eligible = HabitCalendar.scheduled(habit, on: date)
         let amount = amounts[HabitCalendar.dateKey(date)] ?? 0
         let completed = eligible && amount >= habit.targetCount
-        let partial = eligible && amount > 0 && !completed
+        let progress = inside && eligible ? min(1, max(0, CGFloat(amount) / CGFloat(max(1, habit.targetCount)))) : 0
         let canEdit = inside && eligible && date <= today && !session.isWorking && !loading
         Button {
             Task {
@@ -199,14 +199,13 @@ struct NativeHabitDetailSheet: View {
             }
         } label: {
             ZStack {
-                Circle()
-                    .fill(completed ? Color.green.opacity(0.18)
-                          : partial ? tint.opacity(0.14) : Color.clear)
-                if completed {
-                    Circle().stroke(Color.green, lineWidth: 2)
-                } else if partial {
-                    Circle().stroke(tint.opacity(0.8), lineWidth: 2)
+                GeometryReader { geometry in
+                    VStack(spacing: 0) {
+                        Spacer(minLength: 0)
+                        Rectangle().fill(tint).frame(height: geometry.size.height * progress)
+                    }
                 }
+                .clipShape(RoundedRectangle(cornerRadius: 10))
                 Text("\(calendar.component(.day, from: date))")
                     .font(.system(size: 13, weight: completed ? .bold : .regular))
                     .foregroundStyle(inside ? Color.primary : Color.secondary.opacity(0.25))

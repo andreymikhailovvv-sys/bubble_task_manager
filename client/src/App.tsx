@@ -1,3 +1,8 @@
+import { announcePlanikSend } from './components/PlanikSendGesture';
+import { AssistantSettingsProposalCard } from './components/AssistantSettingsProposalCard';
+import { announceAppliedEconomicProposals } from './components/EconomicMoneyGesture';
+import { useScrollFade } from './hooks/useScrollFade';
+import { SubscriptionLimitPanel, SubscriptionDailyRing, PLAN_FEATURES } from './components/SubscriptionLimitPanel';
 import { AiStreamingMessageBody } from './components/AiStreamingMessageBody';
 import EmailVerificationDialog from './components/EmailVerificationDialog';
 import { subscribeAccountEmailVerified } from './lib/account-email-status-events';
@@ -6,8 +11,8 @@ import { createPortal } from 'react-dom';
 import { ArrowUpRight, Bot, BriefcaseBusiness, CalendarDays, CalendarPlus, Check, CheckCheck, ChevronDown, ChevronRight, ChevronUp, Clock3, Circle as CircleIcon, Coins, Copy, Eye, EyeOff, FileText, LayoutGrid, List, Edit3, Maximize2, Menu, MessageCircle, Minimize2, Gauge, Loader2, Pause, Paperclip, PieChart, Play, Smartphone, Plus, Repeat, RotateCcw, Search, SendHorizontal, Settings, Sparkles, Square, Ticket, BellRing, Trash2, UserRound, X } from 'lucide-react';
 import { motion, Reorder } from 'framer-motion';
 import { BubbleField } from './components/BubbleField';
-import { FullscreenModePicker, FullscreenWorkspaceSingle, FullscreenWorkspaceSplit } from './components/FullscreenWorkspaceLayout';
-import { replaceFullscreenPanel, resolveFullscreenPanels, type FullscreenWorkspacePanel } from './lib/fullscreenWorkspacePanels';
+import { FullscreenBlockMenu, FullscreenModePicker, FullscreenWorkspaceSingle, FullscreenWorkspaceSplit } from './components/FullscreenWorkspaceLayout';
+import { replaceFullscreenPanel, resolveFullscreenPanels, requiresCompanionPanel, type FullscreenWorkspacePanel } from './lib/fullscreenWorkspacePanels';
 import { FullscreenUpcomingTasksPanel } from './components/FullscreenUpcomingTasksPanel';
 import { PrimaryWorkspaceSidebar } from './components/PrimaryWorkspaceSidebar';
 import { FullscreenPaneFilters, createDefaultWorkspacePaneFilter, type WorkspacePaneFilter } from './components/FullscreenPaneFilters';
@@ -58,9 +63,18 @@ import type { AiAttachmentPreview } from './components/AiAttachmentTiles';
 import { formatCreditsSpent } from './lib/credits';
 import { AI_TOUR_STEPS, FEATURE_TOUR_STEPS, TASK_TOUR_STEPS, WORKSPACE_TOUR_STEPS, PRIMARY_WORKSPACE_TOUR_STEPS, TourOverlay, type AiTourStep, type FeatureTourStep, type TaskTourStep, type WorkspaceTourStep } from './components/TourOverlay';
 import { useCreditPurchase } from './lib/useCreditPurchase';
+import { useSubscriptionPurchase } from './lib/useSubscriptionPurchase';
 import { ExpandedAiChat } from './components/ExpandedAiChat';
 import { QuickAiLauncherFrame } from './components/QuickAiLauncherFrame';
 import { PlanikMascot } from './components/PlanikMascot';
+import { completionProgress, type CompletionProgress } from './lib/completionStatistics';
+import { BasicPlanikTraining } from './components/BasicPlanikTraining';
+import { TelegramAiAssistantSettings } from './components/TelegramAiAssistantSettings';
+import { MailAssistantSettings } from './components/MailAssistantSettings';
+import { BASIC_LESSON_ID, BASIC_OFFER_MARKER, trainingOfferKey, guidedSteps, nextGuidedStep, type AdvancedLesson, type AdvancedTrainingConfig } from './lib/guidedTraining';
+import { TRAINING_SPHERES, TRAINING_COMPLETE_ID, TRAINING_COMPLETE_TITLE, createTrainingTasks, createCompletionTrainingTask, nextBasicTrainingStep, applyTrainingBubbleAction, type BasicTrainingStep } from './lib/basicTraining';
+import { MascotIdentityContext, useMascotSurface } from './components/MascotPresence';
+import { useMascotWardrobe, MascotWardrobeDialog, MascotWardrobeTrigger } from './components/MascotWardrobe';
 import ModuleRail from './components/ModuleRail';
 import { FocusedTaskWindowFrame } from './components/FocusedTaskWindowFrame';
 import { FocusedSubtaskComposer } from './components/FocusedSubtaskComposer';
@@ -129,9 +143,9 @@ const AI_CHAT_MODEL_SELECT_OPTIONS = AI_CHAT_MODEL_OPTIONS.map(({ value, label }
 
 
 const SUBSCRIPTION_PLANS: Array<{ key: keyof SubscriptionLinks; name: string; price: string; badge: string; features: string[] }> = [
-  { key: 'start', name: 'Старт', price: '299 ₽/мес', badge: 'Для регулярного старта', features: ['3 000 ИИ-кредитов в месяц', 'Память диалогов: до 100 сообщений'] },
-  { key: 'pro', name: 'Про', price: '599 ₽/мес', badge: 'Оптимальный выбор', features: ['6 000 ИИ-кредитов в месяц', 'Безлимитная память диалогов', 'ИИ-чекап', 'Оптимизация расписания'] },
-  { key: 'max', name: 'Максимум', price: '1290 ₽/мес', badge: 'Все возможности', features: ['13 000 ИИ-кредитов в месяц', 'Безлимитная память диалогов', 'Доступ ко всем ИИ-функциям', 'Доступ к самым продвинутым моделям'] }
+  { key: 'start', name: 'Старт', price: '299 ₽/мес', badge: 'Для регулярного старта', features: [...PLAN_FEATURES.start] },
+  { key: 'pro', name: 'Про', price: '599 ₽/мес', badge: 'Оптимальный выбор', features: [...PLAN_FEATURES.pro] },
+  { key: 'max', name: 'Максимум', price: '1290 ₽/мес', badge: 'Все возможности', features: [...PLAN_FEATURES.max] }
 ];
 const MAX_AI_ATTACHMENTS = 3;
 const MAX_AI_ATTACHMENT_SIZE = 8 * 1024 * 1024;
@@ -835,6 +849,11 @@ function buildTimelineViewData(
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const wardrobe = useMascotWardrobe(currentUser?.id,currentUser?.subscriptionPlan,currentUser?.subscriptionExpiresAt);
+  const mascotSurface = useMascotSurface(Boolean(currentUser));
+  const selectedPlannerSkin = wardrobe.selected('planner');
+  const selectedEconomicSkin = wardrobe.selected('economic');
+  const mascotIdentity = useMemo(() => ({variant:'planner' as const,skinId:selectedPlannerSkin,economicSkinId:selectedEconomicSkin}), [selectedPlannerSkin,selectedEconomicSkin]);
   const workspaceUserIdRef = useRef<string | null>(null);
   if (currentUser?.id) workspaceUserIdRef.current = currentUser.id;
   const browserNotificationsEnabledRef = useRef(true);
@@ -845,20 +864,31 @@ export default function App() {
   const [initialWorkspaceReady, setInitialWorkspaceReady] = useState(false);
   const [spheres, setSpheres] = useState<Sphere[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const completionTasksRef = useRef(tasks);
+  completionTasksRef.current = tasks;
   const [unlinkingBubbleTaskId, setUnlinkingBubbleTaskId] = useState<string | null>(null);
   const [mode, setMode] = useState<'global' | 'sectors'>('sectors');
   // Distraction-free viewport for bubbles. Keeps the same BubbleField instance,
   // filters and overlays; only the surrounding chrome is hidden.
-  // The multi-pane workbench is the primary desktop layout. The classic
-  // planner remains available through the explicit 'Классический вид' action.
+  // The multi-pane workbench is the only user-facing desktop layout.
   const [isBubbleFullscreen, setIsBubbleFullscreen] = useState(true);
   const [fullscreenDisplayModes, setFullscreenDisplayModes] = useState<DisplayMode[]>(['bubbles']);
   // Two independently replaceable fullscreen slots; the old view toggles stay
   // a quick way to reset them to one or two visualization modes.
   const [fullscreenPanelSlots, setFullscreenPanelSlots] = useState<FullscreenWorkspacePanel[] | null>(null);
   const fullscreenPanels = fullscreenPanelSlots ?? resolveFullscreenPanels(fullscreenDisplayModes, null);
+  const [pendingWorkspaceBlock, setPendingWorkspaceBlock] = useState<FullscreenWorkspacePanel | null>(null);
+  const blockDragRef = useRef(false);
+  const subscriptionScrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!pendingWorkspaceBlock) return;
+    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') { blockDragRef.current = false; setPendingWorkspaceBlock(null); setIsAddMenuOpen(false); } };
+    document.addEventListener('keydown', escape);
+    return () => document.removeEventListener('keydown', escape);
+  }, [pendingWorkspaceBlock]);
   const [fullscreenSplitRatio, setFullscreenSplitRatio] = useState(50);
   const [fullscreenChatTarget, setFullscreenChatTarget] = useState<HTMLDivElement | null>(null);
+  const [expandedChatTarget, setExpandedChatTarget] = useState<HTMLDivElement | null>(null);
   const [fullscreenFocusTarget, setFullscreenFocusTarget] = useState<HTMLDivElement | null>(null);
   // Each fullscreen view owns its own sector and time filters.
   const [fullscreenPaneFilters, setFullscreenPaneFilters] = useState<Record<DisplayMode, WorkspacePaneFilter>>({
@@ -891,7 +921,9 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [reportPromptTask, setReportPromptTask] = useState<Task | null>(null);
   const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
-  const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false);
+  const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(() => new URLSearchParams(window.location.search).get('openCredits') === '1');
+  useEffect(() => { const url = new URL(window.location.href); if (url.searchParams.get('openCredits') === '1') { url.searchParams.delete('openCredits'); window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash); } }, []);
+  useScrollFade(subscriptionScrollRef, isSubscriptionModalOpen);
   const [creditModalView, setCreditModalView] = useState<'purchase' | 'statistics'>('purchase');
   const [creditUsageStatistics, setCreditUsageStatistics] = useState<CreditUsageStatistics | null>(null);
   const [creditUsageStatisticsLoading, setCreditUsageStatisticsLoading] = useState(false);
@@ -925,6 +957,34 @@ export default function App() {
   const [subscriptionLinks, setSubscriptionLinks] = useState<SubscriptionLinks>({ start: '', pro: '', max: '' });
   const [creditPacks, setCreditPacks] = useState<CreditPack[]>([]);
   const [creditPurchaseAvailable, setCreditPurchaseAvailable] = useState(false);
+  const [subscriptionPurchaseAvailable, setSubscriptionPurchaseAvailable] = useState(false);
+  const activeSubscription = Boolean(currentUser?.subscriptionExpiresAt &&
+    new Date(currentUser.subscriptionExpiresAt).getTime() > Date.now());
+  const shortLimitExhausted = activeSubscription && (currentUser?.subscriptionLimit?.daily?.remainingMilli === 0 || currentUser?.subscriptionLimit?.weekly?.remainingMilli === 0);
+  const subscriptionUserId = currentUser?.id;
+  useEffect(() => {
+    if (!subscriptionUserId) return;
+    let stopped = false;
+    let inFlight = false;
+    const refresh = async () => {
+      if (inFlight || document.visibilityState !== 'visible') return;
+      inFlight = true;
+      try {
+        const { user } = await api.getMe();
+        if (!stopped) setCurrentUser(prev => prev?.id === subscriptionUserId && user.id === subscriptionUserId
+          ? { ...prev, subscriptionLimit: user.subscriptionLimit, subscriptionPlan: user.subscriptionPlan, subscriptionExpiresAt: user.subscriptionExpiresAt, aiCredits: user.aiCredits, aiCreditsMilli: user.aiCreditsMilli } : prev);
+      } catch { /* Reconnect on the next focus or scheduled refresh. */ }
+      finally { inFlight = false; }
+    };
+    const timer = window.setInterval(() => void refresh(), 60_000);
+    const onFocus = () => void refresh();
+    window.addEventListener('focus', onFocus);
+    return () => { stopped = true; window.clearInterval(timer); window.removeEventListener('focus', onFocus); };
+  }, [activeSubscription, subscriptionUserId]);
+  const subscriptionPurchase = useSubscriptionPurchase({
+    surface: 'web', openConfirmation: (url) => window.location.assign(url),
+    onSucceeded: async () => { const me = await api.getMe(); setCurrentUser(me.user); }
+  });
   const creditPurchase = useCreditPurchase({ surface: 'web', openConfirmation: (url) => window.location.assign(url), onSucceeded: async () => { const me = await api.getMe(); setCurrentUser(me.user); } });
   const loadCreditUsageStatistics = async () => {
     setCreditUsageStatisticsLoading(true);
@@ -968,6 +1028,50 @@ export default function App() {
   const [trainingOpenSignal, setTrainingOpenSignal] = useState(0);
   const [hasUnreadNews, setHasUnreadNews] = useState(false);
   const [isOnboardingOfferOpen, setIsOnboardingOfferOpen] = useState(false);
+  const [basicStep, setBasicStep] = useState<BasicTrainingStep | null>(null);
+  const [advancedTraining, setAdvancedTraining] = useState<{ lesson: AdvancedLesson; step: string } | null>(null);
+  const guidedStep = advancedTraining?.step;
+  const [guidedFocusSelected, setGuidedFocusSelected] = useState<string[]>([]);
+  const [guidedFocusMinutes, setGuidedFocusMinutes] = useState(25);
+  const [guidedFocusDeadline, setGuidedFocusDeadline] = useState<number | null>(null);
+  const [guidedFocusRemaining, setGuidedFocusRemaining] = useState(25 * 60);
+  const [guidedFocusIndex, setGuidedFocusIndex] = useState(0);
+  const guidedFocusCandidates = useMemo(() => createTrainingTasks().filter(task => !task.parentTaskId), []);
+  const guidedFocusTasks = guidedFocusCandidates.filter(task => guidedFocusSelected.includes(task.id));
+  const guidedFocusTask: Task | undefined = guidedFocusTasks[guidedFocusIndex] ?? guidedFocusTasks[0];
+  const guidedFocusSetup = guidedStep === 'feature-focus-setup';
+  const guidedFocusMode = guidedStep === 'feature-focus-timer' || guidedStep === 'feature-focus-task';
+  useEffect(() => {
+    if (!guidedFocusMode || guidedFocusDeadline === null) return;
+    const update = () => setGuidedFocusRemaining(Math.max(0, Math.ceil((guidedFocusDeadline - Date.now()) / 1000)));
+    update();
+    const interval = window.setInterval(update, 150);
+    return () => window.clearInterval(interval);
+  }, [guidedFocusMode, guidedFocusDeadline]);
+  const guidedWardrobe = Boolean(guidedStep && ['feature-skins-preview','feature-skins-space','feature-skins-practice'].includes(guidedStep));
+  const [guidedSkinChanged, setGuidedSkinChanged] = useState(false);
+  const [guidedAnimationPlayed, setGuidedAnimationPlayed] = useState(false);
+  const guidedAssistant = guidedStep === 'feature-integration-telegram-ai' || guidedStep?.startsWith('feature-telegram-') && !['feature-telegram-button','feature-telegram-qr'].includes(guidedStep) ? 'telegram' : guidedStep === 'feature-integration-mail' || guidedStep?.startsWith('feature-mail-') ? 'mail' : null;
+  const guidedAssistantSection = guidedStep?.split('-').slice(-1)[0] ?? 'intro';
+  const autoBasicStartRef = useRef<(() => void) | null>(null);
+  const autoBasicChecked = useRef<string | null>(null);
+  const [basicOfferResolvedFor, setBasicOfferResolvedFor] = useState<string | null>(null);
+  const deferTrainingNotices = authLoading || Boolean(currentUser && (!initialWorkspaceReady || basicOfferResolvedFor !== currentUser.id)) || Boolean(basicStep || advancedTraining);
+  useLayoutEffect(() => {
+    document.body.toggleAttribute('data-defer-training-notices', deferTrainingNotices);
+    return () => document.body.removeAttribute('data-defer-training-notices');
+  }, [deferTrainingNotices]);
+  const trainingAccountRef = useRef<string | undefined>(undefined);
+  trainingAccountRef.current = currentUser?.id;
+  const [basicTasks, setBasicTasks] = useState<Task[]>([]);
+  const [basicNotice, setBasicNotice] = useState<string | null>(null);
+  const basicModeRestore = useRef<'global' | 'sectors'>('sectors');
+  const basicRootTasks = useMemo(() => basicTasks.filter(task => !task.parentTaskId && task.status !== 'DONE'), [basicTasks]);
+  const basicSubtasks = useMemo(() => {
+    const result: Record<string, Task[]> = {};
+    for (const task of basicTasks) if (task.parentTaskId) (result[task.parentTaskId] ??= []).push(task);
+    return result;
+  }, [basicTasks]);
   const [activeTourStep, setActiveTourStep] = useState<TaskTourStep | AiTourStep | FeatureTourStep | WorkspaceTourStep>(null);
   const [tourWorkspaceUsesPrimary, setTourWorkspaceUsesPrimary] = useState(false);
   const tourRestoreStateRef = useRef<{
@@ -989,6 +1093,12 @@ export default function App() {
   const [isTimelineOverdueModalOpen, setIsTimelineOverdueModalOpen] = useState(false);
   const [timelineOverdueBulkPostponeLoading, setTimelineOverdueBulkPostponeLoading] = useState<null | 'normal' | 'ai'>(null);
   const [postponeNotice, setPostponeNotice] = useState<{ count: number; serial: number } | null>(null);
+  const [workspaceBlockNotice, setWorkspaceBlockNotice] = useState<number | null>(null);
+  useEffect(() => {
+    if (workspaceBlockNotice === null) return;
+    const timer = window.setTimeout(() => setWorkspaceBlockNotice(null), 3200);
+    return () => window.clearTimeout(timer);
+  }, [workspaceBlockNotice]);
   useEffect(() => {
     if (!postponeNotice) return;
     const timer = window.setTimeout(() => setPostponeNotice(null), 3200);
@@ -1070,6 +1180,8 @@ export default function App() {
       setEditorState(null);
       setFocusedTaskId(null);
       setDisplayMode('timeline');
+      setFullscreenDisplayModes(['timeline']);
+      setFullscreenPanelSlots([{ kind: 'mode', mode: 'timeline' }]);
     } else if (activeTourStep === 'ai-checkup') {
       setIsAiChatOpen(false);
       setEditorState(null);
@@ -1088,7 +1200,7 @@ export default function App() {
       setIsEfficiencyDetailsOpen(false);
       setIsFocusSetupOpen(false);
     } else if (activeTourStep === 'feature-focus-setup') {
-      setFocusSelectedTaskIds(visibleFocusCandidateTasks.slice(0, 3).map((task) => task.id));
+      if (!advancedTraining) setFocusSelectedTaskIds(visibleFocusCandidateTasks.slice(0, 3).map((task) => task.id));
       setIsFocusSetupOpen(true);
       setIsFocusModeOpen(false);
     } else if (activeTourStep === 'feature-telegram-button') {
@@ -1234,6 +1346,15 @@ export default function App() {
   const [aiChatUploadProgress, setAiChatUploadProgress] = useState<number | null>(null);
   const [quickAiChatDraft, setQuickAiChatDraft] = useState('');
   const [planikCelebrationKey, setPlanikCelebrationKey] = useState(0);
+  const [planikCompletionQueue, setPlanikCompletionQueue] = useState<CompletionProgress[]>([]);
+  const planikCompletion = planikCompletionQueue[0];
+  const completionSequence = useRef(0);
+  useEffect(() => {
+    if (!planikCompletion) return;
+    setPlanikCelebrationKey(key => key + 1);
+    const timer = window.setTimeout(() => setPlanikCompletionQueue(queue => queue.slice(1)), 3600);
+    return () => window.clearTimeout(timer);
+  }, [planikCompletion]);
   const [quickAiPendingFiles, setQuickAiPendingFiles] = useState<File[]>([]);
   const [quickAiChatLoading, setQuickAiChatLoading] = useState(false);
   const [quickAiPreviewHovered, setQuickAiPreviewHovered] = useState(false);
@@ -1446,6 +1567,12 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    api.getSubscriptionPlans()
+      .then((result) => setSubscriptionPurchaseAvailable(result.purchaseAvailable))
+      .catch(() => setSubscriptionPurchaseAvailable(false));
+  }, []);
+
+  useEffect(() => {
     api.getCreditPacks()
       .then((response) => { setCreditPacks(response.packs); setCreditPurchaseAvailable(response.purchaseAvailable); })
       .catch(() => {
@@ -1455,6 +1582,15 @@ export default function App() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    const subscriptionId = params.get('payment') === 'subscription' ? params.get('subscriptionPurchaseId') : null;
+    if (subscriptionId) {
+      subscriptionPurchase.setPendingPurchaseId(subscriptionId);
+      void subscriptionPurchase.check(subscriptionId).catch((error) =>
+        subscriptionPurchase.setMessage(error instanceof Error ? error.message : 'Не удалось проверить платёж'));
+      params.delete('payment'); params.delete('subscriptionPurchaseId');
+      window.history.replaceState({}, '', `${window.location.pathname}${params.size ? `?${params.toString()}` : ''}${window.location.hash}`);
+      return;
+    }
     const purchaseId = params.get('payment') === 'return' ? params.get('purchaseId') : null;
     if (!purchaseId) return;
     creditPurchase.setPendingPurchaseId(purchaseId);
@@ -1755,12 +1891,28 @@ export default function App() {
     void api.getTaskShare(token).then((preview) => setTaskShareDialog({ mode: 'accept', token, preview, sphereId: null })).catch((error) => setTaskShareDialog({ mode: 'accept', token, sphereId: null, error: error instanceof Error ? error.message : 'Ссылка недействительна' }));
   }, [currentUser?.id]);
   useEffect(() => {
-    if (!currentUser) {
-      setIsOnboardingOfferOpen(false);
-      return;
-    }
-    setIsOnboardingOfferOpen(localStorage.getItem(getOnboardingOfferStorageKey(currentUser.id)) !== '1');
-  }, [currentUser?.id]);
+    // The new guide replaces the old invitation banner.
+    setIsOnboardingOfferOpen(false);
+    const userId = currentUser?.id;
+    if (!userId || authLoading || !initialWorkspaceReady || autoBasicChecked.current === userId) return;
+    if (new URLSearchParams(window.location.search).has('joinTask')) { setBasicOfferResolvedFor(userId); return; }
+    autoBasicChecked.current = userId;
+    const key = trainingOfferKey(userId);
+    let seenLocally = false;
+    try { seenLocally = localStorage.getItem(key) === '1'; } catch { /* storage is optional */ }
+    if (currentUser?.completedLessonIds?.includes(BASIC_OFFER_MARKER)) { setBasicOfferResolvedFor(userId); return; }
+    void api.claimBasicTrainingOffer().then(({ show }) => {
+      if (trainingAccountRef.current !== userId) return;
+      try { localStorage.setItem(key, '1'); } catch { /* account marker is authoritative */ }
+      if (show && !seenLocally) autoBasicStartRef.current?.();
+    }).catch(() => {
+      // A temporary network failure must not block the workspace. The browser
+      // remembers the offer and the next authenticated boot can sync it.
+      if (trainingAccountRef.current !== userId || seenLocally) return;
+      try { localStorage.setItem(key, '1'); } catch { /* best effort */ }
+      autoBasicStartRef.current?.();
+    }).finally(() => { if (trainingAccountRef.current === userId) setBasicOfferResolvedFor(userId); });
+  }, [currentUser?.id, authLoading, initialWorkspaceReady]);
   useEffect(() => {
     if (!currentUser) return;
     const intervalId = window.setInterval(() => {
@@ -2161,7 +2313,7 @@ export default function App() {
   );
   const focusActiveTask = focusTasks[focusActiveIndex] ?? focusTasks[0] ?? null;
   const focusTaskAiDialog = focusActiveTask ? (aiDialogByTask[focusActiveTask.id] ?? []) : [];
-  const focusTaskAiModel: AiChatModel = focusActiveTask
+  const focusTaskAiModel: AiChatModel = shortLimitExhausted ? DEFAULT_TASK_AI_CHAT_MODEL : focusActiveTask
     ? (focusActiveTask.aiMonitoringEnabled ? (focusActiveTask.aiMonitoringModel ?? DEFAULT_TASK_AI_CHAT_MODEL) : (aiModelByTask[focusActiveTask.id] ?? DEFAULT_TASK_AI_CHAT_MODEL)) : DEFAULT_TASK_AI_CHAT_MODEL;
 
   // Fetch the SAME persistent conversation as regular task help. Switching
@@ -2270,7 +2422,7 @@ export default function App() {
     () => (focusedTask ? aiDialogByTask[focusedTask.id] ?? [] : []),
     [aiDialogByTask, focusedTask]
   );
-  const focusedAiModel: AiChatModel = focusedTask ? (focusedTask.aiMonitoringEnabled ? (focusedTask.aiMonitoringModel ?? DEFAULT_TASK_AI_CHAT_MODEL) : (aiModelByTask[focusedTask.id] ?? DEFAULT_TASK_AI_CHAT_MODEL)) : DEFAULT_TASK_AI_CHAT_MODEL;
+  const focusedAiModel: AiChatModel = shortLimitExhausted ? DEFAULT_TASK_AI_CHAT_MODEL : focusedTask ? (focusedTask.aiMonitoringEnabled ? (focusedTask.aiMonitoringModel ?? DEFAULT_TASK_AI_CHAT_MODEL) : (aiModelByTask[focusedTask.id] ?? DEFAULT_TASK_AI_CHAT_MODEL)) : DEFAULT_TASK_AI_CHAT_MODEL;
   const filteredFocusedAiDialog = useMemo(() => {
     if (!isFocusedAiSearchOpen) return focusedAiDialog;
     const query = focusedAiSearchQuery.trim().toLowerCase();
@@ -3191,7 +3343,7 @@ export default function App() {
 
   const activeAiChatProject = aiChatProjects.find((project) => project.id === activeAiChatProjectId) ?? aiChatProjects[0];
   const activeAiChat = activeAiChatProject?.chats.find((chat) => chat.id === activeAiChatId) ?? activeAiChatProject?.chats[0];
-  const activeProjectChatModel = readSavedAiChatModel(activeAiChat?.model) ?? DEFAULT_WEB_PROJECT_CHAT_MODEL;
+  const activeProjectChatModel = shortLimitExhausted ? DEFAULT_WEB_PROJECT_CHAT_MODEL : (readSavedAiChatModel(activeAiChat?.model) ?? DEFAULT_WEB_PROJECT_CHAT_MODEL);
   const changeProjectChatModel = (model: AiChatModel) => {
     if (!activeAiChatProject?.id || !activeAiChat?.id || activeAiChat.id === QUICK_AI_CHAT_ID) return;
     const projectId = activeAiChatProject.id, chatId = activeAiChat.id;
@@ -3331,6 +3483,14 @@ export default function App() {
     void api.markSystemNotificationsRead().catch((error) => console.error('[System notifications] mark read failed', error));
   };
 
+  const announceConfirmedNotificationSends = (notifications: SystemNotification[]) => {
+    if (document.visibilityState !== 'visible') return;
+    for (const notification of notifications) {
+      const key = notification.eventKey;
+      if (key?.startsWith('telegram-ai-auto-reply:') && key.endsWith(':sent')) announcePlanikSend('telegram-send', key.slice(0, -5));
+      if (key?.startsWith('mail-ai-reply:') && key.endsWith(':sent')) announcePlanikSend('mail-send', key.slice('mail-ai-reply:'.length, -5));
+    }
+  };
   const refreshSystemNotifications = async () => {
     try {
       const result = await api.getSystemNotifications();
@@ -3342,6 +3502,7 @@ export default function App() {
       // Monitoring notifications are badge-only: they do not duplicate the real AI message.
       setUnreadSystemNotificationCount(result.notifications.filter(notification => notification.readAt == null).length);
       deliverBrowserSystemNotifications(newNotifications);
+      announceConfirmedNotificationSends(newNotifications);
       if (newestUnseen && newestUnseen.readAt == null && document.visibilityState === 'visible') setSystemNotificationToast(newestUnseen);
     } catch (error) {
       console.error('[System notifications] refresh failed', error);
@@ -3370,7 +3531,10 @@ export default function App() {
         // Monitoring notifications are badge-only: they do not duplicate the real AI message.
       setUnreadSystemNotificationCount(result.notifications.filter(notification => notification.readAt == null).length);
         // The first load is a baseline: never produce a pile of historical OS alerts.
-        if (baselineLoaded) deliverBrowserSystemNotifications(newNotifications);
+        if (baselineLoaded) {
+          deliverBrowserSystemNotifications(newNotifications);
+          announceConfirmedNotificationSends(newNotifications);
+        }
         baselineLoaded = true;
         if (newestUnseen && newestUnseen.readAt == null && document.visibilityState === 'visible') {
           setSystemNotificationToast(newestUnseen);
@@ -3595,7 +3759,7 @@ export default function App() {
         clientRequestId: userMessage.id,
         question: serializeAiReply(question || 'Пользователь отправил сообщение с вложением. Проанализируй содержимое файлов.', replyTarget),
         history,
-        model: quick ? DEFAULT_QUICK_AI_CHAT_MODEL : activeAiChat?.id === QUICK_AI_CHAT_ID ? quickAiChatModel : activeProjectChatModel,
+        model: shortLimitExhausted ? DEFAULT_QUICK_AI_CHAT_MODEL : quick ? DEFAULT_QUICK_AI_CHAT_MODEL : activeAiChat?.id === QUICK_AI_CHAT_ID ? quickAiChatModel : activeProjectChatModel,
         projectTitle: quick ? QUICK_AI_CHAT_PROJECT_TITLE : activeAiChatProject?.title,
         chatTitle: quick ? QUICK_AI_CHAT_TITLE : activeAiChat?.title,
         projectId: activeAiChatProject?.id,
@@ -3613,7 +3777,8 @@ export default function App() {
       const serviceReport = actionReports.length > 0
         ? `\n\nИзменения:\n- ${actionReports.join('\n- ')}`
         : '';
-      const assistantMessage: AiChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: `${normalizeAiMessageContent(result.answer)}${serviceReport}`, createdAt: new Date().toISOString(), creditsSpentMilli: result.billing?.creditsSpentMilli, webSearchUsed: result.webSearchUsed, webSources: result.webSources, webCitations: result.webCitations, generatedDocument: result.generatedDocument ?? undefined, telegramSendDraft: result.telegramSendDraft ?? undefined, mailSendDraft: result.mailSendDraft ?? undefined, taskProposal: result.taskProposal ?? undefined, economicProposals: result.economicProposals ?? undefined, telegramReadDraft: result.telegramReadDraft ?? undefined };
+      const assistantMessage: AiChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: `${normalizeAiMessageContent(result.answer)}${serviceReport}`, createdAt: new Date().toISOString(), creditsSpentMilli: result.billing?.creditsSpentMilli, webSearchUsed: result.webSearchUsed, webSources: result.webSources, webCitations: result.webCitations, generatedDocument: result.generatedDocument ?? undefined, assistantSettingsProposalId: result.assistantSettingsProposalId ?? undefined, telegramSendDraft: result.telegramSendDraft ?? undefined, mailSendDraft: result.mailSendDraft ?? undefined, taskProposal: result.taskProposal ?? undefined, economicProposals: result.economicProposals ?? undefined, telegramReadDraft: result.telegramReadDraft ?? undefined };
+      announceAppliedEconomicProposals(result.economicProposals);
       if (quick) setAiChatProjects((prev) => prev.map((project, projectIndex) => projectIndex === 0 ? { ...project, chats: project.chats.map((chat) => chat.id === QUICK_AI_CHAT_ID ? { ...chat, messages: [...chat.messages, assistantMessage].slice(-20) } : chat) } : project));
       else {
         updateActiveAiChatMessages((messages) => [...messages, assistantMessage]);
@@ -3798,7 +3963,7 @@ export default function App() {
         question: 'Продолжи предыдущий запрос после разрешения пользователя прочитать выбранную Telegram-переписку.',
         history: chat.messages,
         telegramRead: approval,
-        model: quick ? quickAiChatModel : (readSavedAiChatModel(chat.model) ?? DEFAULT_WEB_PROJECT_CHAT_MODEL),
+        model: shortLimitExhausted ? DEFAULT_WEB_PROJECT_CHAT_MODEL : quick ? quickAiChatModel : (readSavedAiChatModel(chat.model) ?? DEFAULT_WEB_PROJECT_CHAT_MODEL),
         projectTitle: project.title, chatTitle: chat.title, projectId, chatId,
         clientSurface: 'web'
       }, { onStatus: setAiChatProgress, ...textStreamForGeneral() });
@@ -3812,6 +3977,7 @@ export default function App() {
         telegramSendDraft: result.telegramSendDraft ?? undefined, mailSendDraft: result.mailSendDraft ?? undefined,
         taskProposal: result.taskProposal ?? undefined, economicProposals: result.economicProposals ?? undefined, telegramReadDraft: result.telegramReadDraft ?? undefined
       };
+      announceAppliedEconomicProposals(result.economicProposals);
       setAiChatProjects(prev => prev.map(p => p.id !== projectId ? p : {
         ...p, chats: p.chats.map(c => c.id !== chatId ? c : {
           ...c, messages: [...c.messages, response].slice(quick ? -20 : -300)
@@ -4200,13 +4366,24 @@ export default function App() {
   );
   const fullscreenBubbleSpheres = useMemo(() => {
     const sectorIds = fullscreenPaneFilters.bubbles.sphereIds;
-    return sectorIds === null ? spheres : spheres.filter(sphere => sectorIds.includes(sphere.id));
-  }, [fullscreenPaneFilters.bubbles, spheres]);
+    const selected = sectorIds === null ? spheres : spheres.filter(sphere => sectorIds.includes(sphere.id));
+    // With several explicitly selected sectors, reserve space only for the
+    // tasks that survive all current filters. A single selected empty sector
+    // remains available, as does the unfiltered drag-and-drop workspace.
+    if (sectorIds === null && fullscreenPaneFilters.bubbles.timeFilter === 'all' && !search.trim()) return selected;
+    const populated = new Set(fullscreenBubbleTasks.map(task => task.sphereId));
+    return selected.filter(sphere => populated.has(sphere.id));
+  }, [fullscreenPaneFilters.bubbles, spheres, fullscreenBubbleTasks, search]);
   const visibleSpheres = useMemo(() => {
     if (selectedSphereIds.length === 0) return spheres;
     const selectedSet = new Set(selectedSphereIds);
     return spheres.filter((sphere) => selectedSet.has(sphere.id));
   }, [selectedSphereIds, spheres]);
+  const classicBubbleSpheres = useMemo(() => {
+    if (timeFilter === 'all' && !search.trim() && (selectedSphereIds.length === 0 || selectedSphereIds.length === spheres.length)) return visibleSpheres;
+    const populated = new Set(visibleTasks.map(task => task.sphereId));
+    return visibleSpheres.filter(sphere => populated.has(sphere.id));
+  }, [visibleSpheres, visibleTasks, timeFilter, search, selectedSphereIds.length, spheres.length]);
   const isAllSpheresSelected = spheres.length > 0 && visibleSpheres.length === spheres.length;
   const sphereFilterLabel = spheres.length === 0
     ? 'Секторов нет'
@@ -4375,6 +4552,13 @@ export default function App() {
     }
   };
 
+  const celebrateCompletedTask = (task: Task) => {
+    const progress = completionProgress(completionTasksRef.current, task, userTimeZone, new Date(), ++completionSequence.current);
+    completionTasksRef.current = completionTasksRef.current.map(item => item.id === task.id ? { ...item, status: 'DONE' as const } : item);
+    setTasks(current => current.map(item => item.id === task.id ? { ...item, status: 'DONE' as const } : item));
+    if (progress) setPlanikCompletionQueue(queue => [...queue, progress]);
+  };
+
   const completeTask = async (task: Task, scope?: 'me' | 'all') => {
     if (closingTaskIds.includes(task.id)) return;
     if (task.isCollaborative && task.collaborationOwner && !scope) {
@@ -4389,10 +4573,7 @@ export default function App() {
       await new Promise((resolve) => setTimeout(resolve, 680));
       await api.updateTask(task.id, { status: 'DONE', collaborationScope: scope ?? 'me' });
       // A successful update is final even if refreshing the workspace is slow.
-      setTasks((current) => current.map((item) =>
-        item.id === task.id ? { ...item, status: 'DONE' as const } : item
-      ));
-      setPlanikCelebrationKey((key) => key + 1);
+      celebrateCompletedTask(task);
       void persistEfficiencyBonus(EFFICIENCY_BONUSES.doneTask, 'task');
       if (isFocusBonusEligible(task.id)) pushFocusBonusMessage('task', EFFICIENCY_BONUSES.doneTask * (FOCUS_BONUS_MULTIPLIERS.task - 1));
       setEditorState((current) => current?.task?.id === task.id ? null : current);
@@ -4473,7 +4654,7 @@ export default function App() {
     }
     await api.updateTask(subtask.id, { status: nextStatus });
     if (nextStatus === 'DONE') {
-      setPlanikCelebrationKey((key) => key + 1);
+      celebrateCompletedTask(subtask);
       void persistEfficiencyBonus(EFFICIENCY_BONUSES.doneSubtask, 'task');
       if (isFocusBonusEligible(subtask.parentTaskId)) pushFocusBonusMessage('subtask', EFFICIENCY_BONUSES.doneSubtask * (FOCUS_BONUS_MULTIPLIERS.subtask - 1));
     }
@@ -4488,7 +4669,7 @@ export default function App() {
           // Still show the same report proposal after server-confirmed completion.
           const completedParent = tasks.find(task => task.id === subtask.parentTaskId)
             ?? (await api.getTasks()).find(task => task.id === subtask.parentTaskId);
-          if (completedParent) maybeOfferTaskCompletionReport(completedParent);
+          if (completedParent) { celebrateCompletedTask(completedParent); maybeOfferTaskCompletionReport(completedParent); }
           if (focusedTaskId === subtask.parentTaskId) {
             setFocusedTaskId(null);
             setFocusedDraft(null);
@@ -4717,7 +4898,7 @@ export default function App() {
   };
 
   const askTaskAssistant = async (taskId: string, payload: { clientRequestId?: string; question: string; userMessage?: string; model: AiChatModel; attachments?: ChatAttachmentPayload[]; skipEfficiencyBonus?: boolean }, onStatus?: (status: TaskAiProgressStatus) => void, onUploadProgress?: (percent: number | null) => void) => {
-    const result = await api.askTaskAssistantStreaming(taskId, { ...payload, clientSurface: 'web' }, { onStatus, onUploadProgress, ...textStreamForTask(taskId) });
+    const result = await api.askTaskAssistantStreaming(taskId, { ...payload, ...(shortLimitExhausted ? { model: DEFAULT_TASK_AI_CHAT_MODEL } : {}), clientSurface: 'web' }, { onStatus, onUploadProgress, ...textStreamForTask(taskId) });
     try {
       const me = await api.getMe();
       setCurrentUser(me.user);
@@ -5088,15 +5269,18 @@ export default function App() {
 
   const sourceFullscreenPaneIndex = (target: EventTarget | null): 0 | 1 =>
     target instanceof Element && target.closest('[data-fullscreen-pane-index]')?.getAttribute('data-fullscreen-pane-index') === '1' ? 1 : 0;
-  const openTaskInOtherPane = (task: Task, sourcePaneIndex: 0 | 1) => {
+  const openTaskInOtherPane = (task: Task, _sourcePaneIndex: 0 | 1) => {
     if (!isBubbleFullscreen || task.parentTaskId || (task.taskType ?? 'TASK') !== 'TASK') return;
-    const otherPane: 0 | 1 = sourcePaneIndex === 0 ? 1 : 0;
-    const nextSlots = replaceFullscreenPanel(fullscreenPanels, otherPane, { kind: 'task-ai', taskId: task.id });
-    setFullscreenPanelSlots(nextSlots);
-    setFullscreenDisplayModes(nextSlots.flatMap(panel => panel.kind === 'mode' ? [panel.mode] : []));
-    setFocusedTaskId(task.id);
-    setIsAiExpanded(false);
-    setIsAiChatOpen(false);
+    // Context-menu opening follows "Добавить блок": first choose the target
+    // pane (or the side of a single pane), then replace/add it on selection.
+    // Nothing is replaced, and the focused task is unchanged, until placement.
+    if (fullscreenPanels.some(panel => panel.kind === 'task-ai')) {
+      setWorkspaceBlockNotice(Date.now());
+      return;
+    }
+    blockDragRef.current = false;
+    setIsAddMenuOpen(false);
+    setPendingWorkspaceBlock({ kind: 'task-ai', taskId: task.id });
   };
 
   const sphereById = new Map(spheres.map((sphere) => [sphere.id, sphere]));
@@ -5525,9 +5709,8 @@ export default function App() {
   const startTaskTour = () => {
     rememberTourWorkspace();
     setTourWorkspaceUsesPrimary(false);
-    // Legacy task controls live in the classic toolbar: show them for this
-    // lesson only, then restore the exact multi-pane composition on finish.
-    setIsBubbleFullscreen(false);
+    setFullscreenDisplayModes(['bubbles']);
+    setFullscreenPanelSlots([{ kind: 'mode', mode: 'bubbles' }]);
     setIsUpdatesOpen(false);
     setActiveTourStep(TASK_TOUR_STEPS[0].id);
   };
@@ -5542,20 +5725,8 @@ export default function App() {
     }
     setActiveTourStep(WORKSPACE_TOUR_STEPS[0].id);
   };
-  const startAiTour = () => {
-    rememberTourWorkspace();
-    setTourWorkspaceUsesPrimary(false);
-    setIsBubbleFullscreen(false);
-    setIsUpdatesOpen(false);
-    setActiveTourStep(AI_TOUR_STEPS[0].id);
-  };
-  const startFeatureTour = () => {
-    rememberTourWorkspace();
-    setTourWorkspaceUsesPrimary(false);
-    setIsBubbleFullscreen(false);
-    setIsUpdatesOpen(false);
-    setActiveTourStep(FEATURE_TOUR_STEPS[0].id);
-  };
+  const startAiTour = () => startAdvancedTraining('ai');
+  const startFeatureTour = () => startAdvancedTraining('features');
   const finishTaskTour = () => {
     const restore = tourRestoreStateRef.current;
     setActiveTourStep(null);
@@ -5616,11 +5787,123 @@ export default function App() {
     if (next) setActiveTourStep(next.id);
     else finishTaskTour();
   };
-  const isTourAddMenuOpen = activeTourStep === 'create-task' || activeTourStep === 'create-event' || activeTourStep === 'create-sector';
+  const startBasicTraining = () => {
+    if (basicStep || advancedTraining) return;
+    rememberTourWorkspace();
+    basicModeRestore.current = mode;
+    setBasicTasks(createTrainingTasks());
+    setBasicNotice(null);
+    setActiveTourStep(null);
+    setIsUpdatesOpen(false);
+    setFocusedTaskId(null);
+    setEditorState(null);
+    setIsAiChatOpen(false);
+    setIsBubbleFullscreen(true);
+    setMode('sectors');
+    setDisplayMode('bubbles');
+    setFullscreenDisplayModes(['bubbles']);
+    setFullscreenPanelSlots([{ kind: 'mode', mode: 'bubbles' }]);
+    setPendingWorkspaceBlock(null);
+    setBasicStep('intro');
+  };
+  autoBasicStartRef.current = startBasicTraining;
+  const rewardGuidedLesson = (lessonId: string) => {
+    const userId = currentUser.id;
+    void api.completeTrainingLesson(lessonId).then(({ awarded, reward, user }) => {
+      if (trainingAccountRef.current !== userId) return;
+      setCurrentUser(user);
+      if (!awarded) return;
+      setTrainingRewardMessage(`Урок пройден — +${reward} рейтинга!`);
+      window.setTimeout(() => setTrainingRewardMessage(null), 4000);
+    }).catch(error => console.error('Failed to complete guided training lesson', error));
+  };
+  const finishBasicTraining = () => {
+    setBasicStep(null);
+    setBasicTasks([]);
+    setBasicNotice(null);
+    setMode(basicModeRestore.current);
+    setPendingWorkspaceBlock(null);
+    blockDragRef.current = false;
+    finishTaskTour();
+  };
+  const advanceBasicTraining = () => {
+    if (!basicStep) return;
+    const next = nextBasicTrainingStep(basicStep);
+    if (!next) { finishBasicTraining(); rewardGuidedLesson(BASIC_LESSON_ID); return; }
+    if (next === 'complete') setBasicTasks(previous => [...previous, createCompletionTrainingTask()]);
+    if (next === 'block' || next === 'notes' || next === 'task-window') {
+      // Free a slot before teaching block placement; restore the sidebar for its lesson.
+      setFullscreenDisplayModes(['bubbles']);
+      setFullscreenPanelSlots([{ kind: 'mode', mode: 'bubbles' }]);
+      setFocusedTaskId(null);
+      setIsAddMenuOpen(next === 'block');
+    }
+    setBasicNotice(null);
+    setBasicStep(next);
+  };
+  const setAdvancedTrainingStep = (lesson: AdvancedLesson, config: AdvancedTrainingConfig) => {
+    // Reuse the existing read-only tour surfaces, but never run the old
+    // focus session starter, send a prompt, or connect an external account.
+    setIsAiChatOpen(false);
+    setFocusedTaskId(null);
+    setEditorState(null);
+    setIsSettingsOpen(false);
+    setIsAiExpanded(false);
+    setIsEfficiencyDetailsOpen(false);
+    setIsFocusSetupOpen(false);
+    setIsTelegramModalOpen(false);
+    const surface = config.surface;
+    const allowedSurfaces = [...AI_TOUR_STEPS, ...FEATURE_TOUR_STEPS].map(item => item.id as string);
+    setActiveTourStep(surface && allowedSurfaces.includes(surface) && surface !== 'feature-telegram-qr' ? surface as AiTourStep | FeatureTourStep : null);
+    if (config.id === 'feature-focus-setup') { setGuidedFocusSelected([]); setGuidedFocusMinutes(25); setGuidedFocusRemaining(25 * 60); setGuidedFocusDeadline(null); setGuidedFocusIndex(0); }
+    if (config.id !== 'feature-focus-timer' && config.id !== 'feature-focus-task') setGuidedFocusDeadline(null);
+    if (config.id === 'feature-skins-preview') wardrobe.show();
+    if (config.id === 'feature-skins-practice') { setGuidedSkinChanged(false); setGuidedAnimationPlayed(false); }
+    if (config.id === 'feature-done') wardrobe.close();
+    setAdvancedTraining({ lesson, step: config.id });
+  };
+  const startAdvancedTraining = (lesson: AdvancedLesson) => {
+    if (basicStep || advancedTraining) return;
+    rememberTourWorkspace();
+    setIsUpdatesOpen(false);
+    setDisplayMode('bubbles');
+    setFullscreenDisplayModes(['bubbles']);
+    setFullscreenPanelSlots([{ kind: 'mode', mode: 'bubbles' }]);
+    setAdvancedTrainingStep(lesson, guidedSteps(lesson)[0]);
+  };
+  const finishAdvancedTraining = () => {
+    if (guidedWardrobe) wardrobe.close();
+    setGuidedFocusSelected([]);
+    setGuidedFocusDeadline(null);
+    setAdvancedTraining(null);
+    finishTaskTour();
+  };
+  const advanceAdvancedTraining = () => {
+    if (!advancedTraining) return;
+    const next = nextGuidedStep(advancedTraining.lesson, advancedTraining.step);
+    if (!next) {
+      const lesson = advancedTraining.lesson;
+      finishAdvancedTraining();
+      rewardGuidedLesson(lesson);
+      return;
+    }
+    setAdvancedTrainingStep(advancedTraining.lesson, next);
+  };
+  const shownFocusCandidates = guidedFocusSetup ? guidedFocusCandidates : visibleFocusCandidateTasks;
+  const shownFocusSelected = guidedFocusSetup ? guidedFocusSelected : focusSelectedTaskIds;
+  const shownFocusTask = guidedFocusMode ? guidedFocusTask : focusActiveTask;
+  const shownFocusTasks = guidedFocusMode ? guidedFocusTasks : focusTasks;
+  const shownFocusIndex = guidedFocusMode ? guidedFocusIndex : focusActiveIndex;
+  const shownFocusMinutes = guidedFocusMode ? guidedFocusMinutes : focusTimerMinutes;
+  const shownFocusRemaining = guidedFocusMode ? guidedFocusRemaining : focusRemainingSeconds;
+  const shownFocusRunning = guidedFocusMode ? guidedFocusDeadline !== null && guidedFocusRemaining > 0 : isFocusTimerRunning;
+  const shownFocusAiDialog = guidedFocusMode ? [] : focusTaskAiDialog;
+  const isTourAddMenuOpen = basicStep === 'block' || activeTourStep === 'create-task' || activeTourStep === 'create-event' || activeTourStep === 'create-sector';
   const forceQuickAiPreviewOpen = activeTourStep === 'quick-ai' || activeTourStep === 'ai-quick-chat';
-  const integrationTourKind = activeTourStep === 'feature-integration-send' ? 'messages'
+  const openGuidedIntegration = guidedStep === 'feature-open-telegram-assistant' ? 'assistant' : guidedStep === 'feature-open-mail-assistant' ? 'email' : null;
+  const integrationTourKind = openGuidedIntegration ?? (advancedTraining && ['feature-telegram-button', 'feature-telegram-qr'].includes(advancedTraining.step) ? 'bot' : basicStep === 'integrations' ? 'bot' : basicStep === 'android' ? 'android' : activeTourStep === 'feature-integration-send' ? 'messages'
     : activeTourStep === 'feature-integration-telegram-ai' ? 'assistant'
-    : activeTourStep === 'feature-integration-mail' ? 'email' : null;
+    : activeTourStep === 'feature-integration-mail' ? 'email' : null);
 
   const renderOverdueControl = () => (
           <div className="topbar-overdue-wrap relative shrink-0" ref={overduePopoverRef}>
@@ -5675,7 +5958,7 @@ export default function App() {
           </div>
   );
   const renderCreditsControl = () => (
-          <button data-tour="credits" type="button" onClick={() => { if (currentUser?.isGuest) { setAuthError(null); setAuthModalMode('register'); } else { setCreditModalView('purchase'); setIsSubscriptionModalOpen(true); } }} className="light-credit-badge topbar-action-button flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm transition hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-fuchsia-400" title={currentUser?.isGuest ? 'Зарегистрируйтесь, чтобы получить 100 ИИ-кредитов' : 'Посмотреть подписки и увеличить ИИ-кредиты'}><Coins size={15} /><span>Кредиты: {currentUser?.aiCredits ?? 0}</span></button>
+          <button data-tour="credits" type="button" onClick={() => { if (currentUser?.isGuest) { setAuthError(null); setAuthModalMode('register'); } else { setCreditModalView('purchase'); setIsSubscriptionModalOpen(true); } }} data-subscription-limit={activeSubscription ? true : undefined} className="light-credit-badge topbar-action-button flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm transition hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-fuchsia-400" title={currentUser?.isGuest ? 'Зарегистрируйтесь, чтобы получить 100 ИИ-кредитов' : 'Посмотреть подписки и увеличить ИИ-кредиты'}>{activeSubscription ? <SubscriptionDailyRing limit={currentUser?.subscriptionLimit}/> : <><Coins size={15}/><span>{`Кредиты: ${currentUser?.aiCredits ?? 0}`}</span></>}</button>
   );
   // Share the original, interactive mode renderers between ordinary workspace
   // and each fullscreen pane. Nothing is duplicated or displayed as a preview.
@@ -5725,7 +6008,7 @@ export default function App() {
               fullscreen={isBubbleFullscreen}
               compact={isBubbleFullscreen && fullscreenPanels.length === 2}
               themeMode={effectiveThemeMode}
-              showTrainingInvitation={isOnboardingOfferOpen}
+              showTrainingInvitation={!basicStep && isOnboardingOfferOpen}
               onOpenTraining={() => {
                 setTrainingOpenSignal(signal => signal + 1);
                 setIsUpdatesOpen(true);
@@ -5734,47 +6017,68 @@ export default function App() {
                 localStorage.setItem(getOnboardingOfferStorageKey(currentUser.id), '1');
                 setIsOnboardingOfferOpen(false);
               }}
-            tasks={isBubbleFullscreen ? fullscreenBubbleTasks : visibleTasks}
-            timelinePreviewTasks={activeTimelineItems}
-            spheres={isBubbleFullscreen ? fullscreenBubbleSpheres : visibleSpheres}
+            tasks={basicStep ? basicRootTasks : isBubbleFullscreen ? fullscreenBubbleTasks : visibleTasks}
+            timelinePreviewTasks={basicStep ? basicTasks : activeTimelineItems}
+            spheres={basicStep ? TRAINING_SPHERES : isBubbleFullscreen ? fullscreenBubbleSpheres : classicBubbleSpheres}
             rankingMode="coefficient"
-            subtaskMap={displayedSubtaskMap}
+            subtaskMap={basicStep ? basicSubtasks : displayedSubtaskMap}
             isSubtaskFilterActive={subtaskFilterMode !== 'none'}
-            onToggleSubtaskFilter={() => setSubtaskFilterMode((prev) => (prev === 'none' ? 'urgency' : 'none'))}
+            onToggleSubtaskFilter={() => { if (!basicStep) setSubtaskFilterMode((prev) => (prev === 'none' ? 'urgency' : 'none')); }}
             mode={mode}
-            poppingTaskId={poppingTaskId}
-            hasAiNotification={hasUnreadAiMessage}
+            poppingTaskId={basicStep ? null : poppingTaskId}
+            hasAiNotification={basicStep ? undefined : hasUnreadAiMessage}
             selectedId={editorState?.task?.id}
             onSelect={(task) => {
-              openTaskWithFocusGuard(task);
+              if (!basicStep) openTaskWithFocusGuard(task);
             }}
-            onSelectSubtask={(subtask) => setEditorState({ task: subtask })}
+            onSelectSubtask={(subtask) => { if (!basicStep) setEditorState({ task: subtask }); }}
             onCreateSubtask={async (parentTask, payload) => {
-              await createSubtaskForParent(parentTask, payload);
+              if (!basicStep) await createSubtaskForParent(parentTask, payload);
             }}
             onBubbleAction={async (task, payload) => {
+              if (basicStep) {
+                const result = applyTrainingBubbleAction(basicTasks, basicStep, task.id, payload);
+                if (result.tasks === basicTasks) {
+                  const message = basicStep === 'link' ? 'Подведи пузырь к краю другого, не в центр.' : basicStep === 'nest' ? 'Задержи пузырь внутри другого до жёлтой подсветки.' : 'Перенеси пузырь в другой сектор.';
+                  setBasicNotice(message);
+                  throw new Error(message);
+                }
+                setBasicTasks(result.tasks);
+                setBasicNotice(result.next ? null : 'Попробуй перенести пузырь именно в другой сектор.');
+                if (result.next) setBasicStep(result.next);
+                return;
+              }
               await api.bubbleAction(task.id, payload);
               await load();
             }}
-            onToggleSubtaskDone={toggleSubtaskDone}
+            onToggleSubtaskDone={async task => { if (!basicStep) await toggleSubtaskDone(task); }}
             onUpdateSubtaskDueDate={async (subtask, dueDate) => {
+              if (basicStep) return;
               await api.updateTask(subtask.id, { dueDate });
               await load();
             }}
-            onQuickCompleteTask={completeTask}
+            onQuickCompleteTask={async task => {
+              if (!basicStep) { await completeTask(task); return; }
+              if (basicStep === 'complete' && task.id === TRAINING_COMPLETE_ID) {
+                setBasicTasks(previous => previous.map(item => item.id === task.id ? { ...item, status: 'DONE' } : item));
+                setBasicNotice(null);
+                setBasicStep('report');
+              }
+            }}
             onQuickChangeTaskImportance={async (task, importanceDelta) => {
+              if (basicStep) return;
               const nextImportance = Math.max(1, Math.min(5, task.importance + importanceDelta));
               if (nextImportance === task.importance) return;
               await api.updateTask(task.id, { importance: nextImportance });
               await load();
             }}
-            onQuickPostponeTask={async (task, option) => await quickPostponeTask(task, option)}
-            onAddTaskToSphere={(sphere) => setEditorState({ initialSphereId: sphere.id })}
-            onRenameSphere={(sphere) => setSectorEditorSphere(sphere)}
-            onRescheduleTask={(task) => setTimelineReschedulePicker({ taskId: task.id, signal: Date.now() })}
-             onOpenInOtherPane={openTaskInOtherPane}
+            onQuickPostponeTask={async (task, option) => basicStep ? null : await quickPostponeTask(task, option)}
+            onAddTaskToSphere={basicStep ? undefined : (sphere) => setEditorState({ initialSphereId: sphere.id })}
+            onRenameSphere={(sphere) => { if (basicStep === 'sector') setBasicStep('sector-editor'); else if (!basicStep) setSectorEditorSphere(sphere); }}
+            onRescheduleTask={basicStep ? undefined : (task) => setTimelineReschedulePicker({ taskId: task.id, signal: Date.now() })}
+             onOpenInOtherPane={basicStep === 'task-window' ? (task) => { if (!basicRootTasks.some(item => item.id === task.id)) return; setPendingWorkspaceBlock({ kind: 'task-ai', taskId: task.id }); } : basicStep ? undefined : openTaskInOtherPane}
             forceTaskContextMenuOpen={activeTourStep === 'task-context-menu'}
-            isSearchFiltering={Boolean(search.trim())}
+            isSearchFiltering={!basicStep && Boolean(search.trim())}
             />
           </div>
         ) : workspaceMode === 'list' ? (
@@ -5981,7 +6285,7 @@ export default function App() {
           </div>
         ) : (
           <div data-tour="timeline-workspace" ref={timelineScrollContainerRef} className="timeline-canvas h-full overflow-y-auto rounded-[2.2rem] border p-4 backdrop-blur-sm">
-            <div className="space-y-4 pr-1">
+            <div className="timeline-canvas-inner space-y-4 pr-1">
               <section className={`timeline-toolbar sticky top-0 z-20 rounded-3xl border px-3 py-3 shadow-2xl backdrop-blur-xl transition-all duration-300 ease-out sm:px-4 ${isTimelineToolbarHidden && !isTimelineOverdueModalOpen ? 'timeline-toolbar-hidden' : 'timeline-toolbar-visible'}`}>
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center gap-1.5 rounded-2xl border border-white/10 bg-white/5 p-1 shadow-inner">
@@ -6308,6 +6612,7 @@ export default function App() {
           spheres={spheres} theme={effectiveThemeMode}
           onChange={(next) => updateFullscreenPaneFilters(workspaceMode, next)} />
       ) : null}
+      {fullscreenPanels.length === 2 && !workspaceOverlayActive && <button type="button" className="fullscreen-mode-window-close" title="Закрыть окно" aria-label="Закрыть окно режима" onClick={() => closeFullscreenPanel(fullscreenPanels.findIndex(panel => panel.kind === 'mode' && panel.mode === workspaceMode) as 0 | 1)}><X size={16}/></button>}
     </div>
   ) : renderWorkspaceContent(workspaceMode);
   const fullscreenTaskChoices = rootTasks
@@ -6335,7 +6640,8 @@ export default function App() {
     const removed = fullscreenPanels[index];
     const remaining = fullscreenPanels.filter((_, position) => position !== index);
     const nextSlots: FullscreenWorkspacePanel[] = remaining.length
-      ? remaining : [{ kind: 'mode', mode: 'bubbles' }];
+      ? remaining
+      : [{ kind: 'mode', mode: 'bubbles' }];
     if (removed?.kind === 'task-ai' && !nextSlots.some(panel => panel.kind === 'task-ai')) {
       setFocusedTaskId(null);
       setIsAiExpanded(false);
@@ -6343,22 +6649,36 @@ export default function App() {
     setFullscreenDisplayModes(nextSlots.flatMap(panel => panel.kind === 'mode' ? [panel.mode] : []));
     setFullscreenPanelSlots(nextSlots);
   };
+  const blockAlreadyPresent = (next: FullscreenWorkspacePanel) => fullscreenPanels.some(panel => JSON.stringify(panel) === JSON.stringify(next) || (panel.kind === 'task-ai' && next.kind === 'task-ai'));
   const addFullscreenSinglePanel = (side: 'left' | 'right', next: FullscreenWorkspacePanel) => {
-    if (next.kind === 'task-ai') {
+    blockDragRef.current = false;
+    setPendingWorkspaceBlock(null);
+    setIsAddMenuOpen(false);
+    if (JSON.stringify(next) === JSON.stringify(fullscreenPanels[0]) || (next.kind === 'task-ai' && fullscreenPanels[0].kind === 'task-ai')) { setWorkspaceBlockNotice(Date.now()); return; }
+    if (next.kind === 'task-ai' && !basicStep) {
       setFocusedTaskId(next.taskId);
       setIsAiExpanded(false);
       setIsAiChatOpen(false);
     }
+    if (basicStep === 'two-modes' && (next.kind !== 'mode' || next.mode !== 'bubbles')) return;
+    if (basicStep === 'two-modes' && next.kind === 'mode' && next.mode === 'bubbles') { setBasicNotice(null); setBasicStep('mode-added'); }
+    if (basicStep === 'block') { setBasicNotice(null); setBasicStep('block-added'); }
+    if (basicStep === 'task-window' && next.kind === 'task-ai') { setBasicNotice(null); setBasicStep('task-window-added'); }
     const slots = side === 'left' ? [next, fullscreenPanels[0]] : [fullscreenPanels[0], next];
     setFullscreenDisplayModes(slots.flatMap(panel => panel.kind === 'mode' ? [panel.mode] : []));
     setFullscreenPanelSlots(slots);
   };
   const chooseFullscreenPanel = (index: 0 | 1, next: FullscreenWorkspacePanel) => {
+    blockDragRef.current = false;
+    setPendingWorkspaceBlock(null);
+    setIsAddMenuOpen(false);
+    if (fullscreenPanels.some((panel, position) => position !== index && (JSON.stringify(panel) === JSON.stringify(next) || (panel.kind === 'task-ai' && next.kind === 'task-ai')))) { setWorkspaceBlockNotice(Date.now()); return; }
+    if (fullscreenPanels.length === 1 && index === 0 && requiresCompanionPanel(next)) return;
     const replacing = fullscreenPanels[index];
     const nextSlots = replaceFullscreenPanel(fullscreenPanels, index, next);
     if (replacing?.kind === 'task-ai' && next.kind !== 'task-ai'
       && !nextSlots.some(panel => panel.kind === 'task-ai')) setFocusedTaskId(null);
-    if (next.kind === 'task-ai') {
+    if (next.kind === 'task-ai' && !basicStep) {
       setFocusedTaskId(next.taskId);
       setIsAiExpanded(false);
       setIsAiChatOpen(false);
@@ -6371,6 +6691,15 @@ export default function App() {
   };
   const renderFullscreenPanel = (panel: FullscreenWorkspacePanel): ReactNode => {
     if (panel.kind === 'mode') return renderWorkspaceMode(panel.mode);
+    if (panel.kind === 'task-ai' && basicStep) {
+      const demoTask = basicTasks.find(task => task.id === panel.taskId);
+      return <section data-training-task-window className="surface-muted flex h-full w-full flex-col gap-4 rounded-2xl p-5 text-primary">
+        <h2 className="text-lg font-semibold">{demoTask?.title ?? 'Учебная задача'}</h2>
+        <p className="text-sm text-muted">Учебное окно задачи. Настоящие задачи не изменяются.</p>
+        <div className="rounded-xl border p-3 text-sm">Описание задачи</div>
+        <div className="rounded-xl border p-3 text-sm">Подзадачи</div>
+      </section>;
+    }
     if (panel.kind === 'general-ai') return (
       <div ref={setFullscreenChatTarget} className="fullscreen-embedded-ai relative h-full min-h-0 w-full" />
     );
@@ -6378,7 +6707,7 @@ export default function App() {
       <div ref={setFullscreenFocusTarget} className="fullscreen-embedded-focus relative h-full min-h-0 w-full">
         {!focusedTask || focusedTask.id !== panel.taskId ? (
           <div className="flex h-full items-center justify-center p-6 text-center text-sm text-muted">
-            Выберите задачу через кнопку «+» рядом с разделителем.
+            Выберите задачу через «Добавить» → «Добавить блок».
           </div>
         ) : null}
       </div>
@@ -6398,20 +6727,40 @@ export default function App() {
       }}
       onOpenTask={task => {
         const index = fullscreenPanels.findIndex(item => item === panel);
-        if (index >= 0) chooseFullscreenPanel(index as 0 | 1, { kind: 'task-ai', taskId: task.parentTaskId ?? task.id });
+        if (index >= 0) chooseFullscreenPanel(fullscreenPanels.length === 1 ? 1 : index as 0 | 1, { kind: 'task-ai', taskId: task.parentTaskId ?? task.id });
       }}
       onComplete={async task => { await api.updateTask(task.id, { status: 'DONE' }); if (task.parentTaskId) await syncParentStatusBySubtasks(task.parentTaskId); await load(); }} />;
   };
+  // The modal chat owns a real composer-relative mascot slot. Do not
+  // render the workspace avatar at the same time. Higher dialogs still use
+  // the original screen-corner launcher.
+  const useExpandedChatMascot = isAiChatOpen && !hasGeneralAiPane && (!mascotSurface.modal || mascotSurface.expandedChat);
+  const renderPlanikLauncher = (inChat: boolean) => (
+    <div className="mascot-wardrobe-anchor" data-guided-launcher={!inChat && (guidedStep === "ai-open-chat" || guidedStep === "feature-skins-intro") ? "true" : undefined}>
+        <button
+          type="button"
+          className="planik-launcher-button touch-none select-none"
+          aria-label={inChat ? "Перейти к вводу сообщения" : "Открыть общий чат с ИИ"}
+          onClick={() => { if (inChat) { expandedChatTarget?.querySelector<HTMLTextAreaElement>('textarea')?.focus(); return; } if (guidedStep === "ai-open-chat") { setActiveAiChatProjectId(aiChatProjects[0]?.id ?? ''); setActiveAiChatId(QUICK_AI_CHAT_ID); advanceAdvancedTraining(); return; } if ((hasGeneralAiPane && !mascotSurface.modal) || mascotSurface.expandedChat) { (mascotSurface.expandedChat ? expandedChatTarget : fullscreenChatTarget)?.querySelector<HTMLTextAreaElement>('textarea')?.focus(); return; } setActiveAiChatProjectId(aiChatProjects[0]?.id ?? ''); setActiveAiChatId(QUICK_AI_CHAT_ID); setIsAiChatOpen(true); }}
+        >
+          <PlanikMascot notificationCount={unreadSystemNotificationCount} busy={quickAiChatLoading || aiChatLoading || Boolean(aiLoadingTaskId) || focusAiLoading} progress={focusAiLoading ? focusAiProgress : aiLoadingTaskId ? aiProgressByTask[aiLoadingTaskId] : aiChatProgress} celebrationKey={planikCelebrationKey} completion={planikCompletion} skinId={wardrobe.selected('planner')} arrivalKey={mascotSurface.arrivalKey} />
+        </button>
+        {currentUser&&<MascotWardrobeTrigger onClick={wardrobe.show}/>}
+        </div>
+  );
   return (
+    <MascotIdentityContext.Provider value={mascotIdentity}>
     <main
+      data-managed-mascot="planner"
       className={isBubbleFullscreen
         ? `app-shell bubble-fullscreen-shell flex h-[100dvh] min-h-0 flex-col overflow-hidden p-0 ${workspaceOverlayActive ? 'fullscreen-overlay-active' : ''}`
         : 'app-shell flex h-screen flex-col overflow-y-auto p-4 lg:p-6'}
       data-theme={effectiveThemeMode}
     >
-      <ModuleRail active="planner" />
+      {!(focusedTask && !embeddedFocusActive) && !isFocusModeOpen && <ModuleRail active="planner" />}
       {reportPromptTask ? (
         <TaskCompletionReportDialog
+          hideCreditCost={activeSubscription}
           taskId={reportPromptTask.id}
           taskTitle={reportPromptTask.title}
           onClose={() => setReportPromptTask(null)}
@@ -6532,9 +6881,17 @@ export default function App() {
         </div>,
         document.body
       ) : null}
-      <UpdatesMenu open={isUpdatesOpen} onClose={() => setIsUpdatesOpen(false)} trainingOpenSignal={trainingOpenSignal} onStartWorkspaceTour={startWorkspaceTour} onStartTaskTour={startTaskTour} onStartAiTour={startAiTour} onStartFeatureTour={startFeatureTour} completedLessonIds={currentUser.completedLessonIds ?? []} hasUnreadNews={hasUnreadNews} onNewsViewed={markLatestNewsRead} />
+      <UpdatesMenu open={isUpdatesOpen} onStartBasicTour={startBasicTraining} onClose={() => setIsUpdatesOpen(false)} trainingOpenSignal={trainingOpenSignal} onStartAiTour={startAiTour} onStartFeatureTour={startFeatureTour} completedLessonIds={currentUser.completedLessonIds ?? []} hasUnreadNews={hasUnreadNews} onNewsViewed={markLatestNewsRead} />
       {trainingRewardMessage ? <div className="training-reward-toast focus-bonus-message focus-bonus-subtask" role="status">{trainingRewardMessage}</div> : null}
-      {activeTourStep ? <TourOverlay activeStep={activeTourStep} steps={typeof activeTourStep === 'string' && activeTourStep.startsWith('workspace-') ? (tourWorkspaceUsesPrimary ? PRIMARY_WORKSPACE_TOUR_STEPS : WORKSPACE_TOUR_STEPS) : typeof activeTourStep === 'string' && activeTourStep.startsWith('ai-') ? AI_TOUR_STEPS : typeof activeTourStep === 'string' && activeTourStep.startsWith('feature-') ? FEATURE_TOUR_STEPS : TASK_TOUR_STEPS} onNext={advanceTaskTour} onFinish={finishTaskTour} onComplete={completeTaskTour} /> : null}
+      {basicStep === 'report' && <TaskCompletionReportDialog demo taskId={TRAINING_COMPLETE_ID} taskTitle={TRAINING_COMPLETE_TITLE} onClose={advanceBasicTraining} />}
+      {basicStep === 'sector-editor' && <SectorEditor sphere={TRAINING_SPHERES[0]} onCancel={advanceBasicTraining} onSave={async () => {}} />}
+      {basicStep && <BasicPlanikTraining step={basicStep} theme={effectiveThemeMode} notice={basicNotice}
+        onNext={advanceBasicTraining} onFinish={finishBasicTraining} onGrab={() => { if (basicStep === 'grab') setBasicStep('move'); }} />}
+      {guidedAssistant === 'telegram' && <TelegramAiAssistantSettings onClose={finishAdvancedTraining} trainingSection={guidedAssistantSection} />}
+      {guidedAssistant === 'mail' && <MailAssistantSettings onClose={finishAdvancedTraining} trainingSection={guidedAssistantSection} />}
+      {advancedTraining && <BasicPlanikTraining lesson={advancedTraining.lesson} step={advancedTraining.step} theme={effectiveThemeMode} notice={null} actionReady={guidedStep === 'feature-skins-practice' && guidedAnimationPlayed || guidedStep === 'feature-focus-timer' && guidedFocusDeadline !== null && guidedFocusRemaining < guidedFocusMinutes * 60}
+        onNext={advanceAdvancedTraining} onFinish={finishAdvancedTraining} onGrab={() => {}} />}
+      {activeTourStep && !advancedTraining ? <TourOverlay activeStep={activeTourStep} steps={typeof activeTourStep === 'string' && activeTourStep.startsWith('workspace-') ? (tourWorkspaceUsesPrimary ? PRIMARY_WORKSPACE_TOUR_STEPS : WORKSPACE_TOUR_STEPS) : typeof activeTourStep === 'string' && activeTourStep.startsWith('ai-') ? AI_TOUR_STEPS : typeof activeTourStep === 'string' && activeTourStep.startsWith('feature-') ? FEATURE_TOUR_STEPS : TASK_TOUR_STEPS} onNext={advanceTaskTour} onFinish={finishTaskTour} onComplete={completeTaskTour} /> : null}
       {isBubbleFullscreen ? (
         <header data-tour="bubbles-fullscreen-toolbar"
           className="fullscreen-workspace-toolbar fullscreen-workspace-toolbar--one-row surface-topbar light-glass-topbar relative z-40 mx-auto mt-3 mb-2 flex shrink-0 flex-nowrap items-center gap-2 rounded-2xl border px-3 py-2.5 shadow-lg backdrop-blur-lg">
@@ -6560,10 +6917,33 @@ export default function App() {
           onOpenSubtask={(subtask) => setEditorState({ task: subtask })}
           onOpenNote={(id) => setRequestedStandaloneNote({ id, serial: Date.now() })}
         />
-            <FullscreenModePicker modes={fullscreenPanels.filter(panel => panel.kind === 'mode').map(panel => panel.mode)} onChange={(nextModes) => {
-              setFullscreenDisplayModes(nextModes);
-              setFullscreenPanelSlots(null);
-              setDisplayMode(nextModes[0]);
+            <FullscreenModePicker modes={fullscreenPanels.filter(panel => panel.kind === 'mode').map(panel => panel.mode)}
+              onHold={mode => { if (basicStep === 'modes' || (basicStep === 'two-modes' && mode !== 'bubbles')) return; const next: FullscreenWorkspacePanel = { kind: 'mode', mode }; if (blockAlreadyPresent(next)) { setWorkspaceBlockNotice(Date.now()); return; } setPendingWorkspaceBlock(next); }}
+              onDragStart={mode => { if (basicStep === 'modes' || (basicStep === 'two-modes' && mode !== 'bubbles')) return; const next: FullscreenWorkspacePanel = { kind: 'mode', mode }; if (blockAlreadyPresent(next)) { setWorkspaceBlockNotice(Date.now()); return; } blockDragRef.current = true; setPendingWorkspaceBlock(next); }}
+              onDragEnd={() => { blockDragRef.current = false; setPendingWorkspaceBlock(null); }}
+              onChange={(nextModes) => {
+               if (basicStep === 'modes') {
+                  if (nextModes[0] !== 'list') return;
+                  setBasicStep('two-modes');
+                } else if (basicStep === 'two-modes') return;
+              setPendingWorkspaceBlock(null);
+              const mode = nextModes[0];
+              // The toolbar chooses one visualization. Blocks explicitly
+              // added by the user stay in their own slots.
+              const modeIndex = fullscreenPanels.findIndex(panel => panel.kind === 'mode');
+              const index = modeIndex >= 0 ? modeIndex as 0 | 1
+                : fullscreenPanels.findIndex(panel => !requiresCompanionPanel(panel)) as 0 | 1;
+              const existing = fullscreenPanels.findIndex(panel => panel.kind === 'mode' && panel.mode === mode);
+              if (existing !== index || existing < 0) {
+                if (existing >= 0 && fullscreenPanels.length === 2) {
+                  const slots = [fullscreenPanels[1], fullscreenPanels[0]];
+                  setFullscreenPanelSlots(slots);
+                  setFullscreenDisplayModes(slots.flatMap(panel => panel.kind === 'mode' ? [panel.mode] : []));
+                } else {
+                  chooseFullscreenPanel(index === 1 ? 1 : 0, { kind: 'mode', mode });
+                }
+              }
+              setDisplayMode(mode);
               setIsSphereFilterOpen(false);
               setIsTimelineOverdueModalOpen(false);
             }} />
@@ -6571,23 +6951,23 @@ export default function App() {
           <div className="fullscreen-create-control flex items-center justify-center">
             <div className="add-menu-wrap relative shrink-0"
               onMouseEnter={() => setIsAddMenuOpen(true)}
-              onMouseLeave={() => { if (!isTourAddMenuOpen) setIsAddMenuOpen(false); }}>
+              onMouseLeave={() => { if (!isTourAddMenuOpen && !blockDragRef.current) setIsAddMenuOpen(false); }}>
               <button type="button"
                 data-tour="bubbles-fullscreen-create-task"
                 className="add-menu-trigger light-primary-action inline-flex items-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-2 text-sm font-semibold"
                 aria-expanded={isAddMenuOpen || isTourAddMenuOpen}
                 aria-haspopup="menu"
                 onClick={() => setIsAddMenuOpen((prev) => !prev)}>
-                <Plus size={16} /> Новая задача <ChevronDown size={14} />
+                <Plus size={16} /> Добавить <ChevronDown size={14} />
               </button>
               {isAddMenuOpen || isTourAddMenuOpen ? (
                 <div className="add-menu-popover topbar-dropdown absolute right-0 top-[calc(100%+0.5rem)] z-50 w-56 rounded-2xl border p-2 shadow-2xl" role="menu">
-                  <button type="button" role="menuitem"
+                  <button type="button" role="menuitem" data-tour="create-task"
                     className="add-menu-option add-menu-option-task flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold"
                     onClick={() => { setEditorState({ initialSphereId: spheres[0]?.id }); setIsAddMenuOpen(false); }}>
                     <FileText size={14} /> Новая задача
                   </button>
-                  <button type="button" role="menuitem"
+                  <button type="button" role="menuitem" data-tour="create-event"
                     className="add-menu-option add-menu-option-event mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold"
                     onClick={() => {
                       setEditorState({ task: { id: '', title: '', description: '', status: 'TODO',
@@ -6598,7 +6978,7 @@ export default function App() {
                     }}>
                     <CalendarDays size={14} /> Новое событие
                   </button>
-                  <button type="button" role="menuitem"
+                  <button type="button" role="menuitem" data-tour="create-sector"
                     className="add-menu-option add-menu-option-sector mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
                     disabled={spheres.length >= MAX_SPHERES}
                     onClick={() => {
@@ -6607,6 +6987,10 @@ export default function App() {
                     }}>
                     <BriefcaseBusiness size={14} /> Новый сектор
                   </button>
+                  <FullscreenBlockMenu forceOpen={basicStep === 'block' && !pendingWorkspaceBlock} tasks={fullscreenTaskChoices}
+                    onSelect={next => { setIsAddMenuOpen(false); if (blockAlreadyPresent(next)) { setPendingWorkspaceBlock(null); setWorkspaceBlockNotice(Date.now()); return; } setPendingWorkspaceBlock(next); }}
+                    onDragStart={next => { if (blockAlreadyPresent(next)) { blockDragRef.current = false; setPendingWorkspaceBlock(null); setWorkspaceBlockNotice(Date.now()); return; } blockDragRef.current = true; setPendingWorkspaceBlock(next); }}
+                    onDragEnd={() => { blockDragRef.current = false; setPendingWorkspaceBlock(null); setIsAddMenuOpen(false); }}/>
                 </div>
               ) : null}
             </div>
@@ -6614,7 +6998,12 @@ export default function App() {
           <div className="fullscreen-workspace-toolbar-actions flex min-w-0 flex-nowrap items-center gap-2">
             {renderOverdueControl()}
             {renderCreditsControl()}
-        <TelegramIntegrationsMenu tourIntegration={integrationTourKind} onConnectBot={() => void openTelegramLinkModal()} />
+            <div className="relative shrink-0" ref={efficiencyDetailsRef}>
+              <button type="button" className="efficiency-icon-button inline-flex h-9 w-9 items-center justify-center rounded-full transition hover:scale-110 focus-visible:ring-2 focus-visible:ring-violet-400" title={`Рейтинг: ${formattedEfficiencyScore}/100`} aria-label="Рейтинг эффективности" onClick={() => { if (guidedStep === "feature-rating-open") advanceAdvancedTraining(); else setIsEfficiencyDetailsOpen(prev => !prev); }}><svg width="34" height="34" viewBox="0 0 72 72" role="img" aria-label="Рейтинг эффективности" className="efficiency-orb-icon"><defs><linearGradient id="effModernOrbFill" x1="10" y1="10" x2="62" y2="62"><stop offset="0%" stopColor="#38bdf8" /><stop offset="45%" stopColor="#8b5cf6" /><stop offset="100%" stopColor="#f472b6" /></linearGradient><linearGradient id="effModernOrbRing" x1="12" y1="58" x2="60" y2="14"><stop offset="0%" stopColor="#22d3ee" /><stop offset="55%" stopColor="#a78bfa" /><stop offset="100%" stopColor="#fb7185" /></linearGradient></defs><circle cx="36" cy="36" r="25" fill="url(#effModernOrbFill)" opacity="0.18" /><circle cx="36" cy="36" r="26" fill="none" stroke="rgba(148,163,184,0.28)" strokeWidth="5" /><circle cx="36" cy="36" r="26" fill="none" stroke="url(#effModernOrbRing)" strokeWidth="5" strokeLinecap="round" pathLength={100} strokeDasharray={`${efficiencyScore} 100`} transform="rotate(-90 36 36)" /><path d="M36 17l5.4 12.1 13.1 1.4-9.8 8.8 2.8 12.9L36 45.5l-11.5 6.7 2.8-12.9-9.8-8.8 13.1-1.4L36 17z" fill="url(#effModernOrbFill)" /></svg></button>
+              {isEfficiencyDetailsOpen ? <div data-tour="feature-rating" className="efficiency-details-popover efficiency-details-popover-modern absolute right-0 top-[calc(100%+8px)] z-40 w-80 rounded-[1.6rem] border p-4 text-xs shadow-2xl backdrop-blur"><div className="text-center"><div className="efficiency-score-hero tabular-nums">{formattedEfficiencyScore}/100</div><p className="mt-1 text-sm font-semibold text-primary">{efficiencyGradeMessage}</p></div><div className="mt-4 space-y-2"><div className="efficiency-detail-row"><span>Задачи</span><b>+{formatRatingDelta(efficiencyTaskRating)} рейтинга</b></div><div className="efficiency-detail-row"><span>Привычки</span><b>+{formatRatingDelta(efficiencyHabitRating)} рейтинга</b></div><div className="efficiency-detail-row"><span>Работа с ИИ <span className="block text-[10px] font-normal text-muted">+0,1 за запрос · +0,3 за ИИ-инструмент</span></span><b>+{formatRatingDelta(efficiencyAiRating)} рейтинга</b></div><div className="efficiency-detail-row efficiency-detail-row-focus"><span>Режим концентрации (х2)</span><b>+{formatRatingDelta(efficiencyFocusRating)} рейтинга</b></div></div></div> : null}
+            </div>
+            <button type="button" data-tour="feature-focus-button" className="focus-mode-button topbar-action-button inline-flex h-9 w-9 items-center justify-center rounded-xl border shrink-0 text-white shadow-lg transition hover:-translate-y-0.5 hover:scale-105 focus-visible:ring-2 focus-visible:ring-violet-300" onClick={advancedTraining?.step === 'feature-focus-button' ? advanceAdvancedTraining : openFocusSetup} aria-label="Режим концентрации" title="Режим концентрации"><Bot size={17}/></button>
+        <div data-tour="feature-telegram-button"><TelegramIntegrationsMenu tourIntegration={integrationTourKind} onTourOpenAssistant={openGuidedIntegration ? advanceAdvancedTraining : undefined} onConnectBot={() => void openTelegramLinkModal()} /></div>
         <a className="public-nav-link shrink-0 px-2 py-2 text-sm" href="/about">О сервисе</a>
         <div className="auth-actions" aria-label="Управление аккаунтом">
           {hasAccount ? (
@@ -6653,16 +7042,7 @@ export default function App() {
                 <Settings size={17} />
               </button>
             </div>
-            <button type="button" data-tour="bubbles-fullscreen-exit"
-              className="fullscreen-workspace-exit topbar-action-button inline-flex h-9 w-9 items-center justify-center rounded-xl border text-sm font-semibold"
-              onClick={() => {
-                setDisplayMode(fullscreenDisplayModes[0] ?? 'bubbles');
-                setIsBubbleFullscreen(false);
-                setIsSphereFilterOpen(false);
-                setIsTimelineOverdueModalOpen(false);
-              }} title="Классический вид" aria-label="Перейти в классический вид">
-              <Minimize2 size={17} />
-            </button>
+
           </div>
         </header>
       ) : null}
@@ -6693,7 +7073,7 @@ export default function App() {
           onOpenSubtask={(subtask) => setEditorState({ task: subtask })}
           onOpenNote={(id) => setRequestedStandaloneNote({ id, serial: Date.now() })}
         />
-        <TelegramIntegrationsMenu tourIntegration={integrationTourKind} onConnectBot={() => void openTelegramLinkModal()} />
+        <TelegramIntegrationsMenu tourIntegration={integrationTourKind} onTourOpenAssistant={openGuidedIntegration ? advanceAdvancedTraining : undefined} onConnectBot={() => void openTelegramLinkModal()} />
         <a className="public-nav-link shrink-0 px-2 py-2 text-sm" href="/about">О сервисе</a>
         <div className="auth-actions" aria-label="Управление аккаунтом">
           {hasAccount ? (
@@ -6798,7 +7178,7 @@ export default function App() {
         </div>
 
         <div className="relative hidden md:flex items-center justify-center px-1" ref={efficiencyDetailsRef}>
-          <button type="button" className="efficiency-icon-button rounded-full p-1.5" title={`Текущий рейтинг: ${formattedEfficiencyScore}/100 (${efficiencyGrade})`} onClick={() => setIsEfficiencyDetailsOpen((prev) => !prev)}>
+          <button type="button" className="efficiency-icon-button rounded-full p-1.5" title={`Текущий рейтинг: ${formattedEfficiencyScore}/100 (${efficiencyGrade})`} onClick={() => { if (guidedStep === "feature-rating-open") advanceAdvancedTraining(); else setIsEfficiencyDetailsOpen((prev) => !prev); }}>
             <svg width="54" height="54" viewBox="0 0 72 72" role="img" aria-label="Рейтинг эффективности" className="efficiency-orb-icon"><defs><linearGradient id="effOrbFill" x1="10" y1="10" x2="62" y2="62"><stop offset="0%" stopColor="#38bdf8" /><stop offset="45%" stopColor="#8b5cf6" /><stop offset="100%" stopColor="#f472b6" /></linearGradient><linearGradient id="effOrbRing" x1="12" y1="58" x2="60" y2="14"><stop offset="0%" stopColor="#22d3ee" /><stop offset="55%" stopColor="#a78bfa" /><stop offset="100%" stopColor="#fb7185" /></linearGradient></defs><circle cx="36" cy="36" r="25" fill="url(#effOrbFill)" opacity="0.18" /><circle cx="36" cy="36" r="26" fill="none" stroke="rgba(148,163,184,0.28)" strokeWidth="5" /><circle cx="36" cy="36" r="26" fill="none" stroke="url(#effOrbRing)" strokeWidth="5" strokeLinecap="round" pathLength={100} strokeDasharray={`${efficiencyScore} 100`} transform="rotate(-90 36 36)" /><path d="M36 17l5.4 12.1 13.1 1.4-9.8 8.8 2.8 12.9L36 45.5l-11.5 6.7 2.8-12.9-9.8-8.8 13.1-1.4L36 17z" fill="url(#effOrbFill)" /></svg>
           </button>
           {isEfficiencyDetailsOpen ? (
@@ -6808,7 +7188,7 @@ export default function App() {
 
         <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
           {renderOverdueControl()}
-          <button data-tour="feature-focus-button" type="button" onClick={openFocusSetup} className="focus-mode-button topbar-action-button flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold text-white shadow-lg transition hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-violet-300" title="Режим фокуса с ИИ"><Bot size={16} /> Фокус</button>
+          <button data-tour="feature-focus-button" type="button" onClick={advancedTraining?.step === 'feature-focus-button' ? advanceAdvancedTraining : openFocusSetup} className="focus-mode-button topbar-action-button flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold text-white shadow-lg transition hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-violet-300" title="Режим фокуса с ИИ"><Bot size={16} /> Фокус</button>
           {renderCreditsControl()}
           <div className="add-menu-wrap relative" onMouseEnter={() => setIsAddMenuOpen(true)} onMouseLeave={() => { if (!isTourAddMenuOpen) setIsAddMenuOpen(false); }}>
             <button data-tour="create-task" className="add-menu-trigger light-primary-action inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold" onClick={() => setIsAddMenuOpen((prev) => !prev)}><Plus size={16} /> Новая задача <ChevronDown size={14} /></button>
@@ -6817,36 +7197,26 @@ export default function App() {
           <div className="relative shrink-0" ref={settingsMenuRef}>
             <button className="surface-popover light-menu-trigger topbar-settings-button inline-flex h-10 w-10 items-center justify-center rounded-xl border transition hover:border-cyan-300/70" onClick={() => setIsSettingsOpen((prev) => !prev)} aria-label="Настройки" title="Настройки"><Settings size={17} /></button>
           </div>
-          <button type="button" data-tour="workspace-fullscreen-enter"
-            className="topbar-action-button workspace-fullscreen-entry inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border p-0 text-sm font-semibold transition"
-            onClick={() => {
-              setFullscreenDisplayModes([displayMode]);
-              setFullscreenPanelSlots(null);
-              setIsSphereFilterOpen(false);
-              setIsBubbleFullscreen(true);
-            }}
-            title="Перейти в основной вид" aria-label="Перейти в основной вид">
-            <Maximize2 size={18} />
-          </button>
+
         </div>
       </section> : null}
 
 
-      {isFocusSetupOpen ? (
+      {(isFocusSetupOpen || guidedFocusSetup) ? (
         <div className="modal-backdrop fixed inset-0 z-[135] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setIsFocusSetupOpen(false)}>
           <div data-tour="feature-focus-setup" className="focus-setup-modal dialog-surface flex max-h-[calc(100vh-32px)] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
             <div className="flex items-start justify-between gap-4">
               <div>
                 <div className="inline-flex items-center gap-2 rounded-full bg-violet-100 px-3 py-1 text-xs font-semibold text-violet-700"><Bot size={14} /> Режим концентрации</div>
-                <h2 className="mt-3 text-2xl font-bold text-primary">Выберите до 5 главных задач на сейчас</h2>
+                <h2 className="mt-3 text-2xl font-bold text-primary">{guidedFocusSetup ? 'Учебная сессия: выберите 2–5 задач' : 'Выберите до 5 главных задач на сейчас'}</h2>
                 <p className="mt-1 text-sm text-muted">Можно выбрать вручную или доверить подбор задачам с максимальным коэффициентом.</p>
               </div>
               <button className="rounded-full p-2 text-muted transition hover:bg-slate-100" onClick={() => setIsFocusSetupOpen(false)} aria-label="Закрыть"><X size={18} /></button>
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
-              <button type="button" className="rounded-full bg-violet-600 px-4 py-2 text-sm font-semibold text-white" onClick={() => setFocusSelectedTaskIds(visibleFocusCandidateTasks.slice(0, FOCUS_MAX_TASKS).map((task) => task.id))}>Подобрать автоматически</button>
-              <span className="rounded-full bg-slate-100 px-3 py-2 text-sm text-slate-600">Выбрано: {focusSelectedTaskIds.length}/{FOCUS_MAX_TASKS}</span>
-              <div className="focus-sector-dropdown relative">
+              <button type="button" className="rounded-full bg-violet-600 px-4 py-2 text-sm font-semibold text-white" data-guided-focus-auto onClick={() => { const ids = shownFocusCandidates.slice(0, FOCUS_MAX_TASKS).map(task => task.id); if (guidedFocusSetup) setGuidedFocusSelected(ids); else setFocusSelectedTaskIds(ids); }}>Подобрать автоматически</button>
+              <span className="rounded-full bg-slate-100 px-3 py-2 text-sm text-slate-600">Выбрано: {shownFocusSelected.length}/{FOCUS_MAX_TASKS}</span>
+              <div className="focus-sector-dropdown relative" style={guidedFocusSetup ? {display: "none"} : undefined}>
                 <button type="button" className="focus-sector-dropdown-button inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-2 text-sm text-slate-600" onClick={() => setIsFocusSphereDropdownOpen((prev) => !prev)}>
                   <span>Сектор:</span><span className="font-semibold">{focusSphereFilterId === 'all' ? 'Все' : (spheres.find((sphere) => sphere.id === focusSphereFilterId)?.name ?? 'Все')}</span><ChevronDown size={14} />
                 </button>
@@ -6864,11 +7234,11 @@ export default function App() {
               </div>
             </div>
             <div className="mt-4 grid min-h-0 flex-1 gap-3 overflow-y-auto px-1 pt-2 sm:grid-cols-2">
-              {visibleFocusCandidateTasks.map((task) => {
-                const selected = focusSelectedTaskIds.includes(task.id);
-                const sphere = task.sphereId ? spheres.find((item) => item.id === task.sphereId) : null;
+              {shownFocusCandidates.map((task) => {
+                const selected = shownFocusSelected.includes(task.id);
+                const sphere = task.sphereId ? (guidedFocusSetup ? TRAINING_SPHERES : spheres).find((item) => item.id === task.sphereId) : null;
                 return (
-                  <button key={task.id} type="button" onClick={() => toggleFocusTaskSelection(task.id)} className={`focus-task-pick rounded-2xl border p-4 text-left transition ${selected ? 'selected' : ''}`}>
+                  <button key={task.id} type="button" onClick={() => { if (guidedFocusSetup) setGuidedFocusSelected(prev => prev.includes(task.id) ? prev.filter(id => id !== task.id) : prev.length < FOCUS_MAX_TASKS ? [...prev, task.id] : prev); else toggleFocusTaskSelection(task.id); }} className={`focus-task-pick rounded-2xl border p-4 text-left transition ${selected ? 'selected' : ''}`}>
                     <div className="flex items-start justify-between gap-3"><h3 className="font-semibold text-primary">{task.title}</h3>{selected ? <Check className="text-violet-600" size={18} /> : null}</div>
                     {sphere ? <span className="mt-2 inline-flex rounded-full px-2 py-1 text-[11px] font-semibold text-white shadow-sm" style={{ backgroundColor: sphere.color }}>{sphere.name}</span> : null}
                     <p className="mt-2 line-clamp-2 text-xs text-muted">{noteHtmlToPlainText(task.description ?? '', { trimEnd: true }) || 'Описание не заполнено'}</p>
@@ -6876,17 +7246,27 @@ export default function App() {
                   </button>
                 );
               })}
-              {visibleFocusCandidateTasks.length === 0 ? <p className="text-sm text-muted">Нет активных задач для концентрации в выбранном секторе.</p> : null}
+              {shownFocusCandidates.length === 0 ? <p className="text-sm text-muted">Нет активных задач для концентрации в выбранном секторе.</p> : null}
             </div>
             <div className="mt-5 flex justify-end gap-2">
               <button className="surface-muted rounded px-4 py-2 text-sm" onClick={() => setIsFocusSetupOpen(false)}>Отмена</button>
-              <button className="rounded bg-violet-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" disabled={focusSelectedTaskIds.length < FOCUS_MIN_TASKS || focusSelectedTaskIds.length > FOCUS_MAX_TASKS} onClick={() => startFocusSession(focusSelectedTaskIds)}>Начать</button>
+              <button className="rounded bg-violet-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" data-guided-focus-start disabled={shownFocusSelected.length < (guidedFocusSetup ? 2 : FOCUS_MIN_TASKS) || shownFocusSelected.length > FOCUS_MAX_TASKS} onClick={() => { if (guidedFocusSetup) advanceAdvancedTraining(); else startFocusSession(shownFocusSelected); }}>Начать</button>
             </div>
           </div>
         </div>
       ) : null}
 
-      {isFocusModeOpen && focusActiveTask ? (
+      {(() => {
+        // The same production window renders a sandboxed session during the
+        // guided lesson. Real focus state and the running timer stay untouched.
+        const focusActiveTask = shownFocusTask;
+        const focusTasks = shownFocusTasks;
+        const focusActiveIndex = shownFocusIndex;
+        const focusTimerMinutes = shownFocusMinutes;
+        const focusRemainingSeconds = shownFocusRemaining;
+        const isFocusTimerRunning = shownFocusRunning;
+        const focusTaskAiDialog = shownFocusAiDialog;
+        return (isFocusModeOpen || guidedFocusMode) && focusActiveTask ? (
         <div className="modal-backdrop fixed inset-0 z-[134] flex items-center justify-center p-3 backdrop-blur-sm">
           <div className="focus-mode-shell relative grid h-[min(760px,calc(100vh-24px))] w-full max-w-[1500px] gap-4 overflow-hidden rounded-3xl border p-4 shadow-2xl lg:grid-cols-[260px_minmax(360px,1fr)_430px]" onClick={(event) => event.stopPropagation()}>
             <aside data-tour="feature-focus-timer" className="focus-side-panel flex min-h-0 flex-col overflow-y-auto rounded-3xl border p-4">
@@ -6895,17 +7275,17 @@ export default function App() {
                 <div className="mb-4 mt-6 space-y-2">{(['time', 'ai', 'subtask', 'task'] as const).map((type) => focusBonusEvents[type] ? <div key={focusBonusEvents[type]!.id} className={`focus-bonus-message focus-bonus-${type}`}>{focusBonusEvents[type]!.message}</div> : null)}</div><div className="my-6 text-center text-5xl font-black tabular-nums text-slate-900">{formatFocusTime(focusRemainingSeconds)}</div>
                 <CustomSelect
                   value={String(focusTimerMinutes)}
-                  onChange={(value) => handleFocusTimerMinutesChange(Number(value))}
+                  onChange={(value) => { if (!guidedFocusMode) handleFocusTimerMinutesChange(Number(value)); }}
                   options={FOCUS_TIMER_OPTIONS.map((value) => ({ value: String(value), label: `${value} минут${FOCUS_RECOMMENDED_MINUTES.has(value) ? ' · рекомендовано' : ''}` }))}
-                  disabled={isFocusTimerRunning}
+                  disabled={guidedFocusMode || isFocusTimerRunning}
                   buttonClassName={`focus-timer-select-trigger ${isFocusTimerRunning ? 'cursor-not-allowed opacity-60' : ''}`}
                   menuClassName="task-edit-notify-menu focus-timer-select-menu"
                   detachedPopup
                   ariaLabel="Длительность фокус-сессии"
                 />
                 <div className="mt-4 flex justify-center gap-3">
-                  <button className="focus-timer-control primary" onClick={() => isFocusTimerRunning ? setIsFocusTimerRunning(false) : startFocusTimer()}>{isFocusTimerRunning ? <Pause size={20} /> : <Play size={20} />}</button>
-                  <button className="focus-timer-control" onClick={stopFocusTimer}><Square size={18} /></button>
+                  <button className="focus-timer-control primary" data-guided-focus-play aria-label={isFocusTimerRunning ? "Приостановить таймер" : "Запустить таймер"} onClick={() => { if (guidedFocusMode) { if (guidedFocusDeadline === null) setGuidedFocusDeadline(Date.now() + guidedFocusMinutes * 60_000); } else if (isFocusTimerRunning) setIsFocusTimerRunning(false); else startFocusTimer(); }}>{isFocusTimerRunning ? <Pause size={20} /> : <Play size={20} />}</button>
+                  <button className="focus-timer-control" onClick={() => { if (!guidedFocusMode) stopFocusTimer(); }}><Square size={18} /></button>
                 </div>
                 <p className="mt-4 text-center text-xs text-muted">После запуска можно закрыть окно — таймер останется в правом нижнем углу.</p>
                 {isFocusSessionFinished ? <div className="mt-4 rounded-2xl border border-violet-200 bg-violet-50 p-3 text-sm text-violet-900"><p className="font-semibold">Резюме сессии</p><p className="mt-1">Закрыто подзадач: {focusCompletedSubtasksCount}</p><p>Запросов к ИИ: {focusSessionAiRequestCount}</p><p>Заработано рейтинга: +{focusSessionRatingEarned.toFixed(1).replace(/\.0$/, '')}</p></div> : null}
@@ -6913,10 +7293,10 @@ export default function App() {
             </aside>
             <main data-tour="feature-focus-task" className="focus-task-stack relative flex min-h-0 flex-col items-center justify-center gap-1 overflow-hidden">
               <div className="focus-card-peek -mb-1">{focusTasks[(focusActiveIndex - 1 + focusTasks.length) % focusTasks.length]?.title}</div>
-              <button className="focus-stack-arrow absolute top-[4.25rem] z-10" onClick={() => switchFocusTask(-1)}><ChevronUp size={22} /></button>
+              <button className="focus-stack-arrow absolute top-[4.25rem] z-10" onClick={() => guidedFocusMode ? setGuidedFocusIndex(prev => (prev - 1 + focusTasks.length) % focusTasks.length) : switchFocusTask(-1)}><ChevronUp size={22} /></button>
               <motion.article key={focusActiveTask.id} initial={{ opacity: 0, y: 44, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} className="focus-main-card flex min-h-0 w-full max-w-2xl flex-1 flex-col overflow-hidden rounded-[2rem] border p-6 shadow-xl">
                 <div className="flex w-full min-w-0 items-center gap-2 overflow-hidden"><p className="shrink-0 text-xs font-semibold uppercase tracking-[0.18em] text-violet-500">Текущая задача</p>{renderLinkedTaskBadge(focusActiveTask, true)}</div>
-                <div className="mt-2 flex items-start justify-between gap-3"><button type="button" className="text-left text-3xl font-bold text-slate-950 hover:underline" onClick={() => { setFocusedTaskId(focusActiveTask.id); setIsFocusedNotesEditorOpen(false); }}>{focusActiveTask.title}</button><button type="button" className="success-button shrink-0 rounded-xl px-3 py-2 text-sm font-semibold" onClick={() => void completeTask(focusActiveTask)}>Выполнить</button></div>
+                <div className="mt-2 flex items-start justify-between gap-3"><button type="button" className="text-left text-3xl font-bold text-slate-950 hover:underline" onClick={() => { setFocusedTaskId(focusActiveTask.id); setIsFocusedNotesEditorOpen(false); }}>{focusActiveTask.title}</button><button type="button" className="success-button shrink-0 rounded-xl px-3 py-2 text-sm font-semibold" onClick={() => { if (!guidedFocusMode) void completeTask(focusActiveTask); }}>Выполнить</button></div>
                 <p className="mt-1 inline-flex items-center gap-1.5 text-sm font-medium text-violet-500">{focusActiveTask.aiMonitoringEnabled ? <><span>Дедлайн:</span><TaskMonitoringBadge /> На усмотрение ИИ</> : (focusActiveTask.dueDate ? `До дедлайна: ${formatSubtaskRelativeDeadline(focusActiveTask.dueDate)}` : 'Дедлайн не задан')}</p>
                 <div className="mt-3 flex min-h-0 items-start">
                   <p className="focus-task-description min-w-0 flex-1 whitespace-pre-wrap text-sm leading-6 text-muted">{noteHtmlToPlainText(focusActiveTask.description ?? '', { trimEnd: true }) || 'Описание не заполнено.'}</p>
@@ -7002,30 +7382,30 @@ export default function App() {
                   {(hideClosedFocusedSubtasks ? getFocusedSubtaskItems(focusActiveTask.id).filter((subtask) => subtask.status !== 'DONE') : getFocusedSubtaskItems(focusActiveTask.id)).length === 0 ? <li className="text-sm text-subtle">{hideClosedFocusedSubtasks ? 'Активных подзадач пока нет.' : 'Подзадач пока нет.'}</li> : null}
                 </ul>
               </motion.article>
-              <button className="focus-stack-arrow absolute bottom-[4.25rem] z-10" onClick={() => switchFocusTask(1)}><ChevronDown size={22} /></button>
+              <button className="focus-stack-arrow absolute bottom-[4.25rem] z-10" onClick={() => guidedFocusMode ? setGuidedFocusIndex(prev => (prev + 1) % focusTasks.length) : switchFocusTask(1)}><ChevronDown size={22} /></button>
               <div className="focus-card-peek -mt-1">{focusTasks[(focusActiveIndex + 1) % focusTasks.length]?.title}</div>
             </main>
             <aside data-tour="feature-focus-ai" className="ai-chat-lightweight focused-task-ai-panel focus-ai-panel focus-shared-task-ai-panel relative flex min-h-0 flex-col overflow-hidden rounded-3xl border p-4">
               <div className="focus-task-ai-header flex shrink-0 items-center justify-between gap-3">
                 <div className="min-w-0 flex shrink-0 items-center gap-2"><Bot size={18} className="focus-task-ai-bot-icon shrink-0" /><h3 className="truncate font-semibold ai-panel-title">Помощь ИИ</h3></div>
                 <div className="focus-task-ai-header-actions flex min-w-0 items-center justify-end gap-2">
-                  <TaskMonitoringStatuses taskId={focusActiveTask.id}
+                  {!guidedFocusMode && <TaskMonitoringStatuses subscriptionAllowed={Boolean(currentUser?.subscriptionPlan === 'max' && activeSubscription)} taskId={focusActiveTask.id}
                     model={focusActiveTask.aiMonitoringModel}
                     generation={focusActiveTask.aiMonitoringGeneration}
                     enabled={focusActiveTask.aiMonitoringEnabled === true}
                     allowed={focusActiveTask.taskType === 'TASK' && !focusActiveTask.parentTaskId && !focusActiveTask.isCollaborative}
-                    onTaskUpdated={updated => setTasks(prev => prev.map(task => task.id === updated.id ? updated : task))} />
+                    onTaskUpdated={updated => setTasks(prev => prev.map(task => task.id === updated.id ? updated : task))} />}
                   <button type="button" className="focused-task-ai-icon-button shrink-0" onClick={() => setIsFocusAiExpanded(true)} title="Открыть полноразмерный диалог"><Maximize2 size={15} /></button>
                   <button type="button" className="focused-task-ai-icon-button shrink-0" onClick={() => setIsFocusModeOpen(false)} title="Закрыть режим концентрации" aria-label="Закрыть режим концентрации"><X size={15} /></button>
                 </div>
               </div>
               <div className="focused-task-ai-thread-region relative mt-2 min-h-0 flex-1">
-                {!focusActiveTask.aiMonitoringEnabled ? <AiModelChip value={focusTaskAiModel} onChange={model => setAiModelByTask(prev => ({ ...prev, [focusActiveTask.id]: model }))} ariaLabel="Выбрать модель ИИ для задачи" className="absolute left-1/2 top-px z-20 -translate-x-1/2" /> : <AiModelChip disabled value={focusTaskAiModel} onChange={() => undefined} ariaLabel="Модель ИИ для задачи" className="absolute left-1/2 top-px z-20 -translate-x-1/2" />}
+                {!focusActiveTask.aiMonitoringEnabled ? <AiModelChip disabled={shortLimitExhausted} value={focusTaskAiModel} onChange={model => setAiModelByTask(prev => ({ ...prev, [focusActiveTask.id]: model }))} ariaLabel="Выбрать модель ИИ для задачи" className="absolute left-1/2 top-px z-20 -translate-x-1/2" /> : <AiModelChip disabled value={focusTaskAiModel} onChange={() => undefined} ariaLabel="Модель ИИ для задачи" className="absolute left-1/2 top-px z-20 -translate-x-1/2" />}
                 <div ref={focusAiDialogContainerRef} className="chat-thread focused-task-ai-thread-through h-full min-h-0 space-y-3 overflow-y-auto rounded-xl p-3 pt-12">
                   {focusTaskAiDialog.map((message) => <div key={message.id} className={`ai-message-forward-group w-fit max-w-[92%] ${message.role === 'assistant' ? 'mr-auto' : 'ml-auto'}`}><div className={`chat-message w-full rounded-2xl p-3 text-sm ${message.role === 'assistant' ? 'chat-message-assistant' : 'chat-message-user'}`}><div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focus-${message.id}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focus-${message.id}` ? <Check size={12} /> : <Copy size={12} />}</button> : null}</div>{message.messageKind === 'MONITOR_ACTION' ? <TaskMonitoringActionBadge content={message.content} /> : message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTaskReference={openTaskReferenceFromAi} showTaskReferenceButtons /> : <CollapsibleUserMessage>{renderAiMessageContent(message.content, message.attachmentPreviews, message.id)}</CollapsibleUserMessage>}{message.role === 'assistant' && message.webSearchUsed ? <WebCitations sources={message.webSources} searched={message.webSearchUsed} /> : null}{message.role === 'assistant' && message.generatedDocument ? <AiGeneratedDocumentButton document={message.generatedDocument} /> : null}
-                    {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[10px] text-muted opacity-75">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}{message.role === 'assistant' ? <AiSpeechCostLine messageKey={String(message.id)} /> : null}{message.role === 'assistant' && message.taskProposal ? <AiTaskProposalCard proposal={message.taskProposal} onApplied={() => void load()} /> : null}{message.role === 'assistant' && message.telegramSendDraft ? <TelegramInlineSendCard draft={message.telegramSendDraft} /> : null}{message.role === 'assistant' && message.mailSendDraft ? <MailInlineSendCard draft={message.mailSendDraft} /> : null}{message.role === 'assistant' && message.telegramReadDraft ? <TelegramReadConsentCard draft={message.telegramReadDraft} onContinue={(approval) => continueTelegramReadTask(approval, focusActiveTask!.id, true)} /> : null}
-                    </div><div className="ai-message-forward-actions">{message.role === 'assistant' ? <AiReadAloudAction text={message.content} messageKey={String(message.id)} /> : null}<AiReplyAction message={message} onReply={(target) => setReplyToFocusAi(target)} /><TelegramMessageQuickShare text={message.content} compact initialNoteSphereId={focusActiveTask?.sphereId ?? null} /></div></div>)}
-                  <TaskMonitoringTriggerChips taskId={focusActiveTask.id} />
+                    {!activeSubscription && message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[10px] text-muted opacity-75">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}{!activeSubscription && message.role === 'assistant' ? <AiSpeechCostLine messageKey={String(message.id)} /> : null}{message.role === 'assistant' && message.taskProposal ? <AiTaskProposalCard proposal={message.taskProposal} onApplied={() => void load()} /> : null}{message.role === 'assistant' && message.telegramSendDraft ? <TelegramInlineSendCard draft={message.telegramSendDraft} /> : null}{message.role === 'assistant' && message.mailSendDraft ? <MailInlineSendCard draft={message.mailSendDraft} hideCreditCost={activeSubscription} /> : null}{message.role === 'assistant' && message.telegramReadDraft ? <TelegramReadConsentCard draft={message.telegramReadDraft} onContinue={(approval) => continueTelegramReadTask(approval, focusActiveTask!.id, true)} /> : null}
+                    </div><div className="ai-message-forward-actions">{message.role === 'assistant' ? <AiReadAloudAction text={message.content} messageKey={String(message.id)} /> : null}<AiReplyAction message={message} onReply={(target) => setReplyToFocusAi(target)} /><TelegramMessageQuickShare text={message.content} compact initialNoteSphereId={focusActiveTask?.sphereId ?? null} hideCreditCost={activeSubscription} /></div></div>)}
+                  {!guidedFocusMode && <TaskMonitoringTriggerChips taskId={focusActiveTask.id} />}
                   {aiLoadingTaskId === focusActiveTask.id && taskAiStreamingText[focusActiveTask.id] ? <div className="ai-message-forward-group w-fit max-w-[92%] mr-auto"><div className="chat-message chat-message-assistant w-full rounded-2xl p-3 text-sm whitespace-pre-wrap break-words [overflow-wrap:anywhere]"><div className="mb-1"><p className="chat-message-label text-[11px] font-semibold uppercase tracking-wide">ИИ</p></div><AiStreamingMessageBody content={taskAiStreamingText[focusActiveTask.id]} /></div></div> : null}
                 {aiLoadingTaskId === focusActiveTask.id && focusAiProgress ? <TaskAiProgress status={focusAiProgress} /> : liveVoiceTaskProgress[focusActiveTask.id] ? <TaskAiProgress status={liveVoiceTaskProgress[focusActiveTask.id]} /> : focusActiveTask.aiMonitoringEnabled ? <TaskMonitoringIntroProgress taskId={focusActiveTask.id} /> : null}
                 </div>
@@ -7035,7 +7415,7 @@ export default function App() {
               {replyToFocusAi ? <AiReplyPreview target={replyToFocusAi} onDismiss={() => setReplyToFocusAi(null)} /> : null}
               {renderTaskAiRecipientPicker(focusActiveTask)}
 <AiAttachmentTiles files={focusAiPendingFiles} onRemove={(file) => removeFocusAiPendingFile(file.name)} busy={focusAiLoading} uploadProgress={focusAiUploadProgress} />
-              <div className="ai-chat-composer mt-3 flex items-end gap-2 rounded-3xl border p-2"><AutoGrowingTextarea className="form-field min-h-11 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2 text-sm focus:ring-0" value={focusAiDraft} onChange={(e) => setFocusAiDraft(e.target.value)} onPaste={(event) => { const files = clipboardImageFiles(event.clipboardData); if (files.length) { event.preventDefault(); addFocusAiClipboardImages(files); } }} onKeyDown={(event) => { if (shouldSendAiMessageOnEnter(event)) { event.preventDefault(); void sendFocusAiQuestion(); } }} placeholder="Напишите сообщение…" disabled={focusAiLoading} /><input ref={focusAiFileInputRef} type="file" multiple className="hidden" accept=".pdf,.docx,.xls,.xlsx,image/png,image/jpeg,image/webp,image/gif" onChange={handleFocusAiFileSelect} /><button className="surface-muted inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted disabled:opacity-50" title="Прикрепить файл" disabled={focusAiLoading} onClick={() => focusAiFileInputRef.current?.click()}><Paperclip size={16} /></button><VoiceInputButton liveContext={focusActiveTask ? { type: 'task', taskId: focusActiveTask.id, model: focusTaskAiModel } : undefined}
+              <div className="ai-chat-composer mt-3 flex items-end gap-2 rounded-3xl border p-2"><AutoGrowingTextarea className="form-field min-h-11 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2 text-sm focus:ring-0" value={focusAiDraft} onChange={(e) => setFocusAiDraft(e.target.value)} onPaste={(event) => { const files = clipboardImageFiles(event.clipboardData); if (files.length) { event.preventDefault(); addFocusAiClipboardImages(files); } }} onKeyDown={(event) => { if (shouldSendAiMessageOnEnter(event)) { event.preventDefault(); void sendFocusAiQuestion(); } }} placeholder="Напишите сообщение…" disabled={focusAiLoading} /><input ref={focusAiFileInputRef} type="file" multiple className="hidden" accept=".pdf,.docx,.xls,.xlsx,image/png,image/jpeg,image/webp,image/gif" onChange={handleFocusAiFileSelect} /><button className="surface-muted inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted disabled:opacity-50" title="Прикрепить файл" disabled={focusAiLoading} onClick={() => focusAiFileInputRef.current?.click()}><Paperclip size={16} /></button><VoiceInputButton activationMode="transcription" liveContext={focusActiveTask ? { type: 'task', taskId: focusActiveTask.id, model: focusTaskAiModel } : undefined}
     onLiveMessage={event => focusActiveTask && appendLiveTaskMessage(focusActiveTask.id, event)}
     onLiveToolResult={event => focusActiveTask && applyLiveTaskTool(focusActiveTask.id, event)}
     onLiveStatus={status => focusActiveTask && updateLiveTaskStatus(focusActiveTask.id, status)} disabled={focusAiLoading} className="surface-muted text-muted" onTranscript={(text, immediate) => {
@@ -7047,7 +7427,8 @@ export default function App() {
             </aside>
           </div>
         </div>
-      ) : null}
+      ) : null;
+      })()}
 
       {isFocusModeOpen && isFocusAiExpanded && focusActiveTask ? (
         <div className="fixed inset-0 z-[151] flex items-center justify-center bg-slate-950/70 p-4" onClick={() => setIsFocusAiExpanded(false)}>
@@ -7059,7 +7440,7 @@ export default function App() {
               </div>
               <div className="task-ai-fullscreen-actions flex shrink-0 flex-wrap items-center justify-end gap-3">
                 <div className="task-ai-fullscreen-monitor shrink-0">
-                  <TaskMonitoringStatuses taskId={focusActiveTask.id}
+                  <TaskMonitoringStatuses subscriptionAllowed={Boolean(currentUser?.subscriptionPlan === 'max' && activeSubscription)} taskId={focusActiveTask.id}
                     model={focusActiveTask.aiMonitoringModel}
                     generation={focusActiveTask.aiMonitoringGeneration}
                     enabled={focusActiveTask.aiMonitoringEnabled === true}
@@ -7079,7 +7460,7 @@ export default function App() {
                 </div>
               </div>
             </div>
-            {!focusActiveTask.aiMonitoringEnabled ? <AiModelChip value={focusTaskAiModel} onChange={model => setAiModelByTask(prev => ({ ...prev, [focusActiveTask.id]: model }))} ariaLabel="Выбрать модель ИИ для задачи" className="absolute left-1/2 top-[4.5rem] z-20 -translate-x-1/2" /> : <AiModelChip disabled value={focusTaskAiModel} onChange={() => undefined} ariaLabel="Модель ИИ для задачи" className="absolute left-1/2 top-[4.5rem] z-20 -translate-x-1/2" />}
+            {!focusActiveTask.aiMonitoringEnabled ? <AiModelChip disabled={shortLimitExhausted} value={focusTaskAiModel} onChange={model => setAiModelByTask(prev => ({ ...prev, [focusActiveTask.id]: model }))} ariaLabel="Выбрать модель ИИ для задачи" className="absolute left-1/2 top-[4.5rem] z-20 -translate-x-1/2" /> : <AiModelChip disabled value={focusTaskAiModel} onChange={() => undefined} ariaLabel="Модель ИИ для задачи" className="absolute left-1/2 top-[4.5rem] z-20 -translate-x-1/2" />}
             <div ref={focusAiExpandedDialogContainerRef} className="chat-thread focused-task-ai-thread-through min-h-0 flex-1 space-y-3 overflow-y-auto rounded-2xl p-4 pt-12">
               {isFocusAiSearchOpen ? (
                 <label className="surface-input sticky top-0 z-10 flex items-center gap-1 rounded-lg border px-2 py-1 text-xs text-muted">
@@ -7091,8 +7472,8 @@ export default function App() {
               ) : null}
                 {focusTaskAiDialog.filter(message => !isFocusAiSearchOpen || !focusAiSearchQuery.trim() ||
                   message.content.toLowerCase().includes(focusAiSearchQuery.trim().toLowerCase())).map((message) => <div key={message.id} className={`ai-message-forward-group w-fit max-w-[82%] ${message.role === 'assistant' ? 'mr-auto' : 'ml-auto'}`}><div className={`chat-message w-full rounded-2xl p-3 text-sm ${message.role === 'assistant' ? 'chat-message-assistant' : 'chat-message-user'}`}><div className="mb-1 flex items-center justify-between"><p className="text-[11px] font-semibold uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focus-expanded-${message.id}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focus-expanded-${message.id}` ? <Check size={12} /> : <Copy size={12} />}</button> : null}</div>{message.messageKind === 'MONITOR_ACTION' ? <TaskMonitoringActionBadge content={message.content} /> : message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTaskReference={(task) => { setIsFocusAiExpanded(false); openTaskReferenceFromAi(task); }} showTaskReferenceButtons /> : <CollapsibleUserMessage>{renderAiMessageContent(message.content, message.attachmentPreviews, message.id)}</CollapsibleUserMessage>}{message.role === 'assistant' && message.webSearchUsed ? <WebCitations sources={message.webSources} searched={message.webSearchUsed} /> : null}{message.role === 'assistant' && message.generatedDocument ? <AiGeneratedDocumentButton document={message.generatedDocument} /> : null}
-                    {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[11px] text-muted opacity-75">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}{message.role === 'assistant' ? <AiSpeechCostLine messageKey={String(message.id)} /> : null}{message.role === 'assistant' && message.taskProposal ? <AiTaskProposalCard proposal={message.taskProposal} onApplied={() => void load()} /> : null}{message.role === 'assistant' && message.telegramSendDraft ? <TelegramInlineSendCard draft={message.telegramSendDraft} /> : null}{message.role === 'assistant' && message.mailSendDraft ? <MailInlineSendCard draft={message.mailSendDraft} /> : null}{message.role === 'assistant' && message.telegramReadDraft ? <TelegramReadConsentCard draft={message.telegramReadDraft} onContinue={(approval) => continueTelegramReadTask(approval, focusActiveTask!.id, true)} /> : null}
-                    </div><div className="ai-message-forward-actions">{message.role === 'assistant' ? <AiReadAloudAction text={message.content} messageKey={String(message.id)} /> : null}<AiReplyAction message={message} onReply={(target) => setReplyToFocusAi(target)} /><TelegramMessageQuickShare text={message.content} compact initialNoteSphereId={focusActiveTask?.sphereId ?? null} /></div></div>)}
+                    {!activeSubscription && message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[11px] text-muted opacity-75">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}{!activeSubscription && message.role === 'assistant' ? <AiSpeechCostLine messageKey={String(message.id)} /> : null}{message.role === 'assistant' && message.taskProposal ? <AiTaskProposalCard proposal={message.taskProposal} onApplied={() => void load()} /> : null}{message.role === 'assistant' && message.telegramSendDraft ? <TelegramInlineSendCard draft={message.telegramSendDraft} /> : null}{message.role === 'assistant' && message.mailSendDraft ? <MailInlineSendCard draft={message.mailSendDraft} hideCreditCost={activeSubscription} /> : null}{message.role === 'assistant' && message.telegramReadDraft ? <TelegramReadConsentCard draft={message.telegramReadDraft} onContinue={(approval) => continueTelegramReadTask(approval, focusActiveTask!.id, true)} /> : null}
+                    </div><div className="ai-message-forward-actions">{message.role === 'assistant' ? <AiReadAloudAction text={message.content} messageKey={String(message.id)} /> : null}<AiReplyAction message={message} onReply={(target) => setReplyToFocusAi(target)} /><TelegramMessageQuickShare text={message.content} compact initialNoteSphereId={focusActiveTask?.sphereId ?? null} hideCreditCost={activeSubscription} /></div></div>)}
                 <TaskMonitoringTriggerChips taskId={focusActiveTask.id} />
                 {aiLoadingTaskId === focusActiveTask.id && taskAiStreamingText[focusActiveTask.id] ? <div className="ai-message-forward-group w-fit max-w-[82%] mr-auto"><div className="chat-message chat-message-assistant w-full rounded-2xl p-3 text-sm whitespace-pre-wrap break-words [overflow-wrap:anywhere]"><div className="mb-1"><p className="chat-message-label text-[11px] font-semibold uppercase tracking-wide">ИИ</p></div><AiStreamingMessageBody content={taskAiStreamingText[focusActiveTask.id]} /></div></div> : null}
                 {aiLoadingTaskId === focusActiveTask.id && focusAiProgress ? <TaskAiProgress status={focusAiProgress} /> : liveVoiceTaskProgress[focusActiveTask.id] ? <TaskAiProgress status={liveVoiceTaskProgress[focusActiveTask.id]} /> : focusActiveTask.aiMonitoringEnabled ? <TaskMonitoringIntroProgress taskId={focusActiveTask.id} /> : null}
@@ -7106,7 +7487,7 @@ export default function App() {
               <AutoGrowingTextarea className="form-field min-h-11 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2 text-sm focus:ring-0" value={focusAiDraft} onChange={(e) => setFocusAiDraft(e.target.value)} onPaste={(event) => { const files = clipboardImageFiles(event.clipboardData); if (files.length) { event.preventDefault(); addFocusAiClipboardImages(files); } }} onKeyDown={(event) => { if (shouldSendAiMessageOnEnter(event)) { event.preventDefault(); void sendFocusAiQuestion(); } }} placeholder="Напишите сообщение…" disabled={focusAiLoading} />
               <input ref={focusAiExpandedFileInputRef} type="file" multiple className="hidden" accept=".pdf,.docx,.xls,.xlsx,image/png,image/jpeg,image/webp,image/gif" onChange={handleFocusAiFileSelect} />
               <button className="surface-muted inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted disabled:opacity-50" title="Прикрепить файл" disabled={focusAiLoading} onClick={() => focusAiExpandedFileInputRef.current?.click()}><Paperclip size={16} /></button>
-              <VoiceInputButton liveContext={focusActiveTask ? { type: 'task', taskId: focusActiveTask.id, model: focusTaskAiModel } : undefined}
+              <VoiceInputButton activationMode="transcription" liveContext={focusActiveTask ? { type: 'task', taskId: focusActiveTask.id, model: focusTaskAiModel } : undefined}
     onLiveMessage={event => focusActiveTask && appendLiveTaskMessage(focusActiveTask.id, event)}
     onLiveToolResult={event => focusActiveTask && applyLiveTaskTool(focusActiveTask.id, event)}
     onLiveStatus={status => focusActiveTask && updateLiveTaskStatus(focusActiveTask.id, status)} disabled={focusAiLoading} className="surface-muted text-muted" onTranscript={(text, immediate) => {
@@ -7180,26 +7561,28 @@ export default function App() {
 
       {isSubscriptionModalOpen ? (
         <div className="modal-backdrop fixed inset-0 z-[130] flex items-start justify-center overflow-y-auto p-4 pt-[min(6vh,4rem)] backdrop-blur-sm" onClick={() => setIsSubscriptionModalOpen(false)}>
-          <div className="subscription-modal dialog-surface max-h-[88dvh] w-full max-w-5xl overflow-y-auto rounded-3xl border p-0 shadow-2xl sm:overflow-hidden" onClick={(event) => event.stopPropagation()}>
+          <div className="subscription-modal dialog-surface relative max-h-[88dvh] w-full max-w-5xl overflow-hidden rounded-3xl border p-0 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <div ref={subscriptionScrollRef} className="subscription-modal-scroll max-h-[88dvh] overflow-y-auto">
             <div className="subscription-hero relative p-4 sm:p-4">
               <button className="absolute right-4 top-4 rounded-full p-2 text-muted transition hover:bg-white/10" onClick={() => setIsSubscriptionModalOpen(false)} aria-label="Закрыть окно подписки"><X size={18} /></button>
               <div className="subscription-eyebrow inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium"><Sparkles size={14} /> Больше возможностей ИИ</div>
-              <h2 className="mt-3 max-w-2xl text-2xl font-bold text-primary">{creditModalView === 'statistics' ? 'Статистика расхода AI-кредитов' : 'Чтобы увеличить количество ИИ кредитов, приобретите платную подписку'}</h2>
-              <p className="mt-2 max-w-2xl text-sm text-muted">{creditModalView === 'statistics' ? 'Посмотрите расход за день, неделю и 30 дней, а также разбивку по моделям и ИИ-инструментам.' : 'Выберите тариф под свой сценарий: от дополнительного запаса кредитов до полного доступа к продвинутым ИИ-функциям.'}</p>
-              <div className="credit-view-toggle mt-4 inline-flex rounded-xl border p-1">
+              <h2 className="mt-3 max-w-2xl text-2xl font-bold text-primary">{creditModalView === 'statistics' ? (activeSubscription ? 'Лимиты ИИ' : 'Статистика расхода AI-кредитов') : 'Выберите подписку'}</h2>
+              <p className="mt-2 max-w-2xl text-sm text-muted">{creditModalView === 'statistics' ? (activeSubscription ? 'Дневной и недельный лимиты обновляются автоматически.' : 'Посмотрите расход за день, неделю и 30 дней, а также разбивку по моделям и ИИ-инструментам.') : 'Лимит расходуется в зависимости от модели, длины запроса и инструментов ИИ. Это не фиксированное число запросов.'}</p>
+              {activeSubscription && (<SubscriptionLimitPanel limit={currentUser?.subscriptionLimit}/>)}
+               <div className="credit-view-toggle mt-4 inline-flex rounded-xl border p-1">
                 <button type="button" className={`credit-view-toggle-button rounded-lg px-3 py-1.5 text-sm font-semibold ${creditModalView === 'purchase' ? 'is-active is-purchase' : ''}`} onClick={() => setCreditModalView('purchase')}>Пополнить</button>
                 <button type="button" className={`credit-view-toggle-button rounded-lg px-3 py-1.5 text-sm font-semibold ${creditModalView === 'statistics' ? 'is-active is-statistics' : ''}`} onClick={() => { setCreditModalView('statistics'); void loadCreditUsageStatistics(); }}>Статистика</button>
               </div>
             </div>
             {creditModalView === 'statistics' ? (
-              <div key="credits-statistics" className="credit-switch-content max-h-[68vh] overflow-y-auto p-4 sm:p-5">
-                <CreditUsageStats statistics={creditUsageStatistics} loading={creditUsageStatisticsLoading} error={creditUsageStatisticsError} />
+              <div key="credits-statistics" className="credit-switch-content p-4 sm:p-5">
+                {<CreditUsageStats statistics={creditUsageStatistics} loading={creditUsageStatisticsLoading} error={creditUsageStatisticsError}  allowanceMilli={currentUser?.subscriptionLimit?.allowanceMilli} />}
               </div>
             ) : (
               <div key="credits-purchase" className="credit-switch-content">
             <div className="grid gap-3 p-4 sm:grid-cols-3">
               {SUBSCRIPTION_PLANS.map((plan) => {
-                const link = subscriptionLinks[plan.key]?.trim();
+                const isCreating = subscriptionPurchase.creatingPlanKey === plan.key;
                 return (
                   <article key={plan.key} className="subscription-plan-card flex min-h-full flex-col rounded-2xl border p-4 shadow-xl sm:p-3">
                     <div className="flex items-start justify-between gap-3">
@@ -7213,20 +7596,28 @@ export default function App() {
                       {plan.features.map((feature) => (
                         <li key={feature} className="subscription-feature-pill flex items-start gap-2 rounded-xl px-3 py-1.5"><Check size={15} className="mt-0.5 shrink-0 text-emerald-300" /> <span>{feature}</span></li>
                       ))}
+                      {plan.key !== 'start' && <li><button type="button" className="surface-muted rounded-xl px-3 py-2 text-sm font-semibold text-primary" onClick={() => { setIsSubscriptionModalOpen(false); wardrobe.show(); }}>Посмотреть образы</button></li>}
                     </ul>
-                    <a
-                      href={link || undefined}
-                      target={link ? '_blank' : undefined}
-                      rel={link ? 'noreferrer' : undefined}
-                      aria-disabled={!link}
-                      onClick={(event) => { if (!link) event.preventDefault(); }}
-                      className={`mt-3 rounded-xl px-4 py-2.5 text-center text-sm font-semibold shadow-lg transition ${link ? 'bg-gradient-to-r from-fuchsia-600 to-rose-600 text-white hover:-translate-y-0.5 hover:shadow-fuchsia-500/25' : 'cursor-not-allowed bg-slate-500/40 text-slate-300'}`}
-                    >
-                      Купить подписку
-                    </a>
+                    <button type="button" disabled={!subscriptionPurchaseAvailable || (activeSubscription && currentUser?.subscriptionPlan === plan.key) || subscriptionPurchase.creatingPlanKey !== null}
+                      onClick={() => void subscriptionPurchase.start(plan.key)}
+                      className="mt-3 rounded-xl bg-gradient-to-r from-fuchsia-600 to-rose-600 px-4 py-2.5 text-center text-sm font-semibold text-white shadow-lg transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50">
+                      {isCreating ? 'Создаём платёж…' : activeSubscription ? (currentUser?.subscriptionPlan === plan.key ? 'Подписка активна' : 'Сменить тариф') : subscriptionPurchaseAvailable ? 'Купить на месяц' : 'Оплата недоступна'}
+                    </button>
                   </article>
                 );
               })}
+            </div>
+            <div className="px-4 pb-3 text-xs text-muted sm:px-5">
+              Подписка действует один календарный месяц. Автоматического продления и списания нет.
+              {subscriptionPurchase.isReceiptEmailRequired ? <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                <input type="email" autoComplete="email" placeholder="Email для чека" aria-label="Email для чека подписки"
+                  value={subscriptionPurchase.receiptEmail} onChange={event => subscriptionPurchase.setReceiptEmail(event.target.value)}
+                  className="form-field min-w-0 flex-1 rounded-xl border px-3 py-2 text-sm" />
+                <button type="button" disabled={!subscriptionPurchase.receiptEmail.trim() || subscriptionPurchase.creatingPlanKey !== null}
+                  onClick={() => void subscriptionPurchase.retryWithReceiptEmail()}
+                  className="rounded-xl bg-fuchsia-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Продолжить</button>
+              </div> : null}
+              {subscriptionPurchase.message ? <p className="mt-2" role="status">{subscriptionPurchase.message}</p> : null}
             </div>
             <section className="border-t border-white/10 px-4 pb-2 pt-4 sm:px-5">
               <h3 className="text-xl font-bold text-primary">Дополнительные AI-кредиты</h3>
@@ -7259,7 +7650,7 @@ export default function App() {
             </p>
               </div>
             )}
-
+            </div>
           </div>
         </div>
       ) : null}
@@ -7491,19 +7882,26 @@ export default function App() {
                   panels={fullscreenPanels as [FullscreenWorkspacePanel, FullscreenWorkspacePanel]}
                   renderPanel={renderFullscreenPanel}
                   onChoose={chooseFullscreenPanel}
-                  tasks={fullscreenTaskChoices}
+                  placement={workspaceOverlayActive ? null : pendingWorkspaceBlock}
                   ratio={fullscreenSplitRatio}
                   onRatioChange={setFullscreenSplitRatio}
+                  onSwap={() => {
+                    const slots = [fullscreenPanels[1], fullscreenPanels[0]];
+                    setFullscreenPanelSlots(slots);
+                    setFullscreenDisplayModes(slots.flatMap(panel => panel.kind === 'mode' ? [panel.mode] : []));
+                  }}
                 />
               ) : (
                 <FullscreenWorkspaceSingle panel={fullscreenPanels[0]} renderPanel={renderFullscreenPanel}
-                  tasks={fullscreenTaskChoices} onChoose={addFullscreenSinglePanel} />
+                  placement={workspaceOverlayActive ? null : pendingWorkspaceBlock} onChoose={addFullscreenSinglePanel}
+                  allowReplace={basicStep !== 'two-modes'} onReplace={next => chooseFullscreenPanel(0, next)} />
               )}
             </div>
             <PrimaryWorkspaceSidebar key={currentUser?.id ?? 'anonymous'}
+              hideToggle={Boolean((focusedTask && !embeddedFocusActive) || isFocusModeOpen)}
               userId={currentUser?.id ?? 'anonymous'}
-              windowCount={fullscreenPanels.length} tasks={tasks} habits={habits} spheres={spheres}
-              timeZone={userTimeZone} requestedNote={requestedStandaloneNote}
+              forceOpen={basicStep === 'notes' || basicStep === 'habits'} windowCount={fullscreenPanels.length} tasks={tasks} habits={habits} spheres={spheres}
+              timeZone={userTimeZone} requestedNote={fullscreenPanels.some(panel => panel.kind === 'notes') ? null : requestedStandaloneNote}
               onOpenUpcoming={() => setIsUpcomingSubtasksModalOpen(true)}
               onOpenTask={task => {
                 if (task.parentTaskId || task.taskType === 'EVENT') setEditorState({ task });
@@ -7984,6 +8382,7 @@ export default function App() {
       {editorState ? (
         <TaskEditor
           inlineTarget={embeddedFocusActive && editorState.task?.parentTaskId === focusedTask?.id ? fullscreenFocusTarget : null}
+          notesInlineTarget={embeddedFocusActive && editorState.task?.parentTaskId === focusedTask?.id ? fullscreenFocusTarget : null}
           timelineTasks={timelinePickerTasks}
           task={editorState.task}
           subtasks={editorState.task?.id ? (subtaskMap[editorState.task.id] ?? []) : []}
@@ -8192,7 +8591,7 @@ export default function App() {
                 <div>
                   <p className="flex items-center gap-2 text-sm font-semibold ai-panel-title"><Bot size={16} /><span className="focused-task-ai-toolbar-title">Помощь ИИ</span></p>
                 </div>
-                <TaskMonitoringStatuses tourStage={activeTourStep === 'ai-monitor-model' ? 'model' : activeTourStep === 'ai-monitor-button' ? 'button' : null} taskId={focusedTask.id}
+                <TaskMonitoringStatuses subscriptionAllowed={Boolean(currentUser?.subscriptionPlan === 'max' && activeSubscription)} tourStage={activeTourStep === 'ai-monitor-model' ? 'model' : activeTourStep === 'ai-monitor-button' ? 'button' : null} taskId={focusedTask.id}
                   model={focusedTask.aiMonitoringModel}
                   generation={focusedTask.aiMonitoringGeneration}
                   enabled={focusedTask.aiMonitoringEnabled === true}
@@ -8203,7 +8602,7 @@ export default function App() {
                   }} />
               </div>
               <div className="focused-task-ai-thread-region relative mb-2 min-h-0 flex-1">
-                {!focusedTask.aiMonitoringEnabled ? <AiModelChip value={focusedAiModel} onChange={(model) => focusedTask && setAiModelByTask((prev) => ({ ...prev, [focusedTask.id]: model }))} ariaLabel="Выбрать модель ИИ для задачи" className="absolute left-1/2 top-0 z-20 -translate-x-1/2" /> : <AiModelChip disabled value={focusedAiModel} onChange={() => undefined} ariaLabel="Модель ИИ для задачи" className="absolute left-1/2 top-0 z-20 -translate-x-1/2" />}
+                {!focusedTask.aiMonitoringEnabled ? <AiModelChip disabled={shortLimitExhausted} value={focusedAiModel} onChange={(model) => focusedTask && setAiModelByTask((prev) => ({ ...prev, [focusedTask.id]: model }))} ariaLabel="Выбрать модель ИИ для задачи" className="absolute left-1/2 top-0 z-20 -translate-x-1/2" /> : <AiModelChip disabled value={focusedAiModel} onChange={() => undefined} ariaLabel="Модель ИИ для задачи" className="absolute left-1/2 top-0 z-20 -translate-x-1/2" />}
                 <div ref={focusedAiDialogContainerRef} className="chat-thread focused-task-ai-thread-through h-full min-h-0 space-y-2 overflow-y-auto rounded-xl p-3 pt-12">
                 {isFocusedAiSearchOpen ? (
                   <label className="surface-input sticky top-0 z-10 flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] text-muted">
@@ -8230,10 +8629,10 @@ export default function App() {
                     <div className="mb-1 flex items-center justify-between"><p className="chat-message-label text-[11px] font-semibold uppercase tracking-wide">{message.authorName ?? (message.role === 'assistant' ? 'ИИ' : 'Вы')}{message.messageKind === 'HUMAN' && message.recipientName ? ` → ${message.recipientName}` : ''}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focused-${index}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focused-${index}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
                     <div>{message.messageKind === 'MONITOR_ACTION' ? <TaskMonitoringActionBadge content={message.content} /> : message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTaskReference={openTaskReferenceFromAi} showTaskReferenceButtons /> : <CollapsibleUserMessage>{renderAiMessageContent(message.content, message.attachmentPreviews, message.id)}</CollapsibleUserMessage>}</div>
                     {message.role === 'assistant' && message.webSearchUsed ? <WebCitations sources={message.webSources} searched={message.webSearchUsed} /> : null}{message.role === 'assistant' && message.generatedDocument ? <AiGeneratedDocumentButton document={message.generatedDocument} /> : null}
-                    {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[10px] text-muted opacity-75">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}{message.role === 'assistant' ? <AiSpeechCostLine messageKey={String(message.id)} /> : null}
-                    {message.role === 'assistant' && message.taskProposal ? <AiTaskProposalCard proposal={message.taskProposal} onApplied={() => void load()} /> : null}{message.role === 'assistant' && message.telegramSendDraft ? <TelegramInlineSendCard draft={message.telegramSendDraft} /> : null}{message.role === 'assistant' && message.mailSendDraft ? <MailInlineSendCard draft={message.mailSendDraft} /> : null}{message.role === 'assistant' && message.telegramReadDraft ? <TelegramReadConsentCard draft={message.telegramReadDraft} onContinue={(approval) => continueTelegramReadTask(approval, focusedTask!.id)} /> : null}
+                    {!activeSubscription && message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[10px] text-muted opacity-75">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}{!activeSubscription && message.role === 'assistant' ? <AiSpeechCostLine messageKey={String(message.id)} /> : null}
+                    {message.role === 'assistant' && message.taskProposal ? <AiTaskProposalCard proposal={message.taskProposal} onApplied={() => void load()} /> : null}{message.role === 'assistant' && message.telegramSendDraft ? <TelegramInlineSendCard draft={message.telegramSendDraft} /> : null}{message.role === 'assistant' && message.mailSendDraft ? <MailInlineSendCard draft={message.mailSendDraft} hideCreditCost={activeSubscription} /> : null}{message.role === 'assistant' && message.telegramReadDraft ? <TelegramReadConsentCard draft={message.telegramReadDraft} onContinue={(approval) => continueTelegramReadTask(approval, focusedTask!.id)} /> : null}
                                       </div>
-                  <div className="ai-message-forward-actions">{message.role === 'assistant' ? <AiReadAloudAction text={message.content} messageKey={String(message.id)} /> : null}<AiReplyAction message={message} onReply={(target) => (setReplyToAiTask(target), focusedTask && setAiRecipientByTaskId(prev => ({ ...prev, [focusedTask.id]: 'ai' })))} /><TelegramMessageQuickShare text={message.content} compact initialNoteSphereId={focusedTask?.sphereId ?? null} /></div>
+                  <div className="ai-message-forward-actions">{message.role === 'assistant' ? <AiReadAloudAction text={message.content} messageKey={String(message.id)} /> : null}<AiReplyAction message={message} onReply={(target) => (setReplyToAiTask(target), focusedTask && setAiRecipientByTaskId(prev => ({ ...prev, [focusedTask.id]: 'ai' })))} /><TelegramMessageQuickShare text={message.content} compact initialNoteSphereId={focusedTask?.sphereId ?? null} hideCreditCost={activeSubscription} /></div>
                 </div>
                 ))}
                 <TaskMonitoringTriggerChips taskId={focusedTask.id} />
@@ -8288,7 +8687,7 @@ export default function App() {
                 >
                   <Paperclip size={16} />
                 </button>
-                <VoiceInputButton liveContext={{ type: 'task', taskId: focusedTask.id, model: focusedAiModel }}
+                <VoiceInputButton activationMode="transcription" liveContext={{ type: 'task', taskId: focusedTask.id, model: focusedAiModel }}
     onLiveMessage={event => appendLiveTaskMessage(focusedTask.id, event)}
     onLiveToolResult={event => applyLiveTaskTool(focusedTask.id, event)}
     onLiveStatus={status => updateLiveTaskStatus(focusedTask.id, status)} disabled={aiLoadingTaskId === focusedTask.id} className="focused-task-ai-attach-button" onTranscript={(text, immediate) => {
@@ -8544,6 +8943,7 @@ export default function App() {
                   {isFocusedNotesEditorOpen ? (
                     <NotesEditor
                       value={focusedDraft.description ?? ''}
+                      inlineTarget={embeddedFocusActive ? fullscreenFocusTarget : null}
                       onChange={(description) => setFocusedDraft((p) => ({ ...(p ?? {}), description }))}
                       onClose={() => setIsFocusedNotesEditorOpen(false)}
                     />
@@ -9012,7 +9412,7 @@ export default function App() {
               </div>
               <div className="task-ai-fullscreen-actions flex shrink-0 flex-wrap items-center justify-end gap-3">
                 <div className="task-ai-fullscreen-monitor shrink-0">
-                  <TaskMonitoringStatuses taskId={focusedTask.id}
+                  <TaskMonitoringStatuses subscriptionAllowed={Boolean(currentUser?.subscriptionPlan === 'max' && activeSubscription)} taskId={focusedTask.id}
                     model={focusedTask.aiMonitoringModel}
                   generation={focusedTask.aiMonitoringGeneration}
                     enabled={focusedTask.aiMonitoringEnabled === true}
@@ -9042,7 +9442,7 @@ export default function App() {
                 </div>
               </div>
             </div>
-            {!focusedTask.aiMonitoringEnabled ? <AiModelChip value={focusedAiModel} onChange={(model) => focusedTask && setAiModelByTask((prev) => ({ ...prev, [focusedTask.id]: model }))} ariaLabel="Выбрать модель ИИ для задачи" className="absolute left-1/2 top-[4.5rem] z-20 -translate-x-1/2" /> : <AiModelChip disabled value={focusedAiModel} onChange={() => undefined} ariaLabel="Модель ИИ для задачи" className="absolute left-1/2 top-[4.5rem] z-20 -translate-x-1/2" />}
+            {!focusedTask.aiMonitoringEnabled ? <AiModelChip disabled={shortLimitExhausted} value={focusedAiModel} onChange={(model) => focusedTask && setAiModelByTask((prev) => ({ ...prev, [focusedTask.id]: model }))} ariaLabel="Выбрать модель ИИ для задачи" className="absolute left-1/2 top-[4.5rem] z-20 -translate-x-1/2" /> : <AiModelChip disabled value={focusedAiModel} onChange={() => undefined} ariaLabel="Модель ИИ для задачи" className="absolute left-1/2 top-[4.5rem] z-20 -translate-x-1/2" />}
             <div ref={expandedAiDialogContainerRef} className="chat-thread focused-task-ai-thread-through min-h-0 flex-1 space-y-3 overflow-y-auto rounded-2xl p-4 pt-12">
               {isFocusedAiSearchOpen ? (
                 <label className="surface-input sticky top-0 z-10 flex items-center gap-1 rounded-lg border px-2 py-1 text-[12px] text-muted">
@@ -9069,10 +9469,10 @@ export default function App() {
                   <div className="mb-1 flex items-center justify-between"><p className="chat-message-label text-xs font-semibold uppercase tracking-wide">{message.authorName ?? (message.role === 'assistant' ? 'ИИ' : 'Вы')}{message.messageKind === 'HUMAN' && message.recipientName ? ` → ${message.recipientName}` : ''}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focused-expanded-${index}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focused-expanded-${index}` ? <Check size={12} className="text-muted" /> : <Copy size={12} />}</button> : null}</div>
                   <div>{message.messageKind === 'MONITOR_ACTION' ? <TaskMonitoringActionBadge content={message.content} /> : message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTaskReference={(task) => { setIsAiExpanded(false); openTaskReferenceFromAi(task); }} showTaskReferenceButtons /> : <CollapsibleUserMessage>{renderAiMessageContent(message.content, message.attachmentPreviews, message.id)}</CollapsibleUserMessage>}</div>
                   {message.role === 'assistant' && message.webSearchUsed ? <WebCitations sources={message.webSources} searched={message.webSearchUsed} /> : null}{message.role === 'assistant' && message.generatedDocument ? <AiGeneratedDocumentButton document={message.generatedDocument} /> : null}
-                    {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[11px] text-muted opacity-75">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}{message.role === 'assistant' ? <AiSpeechCostLine messageKey={String(message.id)} /> : null}
-                    {message.role === 'assistant' && message.taskProposal ? <AiTaskProposalCard proposal={message.taskProposal} onApplied={() => void load()} /> : null}{message.role === 'assistant' && message.telegramSendDraft ? <TelegramInlineSendCard draft={message.telegramSendDraft} /> : null}{message.role === 'assistant' && message.mailSendDraft ? <MailInlineSendCard draft={message.mailSendDraft} /> : null}{message.role === 'assistant' && message.telegramReadDraft ? <TelegramReadConsentCard draft={message.telegramReadDraft} onContinue={(approval) => continueTelegramReadTask(approval, focusedTask!.id)} /> : null}
+                    {!activeSubscription && message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[11px] text-muted opacity-75">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}{!activeSubscription && message.role === 'assistant' ? <AiSpeechCostLine messageKey={String(message.id)} /> : null}
+                    {message.role === 'assistant' && message.taskProposal ? <AiTaskProposalCard proposal={message.taskProposal} onApplied={() => void load()} /> : null}{message.role === 'assistant' && message.telegramSendDraft ? <TelegramInlineSendCard draft={message.telegramSendDraft} /> : null}{message.role === 'assistant' && message.mailSendDraft ? <MailInlineSendCard draft={message.mailSendDraft} hideCreditCost={activeSubscription} /> : null}{message.role === 'assistant' && message.telegramReadDraft ? <TelegramReadConsentCard draft={message.telegramReadDraft} onContinue={(approval) => continueTelegramReadTask(approval, focusedTask!.id)} /> : null}
                                     </div>
-                <div className="ai-message-forward-actions">{message.role === 'assistant' ? <AiReadAloudAction text={message.content} messageKey={String(message.id)} /> : null}<AiReplyAction message={message} onReply={(target) => (setReplyToAiTask(target), focusedTask && setAiRecipientByTaskId(prev => ({ ...prev, [focusedTask.id]: 'ai' })))} /><TelegramMessageQuickShare text={message.content} compact initialNoteSphereId={focusedTask?.sphereId ?? null} /></div>
+                <div className="ai-message-forward-actions">{message.role === 'assistant' ? <AiReadAloudAction text={message.content} messageKey={String(message.id)} /> : null}<AiReplyAction message={message} onReply={(target) => (setReplyToAiTask(target), focusedTask && setAiRecipientByTaskId(prev => ({ ...prev, [focusedTask.id]: 'ai' })))} /><TelegramMessageQuickShare text={message.content} compact initialNoteSphereId={focusedTask?.sphereId ?? null} hideCreditCost={activeSubscription} /></div>
               </div>
               ))}
               <TaskMonitoringTriggerChips taskId={focusedTask.id} />
@@ -9097,7 +9497,7 @@ export default function App() {
               <AutoGrowingTextarea className="form-field min-h-11 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2 text-sm leading-relaxed focus:ring-0" placeholder="Напишите сообщение…" value={aiDraft} onChange={(event) => setAiDraft(event.target.value)} onPaste={(event) => { const files = clipboardImageFiles(event.clipboardData); if (files.length) { event.preventDefault(); addFocusedAiFiles(files); } }} onKeyDown={(event) => { if (shouldSendAiMessageOnEnter(event)) { event.preventDefault(); void sendFocusedAiQuestion(); } }} />
               <input ref={expandedAiFileInputRef} type="file" accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/png,image/jpeg,image/webp,image/gif" multiple className="hidden" onChange={handleAiFileSelect} />
               <button className="focused-task-ai-attach-button inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full disabled:opacity-40" type="button" title={getTaskAiRecipientId(focusedTask) === 'ai' ? 'Прикрепить файл' : 'Вложения доступны только при отправке ИИ'} disabled={getTaskAiRecipientId(focusedTask) !== 'ai'} onClick={() => expandedAiFileInputRef.current?.click()}><Paperclip size={16} /></button>
-              <VoiceInputButton liveContext={{ type: 'task', taskId: focusedTask.id, model: focusedAiModel }}
+              <VoiceInputButton activationMode="transcription" liveContext={{ type: 'task', taskId: focusedTask.id, model: focusedAiModel }}
     onLiveMessage={event => appendLiveTaskMessage(focusedTask.id, event)}
     onLiveToolResult={event => applyLiveTaskTool(focusedTask.id, event)}
     onLiveStatus={status => updateLiveTaskStatus(focusedTask.id, status)} disabled={aiLoadingTaskId === focusedTask.id} className="surface-muted text-muted" onTranscript={(text, immediate) => {
@@ -9348,9 +9748,12 @@ export default function App() {
       ) : null}
       {isTimelineOptimizeModalOpen ? (<div className="modal-backdrop fixed inset-0 z-[120] flex items-center justify-center p-4 backdrop-blur-sm"><div className="dialog-surface w-full max-w-lg rounded-2xl border p-4"><h3 className="text-lg font-semibold text-primary">Оптимизация таймлайна ИИ</h3><p className="mt-1 text-sm text-muted">Добавьте пожелания к перераспределению задач <span className="inline-flex items-center gap-1 text-rose-300">(1 <Coins size={12} />)</span>.</p><textarea className="form-field mt-3 min-h-28 w-full rounded-lg border p-2 text-sm" value={timelineOptimizeNote} onChange={(e)=>setTimelineOptimizeNote(e.target.value)} /><div className="mt-3 flex justify-end gap-2"><button className="surface-muted rounded px-3 py-2 text-sm" onClick={()=>setIsTimelineOptimizeModalOpen(false)}>Отмена</button><button className="rounded bg-rose-600 px-3 py-2 text-sm text-white" onClick={()=>void handleOptimizeTimeline()} disabled={timelineOptimizeLoading}>Оптимизировать</button></div></div></div>) : null}
 
-      {!hasGeneralAiPane ? <QuickAiLauncherFrame
-        taskOpen={Boolean(focusedTask)}
-        embeddedTaskFocus={embeddedFocusActive}
+      <QuickAiLauncherFrame
+        managedMascot
+        modalMascot={mascotSurface.modal}
+        embeddedChatTarget={hasGeneralAiPane ? fullscreenChatTarget : null}
+        taskOpen={Boolean(focusedTask) && (!embeddedFocusActive || fullscreenPanels[1]?.kind === 'task-ai')}
+        embeddedTaskFocus={embeddedFocusActive && fullscreenPanels[1]?.kind === 'task-ai' && !hasGeneralAiPane}
         fullscreenBubbles={isBubbleFullscreen}
         onHoverChange={hovered => { setQuickAiPreviewHovered(hovered); if(hovered){ scheduleQuickAiChatScrollToBottom(); markSystemNotificationsRead(); } }}
         onFocus={scheduleQuickAiChatScrollToBottom}
@@ -9377,10 +9780,10 @@ export default function App() {
                     </button>
                   ) : null}
                   {item.message.role === 'assistant' && item.message.webSearchUsed ? <WebCitations sources={item.message.webSources} searched={item.message.webSearchUsed} /> : null}
-                  {item.message.role === 'assistant' ? <AiSpeechCostLine messageKey={String(item.message.id)} /> : null}
-                   {item.message.role === 'assistant' && item.message.generatedDocument ? <AiGeneratedDocumentButton document={item.message.generatedDocument} /> : null}{item.message.role === 'assistant' && item.message.taskProposal ? <AiTaskProposalCard proposal={item.message.taskProposal} onApplied={() => void load()} /> : null}{item.message.role === 'assistant' && item.message.economicProposals?.length ? <AiEconomicProposalCards proposals={item.message.economicProposals} /> : null}{item.message.role === 'assistant' && item.message.telegramSuggestedReply ? <TelegramAiReplySuggestionCard reply={item.message.telegramSuggestedReply} /> : null}{item.message.role === 'assistant' && item.message.mailSuggestedReply ? <MailAiReplySuggestionCard reply={item.message.mailSuggestedReply} /> : null}{item.message.role === 'assistant' && item.message.telegramSendDraft ? <TelegramInlineSendCard draft={item.message.telegramSendDraft} /> : null}{item.message.role === 'assistant' && item.message.mailSendDraft ? <MailInlineSendCard draft={item.message.mailSendDraft} /> : null}{item.message.role === 'assistant' && item.message.telegramReadDraft ? <TelegramReadConsentCard draft={item.message.telegramReadDraft} onContinue={(approval) => continueTelegramReadAiChat(approval, aiChatProjects[0].id, QUICK_AI_CHAT_ID)} /> : null}
+                  {!activeSubscription && item.message.role === 'assistant' ? <AiSpeechCostLine messageKey={String(item.message.id)} /> : null}
+                   {item.message.role === 'assistant' && item.message.generatedDocument ? <AiGeneratedDocumentButton document={item.message.generatedDocument} /> : null}{item.message.role === 'assistant' && item.message.taskProposal ? <AiTaskProposalCard proposal={item.message.taskProposal} onApplied={() => void load()} /> : null}{item.message.role === 'assistant' && item.message.economicProposals?.length ? <AiEconomicProposalCards proposals={item.message.economicProposals} /> : null}{item.message.role === 'assistant' && item.message.telegramSuggestedReply ? <TelegramAiReplySuggestionCard reply={item.message.telegramSuggestedReply} /> : null}{item.message.role === 'assistant' && item.message.mailSuggestedReply ? <MailAiReplySuggestionCard reply={item.message.mailSuggestedReply} /> : null}{item.message.role === 'assistant' && item.message.telegramSendDraft ? <TelegramInlineSendCard draft={item.message.telegramSendDraft} /> : null}{item.message.role === 'assistant' && item.message.mailSendDraft ? <MailInlineSendCard draft={item.message.mailSendDraft} hideCreditCost={activeSubscription} /> : null}{item.message.role === 'assistant' && item.message.telegramReadDraft ? <TelegramReadConsentCard draft={item.message.telegramReadDraft} onContinue={(approval) => continueTelegramReadAiChat(approval, aiChatProjects[0].id, QUICK_AI_CHAT_ID)} /> : null}
                 </div>
-                <div className="ai-message-forward-actions">{item.message.role === 'assistant' ? <AiReadAloudAction text={item.message.content} messageKey={String(item.message.id)} /> : null}<AiReplyAction message={item.message} onReply={setReplyToQuickAi} /><TelegramMessageQuickShare text={item.message.content} compact /></div>
+                <div className="ai-message-forward-actions">{item.message.role === 'assistant' ? <AiReadAloudAction text={item.message.content} messageKey={String(item.message.id)} /> : null}<AiReplyAction message={item.message} onReply={setReplyToQuickAi} /><TelegramMessageQuickShare text={item.message.content} compact hideCreditCost={activeSubscription} /></div>
                 </div>
               ))}
               {quickAiChatMessages.length === 0 && systemNotifications.length === 0 ? <p className="text-subtle">Быстрый одноразовый вопрос. Хранится только последние 20 запросов.</p> : null}
@@ -9394,7 +9797,7 @@ export default function App() {
               <AutoGrowingTextarea maxHeight={144} className="form-field min-h-9 min-w-0 flex-1 resize-none rounded-2xl border px-3 py-2 text-sm leading-5 transition focus:ring-2 focus:ring-violet-300" value={quickAiChatDraft} onChange={(e) => setQuickAiChatDraft(e.target.value)} onPaste={(event) => { const files = clipboardImageFiles(event.clipboardData); if (files.length) { event.preventDefault(); setQuickAiPendingFiles(previous => [...previous, ...files].slice(0, MAX_AI_ATTACHMENTS)); } }} onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void sendAiChatQuestion(true); }
               }} placeholder="Спросить быстро…" />
-              <VoiceInputButton liveContext={{ type: 'chat', projectId: aiChatProjects[0]?.id, chatId: QUICK_AI_CHAT_ID, projectTitle: aiChatProjects[0]?.title, chatTitle: 'Быстрые запросы', model: quickAiChatModel }}
+              <VoiceInputButton activationMode="transcription" liveContext={{ type: 'chat', projectId: aiChatProjects[0]?.id, chatId: QUICK_AI_CHAT_ID, projectTitle: aiChatProjects[0]?.title, chatTitle: 'Быстрые запросы', model: quickAiChatModel }}
     onLiveMessage={event => aiChatProjects[0] && appendLiveProjectMessage(aiChatProjects[0].id, QUICK_AI_CHAT_ID, event)}
     onLiveToolResult={event => aiChatProjects[0] && applyLiveProjectTool(aiChatProjects[0].id, QUICK_AI_CHAT_ID, event)}
     onLiveStatus={status => aiChatProjects[0] && updateLiveChatStatus(aiChatProjects[0].id, QUICK_AI_CHAT_ID, status)} small disabled={quickAiChatLoading} className="surface-muted text-muted" onTranscript={(text, immediate) => {
@@ -9405,16 +9808,13 @@ export default function App() {
             </div>
           </div>
         </div>
-        <button
-          type="button"
-          className="planik-launcher-button touch-none select-none"
-          title="Чат с ИИ"
-          aria-label="Открыть общий чат с ИИ"
-          onClick={() => { setActiveAiChatProjectId(aiChatProjects[0]?.id ?? ''); setActiveAiChatId(QUICK_AI_CHAT_ID); setIsAiChatOpen(true); }}
-        >
-          <PlanikMascot notificationCount={unreadSystemNotificationCount} busy={quickAiChatLoading} progress={aiChatProgress} celebrationKey={planikCelebrationKey} />
-        </button>
-      </QuickAiLauncherFrame> : null}
+        {!useExpandedChatMascot ? renderPlanikLauncher(false) : null}
+      </QuickAiLauncherFrame>
+      {(wardrobe.open || guidedWardrobe)&&<MascotWardrobeDialog wardrobe={wardrobe} variant="planner" theme={effectiveThemeMode} training={guidedWardrobe ? {
+        skin: guidedStep === 'feature-skins-preview' ? 'pirate' : guidedStep === 'feature-skins-space' ? 'space' : undefined,
+        onSkin: () => { if (guidedStep === 'feature-skins-practice') { setGuidedSkinChanged(true); setGuidedAnimationPlayed(false); } },
+        onAnimation: () => { if (guidedStep === 'feature-skins-practice' && guidedSkinChanged) setGuidedAnimationPlayed(true); }
+      } : undefined}/>} 
 
       {isCollaborationSettingsOpen && focusedTask?.isCollaborative ? (
         <div className="modal-backdrop fixed inset-0 z-[175] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setIsCollaborationSettingsOpen(false)}>
@@ -9460,7 +9860,7 @@ export default function App() {
       ) : null}
 
       {currentUser && currentUser.browserNotificationsEnabled !== false && browserPermission === 'default'
-        && !browserPermissionNudgeDismissed && initialWorkspaceReady ? createPortal((
+        && !browserPermissionNudgeDismissed && initialWorkspaceReady && !deferTrainingNotices ? createPortal((
         <div className="surface-popover fixed bottom-24 right-6 z-[2147483646] w-[min(22rem,calc(100vw-3rem))] rounded-2xl border border-[color:var(--panel-border)] p-4 text-sm shadow-2xl" role="status">
           <div className="flex items-start gap-2.5">
             <BellRing size={19} className="mt-0.5 shrink-0 text-violet-500" />
@@ -9479,7 +9879,7 @@ export default function App() {
         </div>
       ), document.body) : null}
 
-      <WorkspaceActionToast count={postponeNotice?.count ?? null} light={effectiveThemeMode === 'light'} />
+      <WorkspaceActionToast message={workspaceBlockNotice !== null ? 'Такой блок уже открыт. Добавить второй такой же блок нельзя.' : null} count={postponeNotice?.count ?? null} light={effectiveThemeMode === 'light'} />
 
       {systemNotificationToast ? createPortal((
         <button key={systemNotificationToast.id} type="button" className="system-notification-toast fixed bottom-8 left-6 z-[2147483647] w-[min(22rem,calc(100vw-3rem))] rounded-2xl border px-4 py-3 text-left text-sm shadow-2xl backdrop-blur" onClick={() => { setSystemNotificationToast(null); openSystemNotification(systemNotificationToast); }}>
@@ -9515,13 +9915,17 @@ export default function App() {
       {(isAiChatOpen && !hasGeneralAiPane) || (hasGeneralAiPane && Boolean(fullscreenChatTarget)) ? (
         <ExpandedAiChat
           inlineTarget={hasGeneralAiPane ? fullscreenChatTarget : null}
-          showPlanik
+           surfaceRef={setExpandedChatTarget}
+           showPlanik={false}
+           composerMascot={useExpandedChatMascot ? renderPlanikLauncher(true) : undefined}
+          planikSkinId={wardrobe.selected('planner')}
+          onOpenWardrobe={currentUser?wardrobe.show:undefined}
           projects={aiChatProjects}
           activeProject={activeAiChatProject}
           activeChat={activeAiChat}
           quickChatId={QUICK_AI_CHAT_ID}
-          model={activeAiChat?.id === QUICK_AI_CHAT_ID ? quickAiChatModel : activeProjectChatModel}
-          modelOptions={AI_CHAT_MODEL_SELECT_OPTIONS}
+          model={shortLimitExhausted ? DEFAULT_QUICK_AI_CHAT_MODEL : activeAiChat?.id === QUICK_AI_CHAT_ID ? quickAiChatModel : activeProjectChatModel}
+          modelOptions={shortLimitExhausted ? AI_CHAT_MODEL_SELECT_OPTIONS.filter(option=>option.value===DEFAULT_QUICK_AI_CHAT_MODEL) : AI_CHAT_MODEL_SELECT_OPTIONS}
           pendingFiles={aiChatPendingFiles}
           loading={aiChatLoading}
           imageGenerating={aiChatLoading && (aiChatProgress === 'generating_image' || aiChatProgress === 'editing_image')}
@@ -9529,7 +9933,7 @@ export default function App() {
           messageCount={activeAiChat?.messages.length ?? 0}
           themeMode={effectiveThemeMode}
           notificationCount={unreadSystemNotificationCount}
-          celebrationKey={planikCelebrationKey}
+          celebrationKey={planikCelebrationKey} completion={planikCompletion}
           progress={aiChatProgress}
           onOpenCheckups={() => {
             setIsAiChatOpen(false);
@@ -9579,7 +9983,7 @@ export default function App() {
                 </button>
               ))}
             </div>
-          ) : null}{item.message.role === 'assistant' && item.message.webSearchUsed ? <WebCitations sources={item.message.webSources} searched={item.message.webSearchUsed} /> : null}{item.message.role === 'assistant' && item.message.generatedDocument ? <AiGeneratedDocumentButton document={item.message.generatedDocument} /> : null}{item.message.role === 'assistant' && item.message.taskProposal ? <AiTaskProposalCard proposal={item.message.taskProposal} onApplied={() => void load()} /> : null}{item.message.role === 'assistant' && item.message.economicProposals?.length ? <AiEconomicProposalCards proposals={item.message.economicProposals} /> : null}{item.message.role === 'assistant' && item.message.telegramSendDraft ? <TelegramInlineSendCard draft={item.message.telegramSendDraft} /> : null}{item.message.role === 'assistant' && item.message.mailSendDraft ? <MailInlineSendCard draft={item.message.mailSendDraft} /> : null}{item.message.role === 'assistant' && item.message.telegramReadDraft ? <TelegramReadConsentCard draft={item.message.telegramReadDraft} onContinue={(approval) => continueTelegramReadAiChat(approval, activeAiChatProject!.id, activeAiChat!.id)} /> : null}{item.message.role === 'assistant' && item.message.creditsSpentMilli != null && item.message.creditsSpentMilli > 0 ? <div className="mt-2 text-[11px] text-muted opacity-75">{formatCreditsSpent(item.message.creditsSpentMilli)}</div> : null}{item.message.role === 'assistant' ? <AiSpeechCostLine messageKey={String(item.message.id)} /> : null}</div><div className="ai-message-forward-actions">{item.message.role === 'assistant' ? <AiReadAloudAction text={item.message.content} messageKey={String(item.message.id)} /> : null}<AiReplyAction message={item.message} onReply={(target) => (activeAiChat?.id === QUICK_AI_CHAT_ID ? setReplyToQuickAi(target) : setReplyToAiChat(target))} /><TelegramMessageQuickShare text={item.message.content} compact /></div></div></div>)}
+          ) : null}{item.message.role === 'assistant' && item.message.webSearchUsed ? <WebCitations sources={item.message.webSources} searched={item.message.webSearchUsed} /> : null}{item.message.role === 'assistant' && item.message.generatedDocument ? <AiGeneratedDocumentButton document={item.message.generatedDocument} /> : null}{item.message.role === 'assistant' && item.message.taskProposal ? <AiTaskProposalCard proposal={item.message.taskProposal} onApplied={() => void load()} /> : null}{item.message.role === 'assistant' && item.message.economicProposals?.length ? <AiEconomicProposalCards proposals={item.message.economicProposals} /> : null}{item.message.role === 'assistant' && item.message.telegramSuggestedReply ? <TelegramAiReplySuggestionCard reply={item.message.telegramSuggestedReply} /> : null}{item.message.role === 'assistant' && item.message.mailSuggestedReply ? <MailAiReplySuggestionCard reply={item.message.mailSuggestedReply} /> : null}{item.message.role === 'assistant' && item.message.assistantSettingsProposalId ? <AssistantSettingsProposalCard id={item.message.assistantSettingsProposalId} /> : null}{item.message.role === 'assistant' && item.message.telegramSendDraft ? <TelegramInlineSendCard draft={item.message.telegramSendDraft} /> : null}{item.message.role === 'assistant' && item.message.mailSendDraft ? <MailInlineSendCard draft={item.message.mailSendDraft} hideCreditCost={activeSubscription} /> : null}{item.message.role === 'assistant' && item.message.telegramReadDraft ? <TelegramReadConsentCard draft={item.message.telegramReadDraft} onContinue={(approval) => continueTelegramReadAiChat(approval, activeAiChatProject!.id, activeAiChat!.id)} /> : null}{!activeSubscription && item.message.role === 'assistant' && item.message.creditsSpentMilli != null && item.message.creditsSpentMilli > 0 ? <div className="mt-2 text-[11px] text-muted opacity-75">{formatCreditsSpent(item.message.creditsSpentMilli)}</div> : null}{!activeSubscription && item.message.role === 'assistant' ? <AiSpeechCostLine messageKey={String(item.message.id)} /> : null}</div><div className="ai-message-forward-actions">{item.message.role === 'assistant' ? <AiReadAloudAction text={item.message.content} messageKey={String(item.message.id)} /> : null}<AiReplyAction message={item.message} onReply={(target) => (activeAiChat?.id === QUICK_AI_CHAT_ID ? setReplyToQuickAi(target) : setReplyToAiChat(target))} /><TelegramMessageQuickShare text={item.message.content} compact hideCreditCost={activeSubscription} /></div></div></div>)}
           status={<>{aiChatLoading && aiChatStreamingText ? <div className="ai-message-forward-group w-fit max-w-[calc(100%-2rem)] mr-auto"><div className="ai-chat-message-assistant w-full rounded-2xl p-3 text-sm whitespace-pre-wrap break-words [overflow-wrap:anywhere]"><AiStreamingMessageBody content={aiChatStreamingText} /></div></div> : null}{aiChatLoading ? <AiProgress status={aiChatProgress} /> : activeLiveVoiceStatus ? <AiProgress status={activeLiveVoiceStatus} /> : null}{aiChatError ? <p className="text-sm text-rose-400">{aiChatError}</p> : null}</>}
         />
       ) : null}
@@ -9624,5 +10028,6 @@ export default function App() {
         </div>
       ) : null}
 </main>
+    </MascotIdentityContext.Provider>
   );
 }

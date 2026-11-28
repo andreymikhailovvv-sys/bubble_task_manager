@@ -301,14 +301,14 @@ body[data-theme="light"] .planik-svg { filter: drop-shadow(0 7px 9px rgba(86, 70
 }
 
 /* Softer lavender, muted framing and a gentle ambient shadow in light mode. */
-body[data-theme='light'] .planik-body-stop-start { stop-color: #b8b3ec; }
-body[data-theme='light'] .planik-body-stop-mid { stop-color: #928fd6; }
-body[data-theme='light'] .planik-body-stop-end { stop-color: #686cb6; }
-body[data-theme='light'] .planik-rim-stop-start { stop-color: #d5f4fa; }
-body[data-theme='light'] .planik-rim-stop-mid { stop-color: #c7c0fa; }
-body[data-theme='light'] .planik-rim-stop-end { stop-color: #a8a0e7; }
-body[data-theme='light'] .planik-screen-stop-start { stop-color: #4a4a7b; }
-body[data-theme='light'] .planik-screen-stop-end { stop-color: #323a66; }
+body[data-theme='light'] .planik-mascot:not(.planik-mascot--economic) .planik-body-stop-start { stop-color: #b8b3ec; }
+body[data-theme='light'] .planik-mascot:not(.planik-mascot--economic) .planik-body-stop-mid { stop-color: #928fd6; }
+body[data-theme='light'] .planik-mascot:not(.planik-mascot--economic) .planik-body-stop-end { stop-color: #686cb6; }
+body[data-theme='light'] .planik-mascot:not(.planik-mascot--economic) .planik-rim-stop-start { stop-color: #d5f4fa; }
+body[data-theme='light'] .planik-mascot:not(.planik-mascot--economic) .planik-rim-stop-mid { stop-color: #c7c0fa; }
+body[data-theme='light'] .planik-mascot:not(.planik-mascot--economic) .planik-rim-stop-end { stop-color: #a8a0e7; }
+body[data-theme='light'] .planik-mascot:not(.planik-mascot--economic) .planik-screen-stop-start { stop-color: #4a4a7b; }
+body[data-theme='light'] .planik-mascot:not(.planik-mascot--economic) .planik-screen-stop-end { stop-color: #323a66; }
 body[data-theme='light'] .planik-svg { filter: drop-shadow(0 8px 11px rgba(111, 101, 159, .19)); }
 body[data-theme='light'] .planik-ground-shadow {
   background: radial-gradient(ellipse, rgba(112, 105, 163, .2), transparent 78%);
@@ -429,3 +429,329 @@ body:has(.planik-notes-companion, .planik-task-editor-companion)
 .planik-mascot--economic .planik-svg [fill="#242e54"]{fill:#483129}
 .planik-mascot--economic .planik-svg [fill="#303d6b"]{fill:#75503a}
 .planik-mascot--economic .planik-svg [fill="#59649d"]{fill:#b7854f}
+
+/* The accessories are body-anchored SVG layers; the original action rigs are
+   drawn above them. Never intercept pointer or notification badge events. */
+.planik-skin-artwork,.planik-showcase-arm { pointer-events:none; }
+.planik-skin-head { transform-box:view-box;transform-origin:215px 93px; }
+.planik-skin-collar { transform-box:view-box;transform-origin:215px 225px; }
+.planik-showcase-arm { opacity:0;transform-origin:301px 194px;transform-box:view-box; }
+.planik-mascot[data-mode="showcase"] .planik-showcase-arm { animation: wardrobe-gesture 1.55s ease-in-out both; }
+.planik-mascot[data-mode="showcase"][data-skin-gesture="hat"] .planik-skin-head { animation: wardrobe-tip-hat 1.55s ease-in-out both; }
+.planik-mascot[data-mode="showcase"][data-skin-gesture="scarf"] .planik-skin-collar { animation: wardrobe-fix-scarf 1.55s ease-in-out both; }
+@keyframes wardrobe-gesture {0%{opacity:0;transform:rotate(42deg)}15%{opacity:1}35%,62%{opacity:1;transform:rotate(0deg)}88%{opacity:1;transform:rotate(38deg)}100%{opacity:0;transform:rotate(42deg)}}
+@keyframes wardrobe-tip-hat {0%,28%,82%,100%{transform:none}45%,60%{transform:translateY(-5px) rotate(8deg)}}
+@keyframes wardrobe-fix-scarf {0%,28%,82%,100%{transform:none}45%,60%{transform:translateX(4px) rotate(-6deg)}}
+@media(prefers-reduced-motion:reduce){.planik-showcase-arm{display:none}.planik-skin-head,.planik-skin-collar{animation:none!important}}
+
+/* Individual reactions use existing mode signals; no extra runtime mode. */
+.north-tail{transform-origin:271px 203px;transform-box:view-box;animation:north-tail-sway 3.2s ease-in-out infinite}
+.wizard-cape-back{transform-origin:215px 200px;transform-box:view-box;animation:wizard-cape-sway 4s ease-in-out infinite}
+.north-rub-left,.north-rub-right,.wizard-magic-left,.wizard-magic-right{transform-box:view-box}
+.north-rub-left{transform-origin:130px 196px;animation:north-rub-l .48s ease-in-out infinite alternate}
+.north-rub-right{transform-origin:300px 196px;animation:north-rub-r .48s ease-in-out infinite alternate}
+.north-vapor{transform-box:fill-box;transform-origin:center;animation:north-breath 2.5s ease-out infinite}
+.wizard-orb{animation:wizard-orb-bob 2.6s ease-in-out infinite}
+.wizard-orb-glow{animation:wizard-orb-glow 2.6s ease-in-out infinite}
+.wizard-orbit{transform-origin:0 0;animation:wizard-orbit-spin 7s linear infinite}
+.wizard-magic-left{transform-origin:130px 195px;animation:wizard-hand-l 2.6s ease-in-out infinite}
+.wizard-magic-right{transform-origin:300px 195px;animation:wizard-hand-r 2.6s ease-in-out infinite}
+.planik-mascot:is([data-skin=northern],[data-skin=wizard])[data-mode=typing] .planik-type-left{transform-origin:135px 209px;animation:refined-tap-l .32s ease-in-out infinite alternate}
+.planik-mascot:is([data-skin=northern],[data-skin=wizard])[data-mode=typing] .planik-type-right{transform-origin:295px 209px;animation:refined-tap-r .32s ease-in-out .32s infinite alternate}
+@keyframes refined-tap-l{from{transform:rotate(-5deg)}to{transform:rotate(3deg)}}
+@keyframes refined-tap-r{from{transform:rotate(5deg)}to{transform:rotate(-3deg)}}
+@keyframes north-tail-sway{0%,100%{transform:rotate(-2deg)}50%{transform:rotate(4deg)}}
+@keyframes wizard-cape-sway{0%,100%{transform:scaleX(1)}50%{transform:scaleX(1.025)}}
+@keyframes north-rub-l{from{transform:rotate(-3deg) translateY(-2px)}to{transform:rotate(3deg) translateY(3px)}}
+@keyframes north-rub-r{from{transform:rotate(-3deg) translateY(2px)}to{transform:rotate(3deg) translateY(-3px)}}
+@keyframes north-breath{0%,8%{opacity:0;transform:scale(.3)}24%{opacity:.65}72%,100%{opacity:0;transform:translate(28px,16px) scale(2.3)}}
+@keyframes wizard-orb-bob{0%,100%{transform:translateY(5px)}50%{transform:translateY(-8px)}}
+@keyframes wizard-orb-glow{0%,100%{opacity:.5}50%{opacity:1}}
+@keyframes wizard-orbit-spin{to{transform:rotate(360deg)}}
+@keyframes wizard-hand-l{0%,100%{transform:rotate(-5deg)}50%{transform:rotate(4deg)}}
+@keyframes wizard-hand-r{0%,100%{transform:rotate(5deg)}50%{transform:rotate(-4deg)}}
+@media(prefers-reduced-motion:reduce){.north-tail,.wizard-cape-back,.north-rub-left,.north-rub-right,.north-vapor,.wizard-orb,.wizard-orb-glow,.wizard-orbit,.wizard-magic-left,.wizard-magic-right{animation:none!important}.north-vapor{opacity:0}}
+
+/* All skins use the classic coordinate system and overflow only for accessories. */
+.planik-mascot[data-skin=zoomer][data-mode=hover] .zoomer-phone-hide{animation:zoomer-hide-phone 1.3s steps(1,end) both}
+.planik-mascot[data-skin=zoomer][data-mode=hover] .planik-hover{animation:zoomer-restore-hover 1.3s steps(1,end) both}
+.planik-mascot[data-skin=zoomer][data-mode=hover] .planik-eye{animation-delay:1.3s}
+.planik-mascot:is([data-skin=zoomer],[data-skin=banker])[data-mode=searching] .planik-loupe{transform-origin:248px 243px}
+@keyframes zoomer-hide-phone{0%{visibility:visible;opacity:1}100%{visibility:hidden;opacity:0}}
+@keyframes zoomer-restore-hover{0%{visibility:hidden;opacity:0}100%{visibility:visible;opacity:1}}
+@media(prefers-reduced-motion:reduce){.planik-mascot[data-skin=zoomer][data-mode=hover] .zoomer-phone-hide{display:none;animation:none!important}.planik-mascot[data-skin=zoomer][data-mode=hover] .planik-hover{visibility:visible;opacity:1;animation:none!important}.planik-mascot[data-skin=zoomer][data-mode=hover] .planik-eye{animation-delay:0s}}
+
+/* Adventure outfits use the original coordinate system, not a scaled mascot. */
+.planik-mascot[data-skin=ninja]:is([data-mode=idle],[data-mode=hover]) .planik-eye{visibility:hidden}
+.ninja-squint{transform-box:fill-box;transform-origin:center;animation:planik-blink 5.4s infinite}
+/* The covered eye is independently hidden, so no white pixel can escape
+   the patch when gaze moves down to the map or outside the mascot. */
+.planik-mascot[data-skin=pirate] .planik-eye-right{visibility:hidden}
+.planik-mascot[data-skin=pirate][data-mode=hover] .planik-eye-right{animation:pirate-reveal-eye 2.85s steps(1,end) both}
+.planik-mascot[data-skin=pirate][data-mode=hover] .pirate-eye-patch{transform-box:view-box;transform-origin:245px 159px;animation:pirate-lift-patch 2.85s ease-in-out both}
+.pirate-lift-arm{transform-box:view-box;transform-origin:298px 196px;animation:pirate-lift-arm 2.85s ease-in-out both}
+.pirate-rest-arm{animation:pirate-rest-arm 2.85s steps(1,end) both}
+.pirate-treasure-map{transform-origin:0 0;animation:pirate-map-read 3.4s ease-in-out infinite}
+@keyframes pirate-lift-patch{0%,100%{transform:none}23%,74%{transform:translate(3px,-35px) rotate(-12deg)}}
+@keyframes pirate-reveal-eye{0%,20%{visibility:hidden}23%,74%{visibility:visible}77%,100%{visibility:hidden}}
+@keyframes pirate-lift-arm{0%{opacity:0;transform:rotate(-28deg)}23%,74%{opacity:1;transform:none}100%{opacity:0;transform:rotate(-28deg)}}
+@keyframes pirate-rest-arm{0%{opacity:1}8%{opacity:0}92%,100%{opacity:1}}
+@keyframes pirate-map-read{0%,100%{transform:rotate(-2deg)}50%{transform:rotate(2deg)}}
+.planik-mascot[data-skin=space][data-mode=hover] .planik-character-rig{transform-box:view-box;transform-origin:215px 166px;animation:space-weightless 7s ease-in-out infinite}
+.planik-mascot[data-skin=space][data-mode=hover] .planik-eye-left,.planik-mascot[data-skin=space][data-mode=hover] .planik-eye-right{animation:space-lost-gaze 1.3s ease-in-out infinite alternate}
+.space-arm-left{transform-box:view-box;transform-origin:132px 196px;animation:space-wave-left 1.25s ease-in-out infinite alternate}
+.space-arm-right{transform-box:view-box;transform-origin:298px 196px;animation:space-wave-right 1.15s ease-in-out infinite alternate}
+.space-satellite{animation:space-satellite-drift 3s ease-in-out infinite}
+.space-signal-wave{transform-box:view-box;transform-origin:0 0;animation:space-signal-send 1.35s linear infinite}
+@keyframes space-weightless{0%{transform:translate(0,0) rotate(0deg)}20%{transform:translate(-9px,-24px) rotate(-22deg)}49%{transform:translate(7px,-30px) rotate(170deg)}79%{transform:translate(-9px,-24px) rotate(360deg)}99%,100%{transform:translate(0,0) rotate(360deg)}}
+@keyframes space-lost-gaze{0%{transform:translate(-7px,3px)}30%{transform:translate(5px,-7px)}65%{transform:translate(-4px,-2px)}100%{transform:translate(7px,5px)}}
+@keyframes space-wave-left{from{transform:rotate(-20deg)}to{transform:rotate(20deg)}}
+@keyframes space-wave-right{from{transform:rotate(17deg)}to{transform:rotate(-20deg)}}
+@keyframes space-satellite-drift{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+@keyframes space-signal-send{0%{opacity:0;transform:translate(307px,67px) rotate(40deg) scale(.5)}18%{opacity:1}100%{opacity:0;transform:translate(264px,114px) rotate(40deg) scale(1.2)}}
+@media(prefers-reduced-motion:reduce){
+ .planik-mascot[data-skin=ninja][data-mode=hover] .planik-character-rig,.ninja-hover-ready,.ninja-squint,.pirate-treasure-map,.space-satellite,.space-arm-left,.space-arm-right,.planik-mascot[data-skin=space][data-mode=hover] .planik-character-rig,.planik-mascot[data-skin=space][data-mode=hover] :is(.planik-eye-left,.planik-eye-right){animation:none!important;opacity:1;transform:none}
+ .ninja-throw-arm,.ninja-bomb,.ninja-smoke,.pirate-rest-arm{display:none}
+ .planik-mascot[data-skin=pirate][data-mode=hover] .planik-eye-right{visibility:visible;animation:none!important}
+ .planik-mascot[data-skin=pirate][data-mode=hover] .pirate-eye-patch{animation:none!important;transform:translate(3px,-35px) rotate(-12deg)}
+ .pirate-lift-arm{animation:none!important;opacity:1;transform:none}
+ .space-signal-wave{animation:none!important;transform:translate(280px,96px) rotate(40deg);opacity:.85}
+}
+
+/* The ears sit behind the original body. Both mascots reuse their own
+   theme/variant gradient stops, and keep the original viewport and rig. */
+.cat-ear-left,.cat-ear-right{transform-box:view-box}
+.cat-ear-left{transform-origin:156px 103px}
+.cat-ear-right{transform-origin:274px 103px}
+.planik-mascot[data-skin="cat"][data-mode="thinking"] .cat-ear-left{animation:cat-ear-left-think 2.8s ease-in-out infinite}
+.planik-mascot[data-skin="cat"][data-mode="thinking"] .cat-ear-right{animation:cat-ear-right-think 3.5s ease-in-out -.9s infinite}
+@keyframes cat-ear-left-think{
+ 0%,100%{transform:rotate(0deg) skewX(0deg) scaleY(1)}
+ 17%{transform:rotate(-9deg) skewX(-3deg) scaleY(.91)}
+ 32%{transform:rotate(5deg) skewX(3deg) scaleY(1.02)}
+ 48%,70%{transform:rotate(0deg) scaleY(1)}
+ 82%{transform:rotate(-5deg) scaleY(.94)}
+}
+@keyframes cat-ear-right-think{
+ 0%,100%{transform:rotate(0deg) scaleY(1)}
+ 19%{transform:rotate(6deg) skewX(3deg) scaleY(.91)}
+ 34%{transform:rotate(-4deg) skewX(-2deg) scaleY(1.01)}
+ 53%,72%{transform:rotate(0deg)}
+ 85%{transform:rotate(9deg) scaleY(.94)}
+}
+@media(prefers-reduced-motion:reduce){
+ .planik-mascot[data-skin="cat"][data-mode="thinking"] :is(.cat-ear-left,.cat-ear-right){animation:none!important}
+}
+
+/* One live launcher owns the selected skin; native wardrobe and voice surfaces
+   intentionally show their own single focused avatar instead. */
+.ai-chat-launcher[data-managed-mascot-launcher=planner][data-mascot-surface=modal] {
+  z-index:2147483647!important;
+  right:max(1.5rem,env(safe-area-inset-right))!important;
+  bottom:max(2rem,env(safe-area-inset-bottom))!important;
+  pointer-events:none;
+}
+.ai-chat-launcher[data-managed-mascot-launcher=planner] .mascot-wardrobe-trigger { pointer-events:auto; }
+.ai-chat-launcher[data-managed-mascot-launcher=planner] .mascot-wardrobe-trigger:not([data-hovered=true]):not(:focus-visible) { pointer-events:none; }
+body:has(.mascot-wardrobe-dialog[open],.planik-live-fullscreen,.planik-live-compact) [data-managed-mascot-launcher] { visibility:hidden!important; pointer-events:none!important; }
+body:has(.mascot-wardrobe-dialog[open],.planik-live-fullscreen,.planik-live-compact) [data-managed-mascot-launcher] * { visibility:hidden!important;pointer-events:none!important; }
+/* The mascot follows the composer; the miniature transcript stays hidden. */
+body:has(.ai-chat-expanded-backdrop:not(.ai-chat-expanded-embedded)) [data-managed-mascot-launcher=planner] .planik-quick-ai-preview { opacity:0!important;pointer-events:none!important; }
+@media(max-width:760px){
+  [data-managed-mascot-launcher][data-mascot-surface=modal] .planik-mascot{width:78px;height:70px}
+  .ai-chat-launcher[data-managed-mascot-launcher=planner][data-mascot-surface=modal] .planik-launcher-button{width:78px;height:70px}
+}
+/* Enter on the outer SVG only: all existing pose and gaze animations remain
+   independent. The effect is discarded after 560 ms and never intercepts input. */
+.planik-mascot[data-arriving=true] .planik-svg{animation:wardrobe-enter .44s cubic-bezier(.2,.75,.3,1) both!important}
+.planik-mascot[data-arriving=true][data-skin=northern] .planik-svg{animation:mascot-snow-enter .52s ease-out both!important}
+.planik-mascot[data-arriving=true][data-skin=zoomer] .planik-svg{animation:mascot-phone-enter .52s cubic-bezier(.18,.75,.3,1) both!important;transform-origin:52% 94%}
+.planik-mascot[data-arriving=true]:is([data-skin=pirate],[data-skin=banker],[data-skin=king]) .planik-svg{animation:mascot-gold-enter .52s ease-out both!important;transform-origin:52% 90%}
+.planik-mascot[data-arriving=true][data-skin=wizard] .planik-svg{animation:mascot-portal-enter .52s ease-out both!important}
+.planik-mascot[data-arriving=true][data-skin=ninja] .planik-svg{animation:mascot-smoke-enter .48s ease-out both!important}
+.planik-mascot[data-arriving=true][data-skin=space] .planik-svg{animation:mascot-beam-enter .52s steps(8,end) both!important}
+@keyframes mascot-snow-enter{0%{opacity:0;transform:translateX(20%) scale(.82);filter:blur(7px)}65%{opacity:1;transform:translateX(-3%)}100%{transform:none;filter:none}}
+@keyframes mascot-phone-enter{0%,12%{opacity:0;transform:translateY(12%) scale(.12,.04)}40%{opacity:1;transform:translateY(-4%) scale(.34,1.07)}75%{transform:scale(1.04,.96)}100%{transform:none}}
+@keyframes mascot-gold-enter{0%{opacity:0;transform:scale(.92);filter:blur(4px)}45%{opacity:1;filter:blur(0)}100%{opacity:1;transform:none}}
+@keyframes mascot-portal-enter{0%{opacity:0;transform:scale(.08) rotate(-8deg)}55%{opacity:1;transform:scale(1.09) rotate(2deg)}100%{transform:none}}
+@keyframes mascot-smoke-enter{0%{opacity:0;filter:blur(10px);transform:scale(.85)}60%{opacity:1;filter:blur(2px)}100%{filter:none;transform:none}}
+@keyframes mascot-beam-enter{0%{opacity:0;clip-path:inset(100% 0 0)}35%{opacity:.65;filter:brightness(2.5);clip-path:inset(34% 0 0)}70%{opacity:1;filter:brightness(1.4);clip-path:inset(0)}100%{opacity:1;filter:none;clip-path:inset(0)}}
+.mascot-arrival-effect{position:absolute;inset:0;z-index:2;pointer-events:none;overflow:visible}
+.mascot-arrival-particle{position:absolute;width:6%;aspect-ratio:1;border-radius:50%;background:#c5eaff;box-shadow:0 0 8px currentColor;color:#c5eaff;animation:mascot-arrival-spark .48s ease-out both}
+@keyframes mascot-arrival-spark{0%{opacity:0;scale:.3}28%{opacity:1}100%{opacity:0;scale:1.8;translate:12px -20px}}
+[data-arrival-skin=northern] .mascot-arrival-particle{border-radius:0;clip-path:polygon(45% 0,55% 0,55% 38%,90% 18%,95% 28%,65% 50%,95% 72%,90% 82%,55% 62%,55% 100%,45% 100%,45% 62%,10% 82%,5% 72%,35% 50%,5% 28%,10% 18%,45% 38%);width:11%;animation:mascot-snow-particle .52s ease-out both}
+@keyframes mascot-snow-particle{0%{opacity:0;translate:45px -15px;scale:.5}25%{opacity:.95}100%{opacity:0;translate:-40px 20px;scale:1.15}}
+.mascot-arrival-phone{position:absolute;left:34%;bottom:1%;width:42%;height:21%;border:2px solid #a39ad0;border-radius:5px;background:linear-gradient(145deg,#625c91,#211f3b);transform:perspective(75px) rotateX(42deg);box-shadow:0 0 10px #9b87f7;animation:mascot-arrival-prop .56s ease-out both}
+.mascot-arrival-phone i{position:absolute;inset:13% 8%;border-radius:2px;background:linear-gradient(130deg,#93ebec,#826ce3)}
+.mascot-arrival-phone b{position:absolute;bottom:4%;left:43%;width:14%;height:2px;background:#d5ccff}
+.mascot-money-cloud{position:absolute;inset:0;pointer-events:none}
+.mascot-money-piece{position:absolute;display:grid;place-items:center;animation:mascot-money-cloud .44s ease-out both;box-sizing:border-box}
+.mascot-money-piece.is-coin{width:9%;height:9%;border-radius:50%;background:radial-gradient(ellipse,#ffeab2 42%,#ca913a 48%,#f8d781 76%);border:1px solid #bd8b37}
+.mascot-money-piece.is-note{width:19%;height:10%;border-radius:2px;background:#a8d5a2;border:1px solid #578b68;color:#427454;font-size:clamp(5px,1.2cqh,11px);font-weight:700}
+@keyframes mascot-money-cloud{0%{opacity:0;transform:scale(.45)}25%{opacity:1}70%{opacity:.85}100%{opacity:0;transform:translate(var(--money-x),var(--money-y)) rotate(var(--money-r)) scale(.85)}}
+[data-arrival-skin=pirate] .mascot-arrival-particle,[data-arrival-skin=banker] .mascot-arrival-particle{background:#ffda72;color:#ffd072}
+.mascot-arrival-portal{position:absolute;inset:4% 16% 2%;border:3px solid #bca2ff;border-radius:50%;background:radial-gradient(ellipse,#170b45aa,transparent 70%);box-shadow:0 0 12px #a98cff,inset 0 0 20px #bca2ff;animation:mascot-portal-ring .52s ease-out both}
+.mascot-arrival-portal i,.mascot-arrival-portal b{position:absolute;inset:8%;border:1px dashed #dfd1ff;border-radius:50%;transform:rotate(40deg)}
+[data-arrival-skin=wizard] .mascot-arrival-particle{background:#d2b5ff;color:#aa7cff}
+[data-arrival-skin=space] .mascot-arrival-portal{inset:-10% 30% 0;border:0;border-radius:0;background:linear-gradient(90deg,transparent,#9ef7ffbb,transparent);box-shadow:none;animation:mascot-arrival-prop .52s ease-out both}
+[data-arrival-skin=space] .mascot-arrival-portal :is(i,b){display:none}
+[data-arrival-skin=space] .mascot-arrival-particle{border-radius:1px;background:#a7f6ff;color:#7fdbff}
+[data-arrival-skin=ninja] .mascot-arrival-particle{width:31%;background:radial-gradient(circle,#cbd0daaa,#858c9e99 35%,transparent 72%);box-shadow:none;animation:mascot-smoke-particle .5s ease-out both}
+@keyframes mascot-smoke-particle{0%{opacity:0;scale:.4}30%{opacity:.95;scale:1.2}100%{opacity:0;scale:2;translate:15px -15px}}
+@keyframes mascot-portal-ring{0%{opacity:0;scale:.1}30%{opacity:1;scale:1.1}100%{opacity:0;scale:.65;rotate:40deg}}
+@keyframes mascot-arrival-prop{0%{opacity:0;scale:.6}20%,55%{opacity:1;scale:1}100%{opacity:0;scale:.9}}
+@media(prefers-reduced-motion:reduce){.planik-mascot[data-arriving=true] .planik-svg{animation:none!important}.mascot-arrival-effect{display:none}}
+
+/* A chat pane still owns its old composer anchor, even though its avatar is
+   now the same live mascot as the workspace/modal launcher. */
+.ai-chat-launcher[data-managed-mascot-launcher=planner][data-mascot-chat-embedded=true]{right:var(--mascot-chat-right,16px)!important;bottom:var(--mascot-chat-bottom,138px)!important;display:flex;align-items:flex-end}
+/* The expanded-chat avatar lives in the composer, not at viewport coordinates.
+   It follows resizing, attachments, reply previews and the dialog transition. */
+.ai-chat-expanded-composer-wrap > .planik-chat-mascot-slot {
+  position:absolute;
+  right:0;
+  bottom:calc(100% + 4px);
+  z-index:1;
+  display:flex;
+  width:max-content;
+  pointer-events:none;
+}
+.planik-chat-mascot-slot .mascot-wardrobe-trigger {
+  top:auto;bottom:8px;left:auto;right:calc(100% - 12px);
+  transform:translateY(3px);
+}
+.planik-chat-mascot-slot .mascot-wardrobe-trigger[data-hovered=true],
+.planik-chat-mascot-slot .mascot-wardrobe-trigger:focus-visible {transform:translateY(0)}
+body:has(.mascot-wardrobe-dialog[open],.planik-live-fullscreen,.planik-live-compact) [data-managed-chat-mascot],
+body:has(.mascot-wardrobe-dialog[open],.planik-live-fullscreen,.planik-live-compact) [data-managed-chat-mascot] * {visibility:hidden!important;pointer-events:none!important}
+@media(max-width:600px) {
+  .planik-chat-mascot-slot .planik-launcher-button,
+  .planik-chat-mascot-slot .planik-mascot {width:99px;height:88px}
+}
+.ai-chat-launcher[data-mascot-chat-embedded=true] .planik-quick-ai-preview{opacity:0!important;pointer-events:none!important}
+
+.planik-mascot[data-skin=ninja][data-mode=hover] .planik-character-rig{animation:none;opacity:1}
+.planik-mascot[data-skin=ninja][data-mode=hover] :is(.planik-eye-left,.planik-eye-right){animation:ninja-scan 2.1s ease-in-out infinite;transform-box:fill-box;transform-origin:center}
+@keyframes ninja-scan{0%,100%{translate:0 0}19%,35%{translate:-12px 0}59%,78%{translate:12px 0}}
+.ninja-guard-left,.ninja-guard-right{transform-box:view-box;animation:ninja-guard-set .28s cubic-bezier(.2,.8,.3,1) both}
+.ninja-guard-left{transform-origin:132px 196px}.ninja-guard-right{transform-origin:298px 196px}
+@keyframes ninja-guard-set{from{rotate:13deg;opacity:.65}to{rotate:0deg;opacity:1}}
+.ninja-notebook-page{transform-box:view-box;transform-origin:45px 34px;animation:ninja-page-turn 1.6s ease-in-out infinite}
+.ninja-chopsticks-arm{transform-box:view-box;transform-origin:298px 196px;animation:ninja-page-pick 1.6s ease-in-out infinite}
+@keyframes ninja-page-turn{0%,30%{transform:scaleX(1);opacity:1}53%{transform:scaleX(.06);opacity:1}70%{transform:scaleX(-.92);opacity:1}73%,100%{transform:scaleX(1);opacity:0}}
+@keyframes ninja-page-pick{0%,18%,100%{transform:rotate(0deg)}34%{transform:rotate(6deg)}65%{transform:rotate(-12deg)}82%{transform:rotate(-3deg)}}
+@media(prefers-reduced-motion:reduce){.ninja-guard-left,.ninja-guard-right,.ninja-notebook-page,.ninja-chopsticks-arm,.planik-mascot[data-skin=ninja][data-mode=hover] :is(.planik-eye-left,.planik-eye-right){animation:none!important;translate:none}}
+
+/* Keep the preview interactive during the pointer's travel from the painted
+   torso, including compact modal anchors. The empty screen stays clickable. */
+.ai-chat-launcher[data-quick-hover=true] .planik-quick-ai-preview{opacity:1;transform:translateY(0);pointer-events:auto}
+.ai-chat-launcher[data-quick-hover=true] .planik-quick-ai-preview::after{content:"";position:absolute;top:100%;right:0;width:min(135px,100%);height:32px;pointer-events:auto}
+.ai-chat-launcher[data-managed-mascot-launcher=planner][data-mascot-surface=modal] .planik-quick-ai-preview{bottom:calc(100% - 12px);width:min(320px,calc(100vw - 48px))}
+.ai-chat-launcher[data-mascot-chat-embedded=true] .planik-quick-ai-preview{opacity:0!important;pointer-events:none!important}
+.ai-chat-launcher[data-mascot-chat-embedded=true] .planik-quick-ai-preview::after{pointer-events:none}
+body:has(.ai-chat-expanded-backdrop:not(.ai-chat-expanded-embedded)) .planik-quick-ai-preview::after{pointer-events:none}
+
+/* Money entrances: a cloud on both sides of the character, not a central burst. */
+.planik-svg{position:relative;z-index:1}
+.mascot-arrival-rear{z-index:0}
+.mascot-arrival-front{z-index:2}
+.mascot-money-piece{animation-name:mascot-money-drift;animation-timing-function:cubic-bezier(.18,.65,.32,1);transform-origin:center}
+.mascot-money-piece.is-coin{width:8%;height:auto;aspect-ratio:1;color:#a46b18;font-size:clamp(5px,1.5cqh,12px);box-shadow:inset 0 0 0 1px #ffe7a5,0 1px 3px #61421788}
+.mascot-money-piece.is-note{width:18%;height:auto;aspect-ratio:1.85;background:linear-gradient(125deg,#d4eabd,#82bc85);border:1px solid #4b8358;box-shadow:inset 0 0 0 2px #bedba9,0 1px 2px #193d2866}
+@keyframes mascot-money-drift{0%{opacity:0;transform:translate(-50%,-50%) scale(.6)}18%{opacity:1;transform:translate(-50%,-50%) scale(1)}55%{opacity:.95}82%{opacity:.65}100%{opacity:0;transform:translate(calc(-50% + var(--money-x)),calc(-50% + var(--money-y))) rotate(var(--money-r)) scale(.7)}}
+.planik-mascot[data-arriving=true]:is([data-skin=pirate],[data-skin=banker],[data-skin=king]) .planik-svg{animation:mascot-cloud-reveal .58s ease-out both!important}
+@keyframes mascot-cloud-reveal{0%,13%{opacity:0;filter:blur(3px);transform:scale(.88)}65%,100%{opacity:1;transform:none}}
+.planik-mascot[data-skin=king] .planik-svg{animation:none}
+.planik-mascot[data-skin=king] .planik-eye{animation:planik-blink 6.4s infinite}
+.king-crown{transform-box:view-box;transform-origin:215px 82px}
+.planik-mascot[data-skin=king]:is([data-mode=hover],[data-mode=showcase]) .king-crown{animation:king-tip-crown 1.45s ease-in-out both}
+.king-greeting-arm{transform-box:view-box;transform-origin:300px 195px;animation:king-greet-arm 1.45s ease-in-out both}
+.king-rest-hand{animation:king-rest-hand 1.45s steps(1,end) both}
+.planik-mascot[data-mode=thinking] .king-ruby{animation:king-ruby-glow 1.15s ease-in-out infinite alternate}
+@keyframes king-tip-crown{0%,100%{transform:none}35%,65%{transform:translate(5px,-13px) rotate(8deg)}}
+@keyframes king-greet-arm{0%,100%{opacity:0;transform:rotate(27deg)}25%,75%{opacity:1;transform:none}}
+@keyframes king-rest-hand{0%,78%{opacity:1}24%,76%{opacity:0}100%{opacity:1}}
+@keyframes king-ruby-glow{from{filter:drop-shadow(0 0 2px #ec234c)}to{filter:drop-shadow(0 0 12px #ff285d) drop-shadow(0 0 6px #ff9dad)}}
+@media(prefers-reduced-motion:reduce){.planik-mascot[data-skin=king] :is(.king-crown,.king-greeting-arm,.king-rest-hand,.king-ruby,.planik-eye){animation:none!important}.king-greeting-arm{display:none}.planik-mascot[data-arriving=true]:is([data-skin=pirate],[data-skin=banker],[data-skin=king]) .planik-svg{animation:none!important}}
+
+/* Finance reactions run only after a successful write. */
+.planik-mascot[data-skin=king][data-mode=thinking] .planik-character-rig{transform-box:view-box;transform-origin:215px 220px;animation:king-throne-tremble .55s ease-in-out infinite}
+@keyframes king-throne-tremble{0%,100%{transform:translateX(0) rotate(0)}25%{transform:translateX(-1.5px) rotate(-.7deg)}75%{transform:translateX(1.5px) rotate(.7deg)}}
+@media(prefers-reduced-motion:reduce){.planik-mascot[data-skin=king][data-mode=thinking] .planik-character-rig{animation:none!important}}
+
+.planik-mascot[data-skin=king][data-mode=idle] .planik-svg{animation:planik-float 3.6s ease-in-out infinite}
+@media(prefers-reduced-motion:reduce){.planik-mascot[data-skin=king][data-mode=idle] .planik-svg{animation:none!important}}
+
+/* The website celebration uses the same metric shell and gradients as the right rail. */
+.planik-mascot[data-completion="true"] .planik-svg { animation: none; }
+.planik-completion-gesture { pointer-events: none; }
+.planik-completion-arm path { animation: planik-sign-arm 3.6s ease both; }
+.planik-completion-hold { animation: planik-sign-hold 3.6s ease both; }
+.planik-completion-sign { position:absolute;inset:0;z-index:2;pointer-events:none;animation:planik-sign-lift 3.6s ease both; }
+.planik-mascot .planik-completion-card { position: absolute; z-index: 2; right: 0; bottom: 104%; width: 158px; max-width: calc(100vw - 24px); box-sizing: border-box; display: grid; gap: 7px; padding: 10px 12px; text-align: left; color: var(--text-primary, #f1f5f9); border: 1px solid var(--panel-border, #555c76); background: var(--card-bg, #222c42); box-shadow: 0 5px 22px rgba(18,20,42,.23), 0 0 15px rgba(255,218,130,.18); pointer-events: none; }
+.planik-completion-card .primary-widget-metric-title { white-space: nowrap; font-size: 11px; gap: 6px; }
+.planik-completion-card .primary-widget-metric-title svg { flex: none; }
+.planik-completion-card .planik-completion-values { display: grid; font-variant-numeric: tabular-nums; }
+.planik-completion-values strong { grid-area: 1 / 1; font-size: 16px; white-space: nowrap; }
+.planik-completion-values strong small { font-size: 11px; }
+.planik-completion-before { animation: planik-spotlight-old 3.6s both; }
+.planik-completion-after { animation: planik-spotlight-new 3.6s both; }
+.planik-completion-card .primary-widget-progress { display: block; height: 7px; background: color-mix(in srgb, var(--panel-border, #77809d) 38%, transparent); }
+.planik-completion-card .primary-widget-progress > span { background: linear-gradient(90deg,#69cde7,#759adf 55%,#b09df1); width: var(--completion-to); animation: planik-spotlight-progress 3.6s both; }
+.planik-completion-card[data-scope="today"] .primary-widget-progress > span { background: linear-gradient(90deg,#79d4e0,#a18bfa 55%,#ea85ac); }
+.planik-completion-card[data-scope="subtasks"] .primary-widget-progress > span { background: linear-gradient(90deg,#69cde7,#23c6b4); }
+body[data-theme='light'] .planik-mascot .planik-completion-card { color: #1e293b; background: #f8fafc; border-color: #dce3ed; }
+/* The 90-unit SVG lift corresponds to 29% of the mascot's CSS height
+   for the launcher/composer/sidekick aspect ratios. The hand never releases
+   the pole while the card is visible. */
+@keyframes planik-sign-arm {
+  0%,5% { d:path("M301 203Q348 225 326 243");opacity:0 }
+  23%,86% { d:path("M301 203Q348 197 326 153");opacity:1 }
+  100% { d:path("M301 203Q348 225 326 243");opacity:0 }
+}
+@keyframes planik-sign-hold {
+  0%,5% { transform:translateY(90px);opacity:0 }
+  23%,86% { transform:translateY(0);opacity:1 }
+  100% { transform:translateY(90px);opacity:0 }
+}
+@keyframes planik-sign-lift {
+  0%,5% { transform:translateY(29%);opacity:0 }
+  23%,86% { transform:translateY(0);opacity:1 }
+  100% { transform:translateY(29%);opacity:0 }
+}
+@keyframes planik-spotlight-old { 0%,29% { opacity: 1; } 36%,100% { opacity: 0; } }
+@keyframes planik-spotlight-new { 0%,29% { opacity: 0; transform: translateY(4px); } 36%,100% { opacity: 1; transform: none; } }
+@keyframes planik-spotlight-progress { 0%,28% { width: var(--completion-from); } 48%,100% { width: var(--completion-to); } }
+@media (prefers-reduced-motion: reduce) {
+  .planik-mascot .planik-completion-card, .planik-completion-sign, .planik-completion-arm path, .planik-completion-hold, .planik-completion-after, .planik-completion-card .primary-widget-progress > span { animation: none; }
+  .planik-completion-before { display: none; }
+}
+
+.planik-mascot[data-finance-leaving=true]{opacity:0;transition:opacity .18s ease}
+@media(prefers-reduced-motion:reduce){.planik-mascot[data-finance-leaving=true]{transition:none}}
+
+/* Mechanical scoreboard: the old row drops out and the new row falls in
+   from above. The light runs across the entire track even at equal widths. */
+.planik-completion-card .planik-completion-values{overflow:hidden;line-height:1.25}
+@keyframes planik-spotlight-old{0%,29%{opacity:1;transform:translateY(0)}42%,100%{opacity:0;transform:translateY(110%)}}
+@keyframes planik-spotlight-new{0%,29%{opacity:0;transform:translateY(-110%)}42%,100%{opacity:1;transform:translateY(0)}}
+.planik-completion-card .primary-widget-progress{position:relative;overflow:hidden}
+.planik-completion-card .primary-widget-progress::after{content:"";position:absolute;inset:0;width:45%;background:linear-gradient(90deg,transparent,rgba(222,250,255,.9),transparent);transform:translateX(-120%);animation:planik-completion-shine 3.6s both;pointer-events:none}
+@keyframes planik-completion-shine{0%,27%{transform:translateX(-120%);opacity:0}31%{opacity:1}61%{transform:translateX(250%);opacity:1}65%,100%{transform:translateX(250%);opacity:0}}
+.planik-send-gesture{pointer-events:none;animation:planik-send-visibility 2.8s both}
+.planik-plane-arm{transform-origin:133px 194px;animation:planik-plane-throw-arm 2.8s both}
+.planik-paper-plane{transform-origin:88px 180px;animation:planik-plane-flight 2.8s both}
+.planik-plane-trail{animation:planik-plane-trail 2.8s both}
+.planik-mailbox{transform-origin:82px 261px;animation:planik-mailbox-arrival 2.8s both}
+.planik-mail-arm{transform-origin:133px 194px;animation:planik-mail-deposit-arm 2.8s both}
+.planik-mail-letter{transform-origin:90px 172px;animation:planik-mail-deposit-letter 2.8s both}
+.planik-mail-success{animation:planik-mail-success 2.8s both}
+@keyframes planik-send-visibility{0%{opacity:0}9%,88%{opacity:1}100%{opacity:0}}
+@keyframes planik-plane-throw-arm{0%,14%{transform:rotate(-14deg)}30%{transform:rotate(24deg)}42%{transform:rotate(14deg)}65%,100%{transform:rotate(0)}}
+@keyframes planik-plane-flight{0%,14%{transform:rotate(-14deg) translate(3px,7px);opacity:1}30%{transform:translate(-11px,-20px) rotate(24deg);opacity:1}65%{transform:translate(-58px,-64px) rotate(20deg) scale(.95);opacity:1}86%,100%{transform:translate(-130px,-125px) rotate(20deg) scale(.65);opacity:0}}
+@keyframes planik-plane-trail{0%,28%,100%{opacity:0}35%{opacity:.9}80%{opacity:0;transform:translate(-75px,-66px)}}
+@keyframes planik-mailbox-arrival{0%{transform:translateY(22px) scale(.85);opacity:0}15%,86%{transform:none;opacity:1}100%{opacity:0;transform:translateY(12px)}}
+@keyframes planik-mail-deposit-arm{0%,17%{transform:rotate(0)}44%{transform:rotate(-36deg)}57%{transform:rotate(-36deg)}75%,100%{transform:rotate(0)}}
+@keyframes planik-mail-deposit-letter{0%,17%{transform:none;opacity:1}44%{transform:translate(-2px,39px);opacity:1}58%{transform:translate(-2px,50px) scaleY(.15);opacity:0}100%{opacity:0}}
+@keyframes planik-mail-success{0%,55%{opacity:0;transform:translateY(4px)}65%,87%{opacity:1;transform:none}100%{opacity:0}}
+@media(prefers-reduced-motion:reduce){.planik-completion-card .primary-widget-progress::after{animation:none;display:none}.planik-send-gesture,.planik-send-gesture *{animation:none}.planik-plane-trail,.planik-mail-success{display:none}}

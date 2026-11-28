@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.rememberPagerState
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
 import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.shape.*
@@ -45,6 +47,8 @@ import java.util.Locale
 import java.util.UUID
 import ru.planirovych.app.data.model.*
 import ru.planirovych.app.ui.theme.ThemeMode
+import ru.planirovych.app.planik.PlanikWakeControls
+import ru.planirovych.app.planik.rememberPlanikWake
 
 private enum class AuthMode { LOGIN, REGISTER }
 
@@ -52,9 +56,22 @@ private enum class AuthMode { LOGIN, REGISTER }
 fun HomeScreen(vm: HomeViewModel, dark: Boolean,
     notificationTaskId:String?=null,openGeneralAi:Boolean=false,
     quickAiMode:String?=null,quickAiRequestId:Int=0,
-    onQuickAiHandled:(Int)->Unit={}) {
+    onQuickAiHandled:(Int)->Unit={},
+    updateAvailable:Boolean=false,onCheckUpdates:()->Unit={},
+    notificationHabitId:String?=null,notificationChatId:String?=null,
+    notificationAccount:String?=null,notificationRequestId:Int=0,notificationTaskChat:Boolean=false,notificationLoanId:String?=null) {
     val state by vm.state.collectAsStateWithLifecycle()
     val themeMode by vm.themeMode.collectAsStateWithLifecycle()
+    val planikWake=rememberPlanikWake(state.user?.id,!state.loading && state.error==null)
+    val context=LocalContext.current
+    LaunchedEffect(vm) {
+        ru.planirovych.app.planik.PlanikLiveUpdates.events.collect {
+            vm.reconcileAfterPlanik().join()
+            val chat=vm.generalAi.value
+            chat.selectedProjectId?.let { vm.syncGeneralAiThread(it,chat.selectedChatId) }
+            vm.taskAi.value.taskId?.let { vm.syncTaskAiHistory(it) }
+        }
+    }
     val focusManager=LocalFocusManager.current
     val softwareKeyboard=LocalSoftwareKeyboardController.current
     val density=LocalDensity.current
@@ -63,10 +80,21 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
     // Do not mount a bottom sheet while the search IME is animating out.
     var pendingFocusTaskId by remember{mutableStateOf<String?>(null)}
     var settings by remember { mutableStateOf(false) }
+    // Installation-local, one announcement for this feature release. No
+    // microphone permission or assistant role is changed by the welcome.
+    val releasePrefs=remember(context) { context.getSharedPreferences("android_release_announcements",android.content.Context.MODE_PRIVATE) }
+    var planikIntroPending by remember { mutableStateOf(!releasePrefs.getBoolean("planik_voice_1_0_26_seen",false)) }
+    fun dismissPlanikIntro() {
+        releasePrefs.edit().putBoolean("planik_voice_1_0_26_seen",true).apply()
+        planikIntroPending=false
+    }
+    var wardrobeOpen by remember(state.user?.id) { mutableStateOf(false) }
+    LaunchedEffect(state.user?.id){vm.refreshMascotWardrobe(state.user?.id)}
     var accountOpen by remember { mutableStateOf(false) }
     var creationType by remember { mutableStateOf<TaskType?>(null) }
     var createHabit by remember { mutableStateOf(false) }
     var createNote by remember { mutableStateOf(false) }
+    var notesRequest by remember { mutableIntStateOf(0) }
     var plannerMenuOpen by remember { mutableStateOf(false) }
     val pagerState = rememberPagerState(initialPage=0,pageCount={4})
     val plannerScrimAlpha by animateFloatAsState(
@@ -109,8 +137,7 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
         financialSuggestions=if(voiceFromFinance)emptySet() else setOf(
             "Запиши расход","Создай счёт","Переведи деньги между счетами","Создай долг")
     )
-    // One shared authenticated Quick AI thread: the assistant reply must finish
-    // before moving away from the originating planner / finance screen.
+    // Open the shared Quick AI thread as soon as processing starts.
     LaunchedEffect(pendingVoiceText,sharedChat.projects,sharedChat.loading,sharedChat.busy){
         val spoken=pendingVoiceText?:return@LaunchedEffect
         if(sharedChat.loading)return@LaunchedEffect
@@ -132,12 +159,10 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
         vm.chooseGeneralAiChat(quick.id,QUICK_AI_THREAD_ID)
         vm.sendGeneralAi(quick.id,QUICK_AI_THREAD_ID,UUID.randomUUID().toString(),
             spoken,spoken,emptyList(),thread.model?:"gpt-6-luna",
-            onDone={
-                voiceAwaiting=false
-                pagerScope.launch{pagerState.animateScrollToPage(2)}
-            },
+            onDone={voiceAwaiting=false},
             onFailed={message->voiceAwaiting=false;voiceError=message}
         )
+        pagerScope.launch{pagerState.scrollToPage(2)}
     }
     var requestPersonalChat by remember { mutableStateOf(false) }
     LaunchedEffect(requestPersonalChat,sharedChat.projects,sharedChat.loading,sharedChat.saving){
@@ -151,8 +176,10 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
             }
         }
     }
-    var quickNavigationHandled by remember(openGeneralAi,quickAiRequestId){mutableStateOf(false)}
-    LaunchedEffect(openGeneralAi,quickAiMode,quickAiRequestId,sharedChat.projects,state.loading){
+    var quickNavigationHandled by remember(openGeneralAi,quickAiRequestId,notificationRequestId){mutableStateOf(false)}
+    LaunchedEffect(openGeneralAi,quickAiMode,quickAiRequestId,sharedChat.projects,state.loading,notificationRequestId,state.user?.id){
+        if(notificationAccount!=null && state.user?.id!=notificationAccount)return@LaunchedEffect
+        if(quickAiMode in listOf("live","wake_voice","assistant_chat"))return@LaunchedEffect
         if(quickAiMode=="voice" && quickAiRequestId>0 && !quickNavigationHandled && !state.loading){
             quickNavigationHandled=true
             onQuickAiHandled(quickAiRequestId)
@@ -163,11 +190,12 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
             pagerState.scrollToPage(2)
             // Widget result and scheduled checkup alerts must open Quick Requests,
             // not whichever project conversation happened to be selected last.
+            val chatId=notificationChatId?:QUICK_AI_THREAD_ID
             val quickProject=sharedChat.projects.firstOrNull{p->
-                p.chats.any{it.id==QUICK_AI_THREAD_ID}
+                p.chats.any{it.id==chatId}
             }
             if(quickProject!=null){
-                vm.chooseGeneralAiChat(quickProject.id,QUICK_AI_THREAD_ID)
+                vm.chooseGeneralAiChat(quickProject.id,chatId)
                 quickNavigationHandled=true
             }
         }
@@ -194,6 +222,7 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
     // Direct timeline navigation must close back to the timeline.
     var subtaskReturnToTaskId by remember { mutableStateOf<String?>(null) }
     var taskAiChatId by remember { mutableStateOf<String?>(null) }
+    var openedNotificationHabitId by remember(state.user?.id){mutableStateOf<String?>(null)}
     LaunchedEffect(quickAiRequestId){
         if(quickAiRequestId>0){
             // A widget should not be hidden behind an already-open task sheet.
@@ -205,6 +234,64 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
             taskAiChatId=null
             settings=false
         }
+    }
+    // Voice activation has a separate route from the widget: a project sync
+    // must not cancel a pending recording or cause the chat composer to open it twice.
+    val wakeProjectId=sharedChat.projects.firstOrNull { p -> p.chats.any { it.id==QUICK_AI_THREAD_ID } }?.id
+    LaunchedEffect(quickAiMode,quickAiRequestId,notificationAccount,state.user?.id,state.loading,
+        if(quickAiMode in listOf("live","assistant_chat"))wakeProjectId else null) {
+        val mode=quickAiMode
+        val account=state.user?.id
+        if(mode !in listOf("live","wake_voice","assistant_chat") || state.loading || account==null ||
+            notificationAccount!=account || quickNavigationHandled)return@LaunchedEffect
+        if(mode in listOf("live","assistant_chat") && wakeProjectId==null) {
+            vm.loadGeneralAi(account)
+            return@LaunchedEffect
+        }
+        settings=false
+        accountOpen=false
+        wardrobeOpen=false
+        creationType=null
+        createHabit=false
+        createNote=false
+        pendingFocusTaskId=null
+        openedTaskId=null
+        newSubtaskParentId=null
+        overlaySubtaskId=null
+        overlayNewSubtaskParentId=null
+        taskAiChatId=null
+        subtaskReturnToTaskId=null
+        openedNotificationHabitId=null
+        plannerMenuOpen=false
+        authMode=null
+        voiceError=null
+        focusManager.clearFocus(force=true)
+        softwareKeyboard?.hide()
+        if(mode=="assistant_chat") {
+            val projectId=wakeProjectId ?: return@LaunchedEffect
+            vm.chooseGeneralAiChat(projectId,QUICK_AI_THREAD_ID)
+            pagerState.scrollToPage(2)
+            vm.syncGeneralAiThread(projectId,QUICK_AI_THREAD_ID)
+            quickNavigationHandled=true
+            // Give the chat and workspace their navigation event before clearing it.
+            delay(220)
+            onQuickAiHandled(quickAiRequestId)
+            return@LaunchedEffect
+        } else if(mode=="live") {
+            val projectId=wakeProjectId ?: return@LaunchedEffect
+            vm.chooseGeneralAiChat(projectId,QUICK_AI_THREAD_ID)
+            pagerState.scrollToPage(2)
+            quickNavigationHandled=true
+            context.startActivity(ru.planirovych.app.planik.PlanikLiveActivity.intent(context,
+                projectId=projectId,chatId=QUICK_AI_THREAD_ID,expectedUserId=account))
+        } else {
+            voiceFromFinance=false
+            pagerState.scrollToPage(0)
+            delay(350)
+            quickNavigationHandled=true
+            voiceInput()
+        }
+        onQuickAiHandled(quickAiRequestId)
     }
     // Never resume a previously focused chat input just because the user
     // switched back to Chats AI. A widget's explicit text command is different.
@@ -224,9 +311,18 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
         subtaskReturnToTaskId = null
         taskAiChatId = null
     }
-    LaunchedEffect(notificationTaskId,state.user?.id){
-        if(!notificationTaskId.isNullOrBlank()){
-            openedTaskId=notificationTaskId
+    LaunchedEffect(notificationLoanId,notificationRequestId,state.user?.id,state.loading){
+        if(!state.loading && notificationAccount==state.user?.id && !notificationLoanId.isNullOrBlank())pagerState.scrollToPage(3)
+    }
+    LaunchedEffect(notificationHabitId,notificationRequestId,state.user?.id,state.loading){
+        if(!state.loading && notificationAccount==state.user?.id && !notificationHabitId.isNullOrBlank()){
+            pagerState.scrollToPage(0)
+            openedNotificationHabitId=notificationHabitId
+        }
+    }
+    LaunchedEffect(notificationTaskId,state.user?.id,notificationRequestId,state.loading){
+        if(!state.loading && !notificationTaskId.isNullOrBlank() && (notificationAccount==null || notificationAccount==state.user?.id)){
+            if(notificationTaskChat){taskAiChatId=notificationTaskId;openedTaskId=null}else openedTaskId=notificationTaskId
             newSubtaskParentId=null
             overlaySubtaskId=null
             overlayNewSubtaskParentId=null
@@ -251,6 +347,7 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
                         NativeHoldAction("Добавить напоминание",Icons.Default.Notifications){creationType=TaskType.REMINDER},
                         NativeHoldAction("Добавить привычку",Icons.Default.AutoAwesome){createHabit=true},
                         NativeHoldAction("Добавить заметку",Icons.Default.StickyNote2){createNote=true},
+                        NativeHoldAction("Открыть заметки",Icons.Default.StickyNote2){notesRequest++},
                         NativeHoldAction("Создать чат с ИИ",Icons.Default.SmartToy){
                             requestPersonalChat=true
                             vm.loadGeneralAi(state.user?.id)
@@ -339,6 +436,9 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
                 quickAiRequestId=quickAiRequestId,
                 onQuickAiHandled=onQuickAiHandled,
                 onQuickVoice={voiceFromFinance=true;voiceInput()},voiceAwaiting=voiceAwaiting,
+                notesRequest=notesRequest,
+                notificationLoanId=notificationLoanId?.takeIf{notificationAccount==state.user?.id},notificationRequestId=notificationRequestId,
+                updateAvailable=updateAvailable,
                 modifier = Modifier.padding(padding),
             )
         }
@@ -359,6 +459,9 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
         NativeQuickTaskCreateSheet(type=type,vm=vm,dark=dark,
             onClose={creationType=null})
     }
+    state.habits.firstOrNull{it.id==openedNotificationHabitId}?.let{habit->
+        NativeHabitDetailSheet(vm,habit,dark,onClose={openedNotificationHabitId=null})
+    }
     if(createHabit) NativeHabitCreateSheet(vm=vm,dark=dark,
         onClose={createHabit=false})
     if(createNote) NativeQuickNoteCreateSheet(vm=vm,dark=dark,
@@ -373,9 +476,24 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
     if (settings) SettingsSheet(
         state.user, dark, themeMode, vm::setThemeMode, { settings = false },
         { authMode = it; settings = false }, { vm.logout { settings = false } },
+        updateAvailable=updateAvailable,onCheckUpdates={settings=false;onCheckUpdates()},
+        onOpenWardrobe={settings=false;wardrobeOpen=true;vm.refreshMascotWardrobe(state.user?.id)},
+        planikWake=planikWake,
     )
+    if(wardrobeOpen) NativeMascotWardrobeDialog(vm,dark,state.user?.id){wardrobeOpen=false}
     authMode?.let { mode ->
         AuthDialog(mode, state.authBusy, state.authError, { authMode = null; vm.clearAuthError() }, vm::login, vm::register)
+    }
+
+    if(planikIntroPending && !state.loading && state.error==null && state.user?.id!=null &&
+        quickAiMode==null && !openGeneralAi && notificationTaskId==null &&
+        notificationHabitId==null && notificationLoanId==null && notificationChatId==null &&
+        !settings && !wardrobeOpen && !accountOpen && authMode==null &&
+        openedTaskId==null && taskAiChatId==null && !voiceAwaiting && voiceError==null) {
+        PlanikVoiceReleaseIntro(
+            onDismiss={dismissPlanikIntro()},
+            onSettings={dismissPlanikIntro();settings=true}
+        )
     }
 
     val openedTask = state.tasks.firstOrNull { it.id == openedTaskId }
@@ -582,7 +700,7 @@ private fun Workspace(
                 IconButton(settings, Modifier.clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceVariant)) { Icon(Icons.Default.Settings,"Настройки", tint=Color(0xFFF59E0B)) }
             }
             Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                Metric(Icons.Default.AutoAwesome, "ИИ-кредиты", "${state.user?.aiCredits ?: 0}", Color(0xFF22B8CF), Modifier.weight(1f))
+                Metric(Icons.Default.AutoAwesome, if(state.user?.subscriptionLimit != null) "Лимит ИИ" else "ИИ-кредиты", state.user?.aiBalanceLabel ?: "0", Color(0xFF22B8CF), Modifier.weight(1f))
                 Metric(Icons.Default.Star, "Эффективность", "${state.user?.efficiencyScore?.toInt() ?: 0}/100", Color(0xFF8B5CF6), Modifier.weight(1f))
             }
         }
@@ -648,7 +766,9 @@ private fun nextHabitWeekday(habit: Habit, today: LocalDate): String {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(9.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     items(dueToday, key = { it.id }) { habit ->
-                        HabitBubble(habit, dayKey, scheduledToday = true)
+                        Box(Modifier.animateItem()) {
+                            HabitBubble(habit, dayKey, scheduledToday = true)
+                        }
                     }
                     if (dueToday.isNotEmpty() && otherDays.isNotEmpty()) {
                         item(key = "other-days-divider") {
@@ -657,8 +777,10 @@ private fun nextHabitWeekday(habit: Habit, today: LocalDate): String {
                         }
                     }
                     items(otherDays, key = { it.id }) { habit ->
-                        HabitBubble(habit, dayKey, scheduledToday = false,
-                            nextWeekday = nextHabitWeekday(habit, today))
+                        Box(Modifier.animateItem()) {
+                            HabitBubble(habit, dayKey, scheduledToday = false,
+                                nextWeekday = nextHabitWeekday(habit, today))
+                        }
                     }
                 }
             }
@@ -794,6 +916,55 @@ private fun taskSortTime(value: String?): Long {
 
 @Composable private fun EmptyCard(text:String){Surface(Modifier.fillMaxWidth(),shape=RoundedCornerShape(20.dp),color=MaterialTheme.colorScheme.surfaceVariant){Column(Modifier.padding(28.dp).fillMaxWidth(),horizontalAlignment=Alignment.CenterHorizontally){Icon(Icons.Default.CheckCircle,null,tint=MaterialTheme.colorScheme.primary);Spacer(Modifier.height(8.dp));Text(text)}}}
 
+@Composable
+private fun PlanikVoiceReleaseIntro(onDismiss:()->Unit,onSettings:()->Unit) {
+    val accent=MaterialTheme.colorScheme.primary
+    AlertDialog(
+        onDismissRequest=onDismiss,
+        shape=RoundedCornerShape(26.dp),
+        icon={
+            Box(Modifier.size(64.dp).clip(RoundedCornerShape(22.dp))
+                .background(accent.copy(alpha=.13f)),contentAlignment=Alignment.Center){
+                Icon(Icons.Default.SmartToy,null,tint=accent,modifier=Modifier.size(37.dp))
+            }
+        },
+        title={Text("Планик всегда под рукой",fontWeight=FontWeight.Bold,
+            style=MaterialTheme.typography.headlineSmall)},
+        text={
+            Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
+                Text("Два новых способа обратиться к ИИ, не отвлекаясь от своих дел.",
+                    style=MaterialTheme.typography.bodyMedium)
+                Surface(shape=RoundedCornerShape(16.dp),color=MaterialTheme.colorScheme.surfaceVariant) {
+                    Row(Modifier.fillMaxWidth().padding(12.dp),horizontalArrangement=Arrangement.spacedBy(12.dp),
+                        verticalAlignment=Alignment.CenterVertically) {
+                        Icon(Icons.Default.Mic,null,tint=accent,modifier=Modifier.size(26.dp))
+                        Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(4.dp)){
+                            Text("«Эй, Планик»",fontWeight=FontWeight.SemiBold)
+                            Text("Вызовите ассистента голосом в приложении или в фоне.",
+                                style=MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+                Surface(shape=RoundedCornerShape(16.dp),color=MaterialTheme.colorScheme.surfaceVariant) {
+                    Row(Modifier.fillMaxWidth().padding(12.dp),horizontalArrangement=Arrangement.spacedBy(12.dp),
+                        verticalAlignment=Alignment.CenterVertically) {
+                        Icon(Icons.Default.SmartToy,null,tint=accent,modifier=Modifier.size(26.dp))
+                        Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(4.dp)){
+                            Text("Системный ассистент",fontWeight=FontWeight.SemiBold)
+                            Text("Назначьте Планика помощником Android и вызывайте его привычной кнопкой или жестом поверх других приложений.",
+                                style=MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+                Text("Включайте любой способ или оба сразу в настройках. Выбор всегда за вами.",
+                    style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        },
+        confirmButton={Button(onClick=onSettings){Text("Настроить")}},
+        dismissButton={TextButton(onClick=onDismiss){Text("Позже")}}
+    )
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SettingsSheet(
@@ -803,10 +974,26 @@ private fun SettingsSheet(
     setMode: (ThemeMode) -> Unit,
     close: () -> Unit,
     auth: (AuthMode) -> Unit,
-    logout: () -> Unit
+    logout: () -> Unit,
+    updateAvailable:Boolean=false,onCheckUpdates:()->Unit={},onOpenWardrobe:()->Unit={},
+    planikWake:PlanikWakeControls
 ) {
-    ModalBottomSheet(onDismissRequest=close) {
-        Column(Modifier.padding(20.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
+    var planikSettings by remember { mutableStateOf(false) }
+    var systemAssistantSettings by remember { mutableStateOf(false) }
+    if(systemAssistantSettings) {
+        PlanikSystemSettingsSheet(planikWake) { systemAssistantSettings=false }
+        return
+    }
+    if(planikSettings) {
+        PlanikVoiceSettingsSheet(planikWake) { planikSettings=false }
+        return
+    }
+    // Open at the content's natural expanded height rather than the
+    // half-screen anchor. It remains a wrap-content sheet, not fullscreen.
+    val sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true)
+    ModalBottomSheet(onDismissRequest=close,sheetState=sheetState) {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal=20.dp,vertical=12.dp),
+            verticalArrangement=Arrangement.spacedBy(12.dp)) {
             Text("Настройки",style=MaterialTheme.typography.headlineSmall,
                 fontWeight=FontWeight.Bold)
             Text(user?.displayName ?: "Профиль")
@@ -841,6 +1028,54 @@ private fun SettingsSheet(
                         uncheckedIconColor=Color(0xFF6D28D9)
                     ))
             }
+            Surface(shape=RoundedCornerShape(16.dp),color=MaterialTheme.colorScheme.surfaceVariant,
+                modifier=Modifier.fillMaxWidth()) {
+                Row(Modifier.fillMaxWidth().padding(horizontal=12.dp,vertical=8.dp),
+                    verticalAlignment=Alignment.CenterVertically) {
+                    Row(Modifier.weight(1f).clickable { planikSettings=true }.padding(vertical=6.dp),
+                        verticalAlignment=Alignment.CenterVertically) {
+                        Icon(Icons.Default.Mic,null)
+                        Column(Modifier.padding(start=10.dp,end=8.dp).weight(1f)) {
+                            Row(verticalAlignment=Alignment.CenterVertically) {
+                                Text("Эй, Планик")
+                                Text("›",Modifier.padding(start=6.dp),style=MaterialTheme.typography.titleLarge)
+                            }
+                            Text(if(planikWake.enabled)planikWake.status else "Настройки голосового вызова",
+                                style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                    Switch(checked=planikWake.enabled,enabled=planikWake.available || planikWake.enabled,
+                        onCheckedChange=planikWake.onChange)
+                }
+            }
+            Surface(shape=RoundedCornerShape(16.dp),color=MaterialTheme.colorScheme.surfaceVariant,
+                modifier=Modifier.fillMaxWidth()) {
+                Row(Modifier.fillMaxWidth().padding(horizontal=12.dp,vertical=8.dp),
+                    verticalAlignment=Alignment.CenterVertically) {
+                    Row(Modifier.weight(1f).clickable { systemAssistantSettings=true }.padding(vertical=6.dp),
+                        verticalAlignment=Alignment.CenterVertically) {
+                        Icon(Icons.Default.SmartToy,null)
+                        Column(Modifier.padding(start=10.dp,end=8.dp).weight(1f)) {
+                            Row(verticalAlignment=Alignment.CenterVertically) {
+                                Text("Системный ассистент")
+                                Text("›",Modifier.padding(start=6.dp),style=MaterialTheme.typography.titleLarge)
+                            }
+                            Text(if(!planikWake.systemEnabled)"Вызов кнопкой или жестом"
+                                else if(planikWake.systemSelected)"Активен" else "Назначьте помощником Android",
+                                style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                    Switch(checked=planikWake.systemEnabled,enabled=planikWake.available || planikWake.systemEnabled,
+                        onCheckedChange=planikWake.onSystemEnabled)
+                }
+            }
+            OutlinedButton(onClick=onOpenWardrobe,enabled=user?.id!=null,modifier=Modifier.fillMaxWidth()){Text("Аксессуары и скины Планика")}
+            OutlinedButton(onClick=onCheckUpdates,modifier=Modifier.fillMaxWidth()){
+                Icon(Icons.Default.SystemUpdate,null)
+                Spacer(Modifier.width(8.dp))
+                Text("Обновления",Modifier.weight(1f))
+                if(updateAvailable) Badge { Text("Новое") }
+            }
             if(user?.hasAccount==true) {
                 OutlinedButton(logout,Modifier.fillMaxWidth()){Text("Выйти")}
             } else {
@@ -851,6 +1086,98 @@ private fun SettingsSheet(
                     }
                 }
             }
+            Spacer(Modifier.height(8.dp))
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PlanikVoiceSettingsSheet(wake:PlanikWakeControls,close:()->Unit) {
+    val sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true)
+    ModalBottomSheet(onDismissRequest=close,sheetState=sheetState) {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal=20.dp,vertical=12.dp),
+            verticalArrangement=Arrangement.spacedBy(12.dp)) {
+            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
+                Text("Эй, Планик",Modifier.weight(1f),style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.Bold)
+                TextButton(onClick=close){Text("Назад")}
+            }
+            Row(verticalAlignment=Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Голосовой вызов")
+                    Text(wake.status,style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Switch(checked=wake.enabled,enabled=wake.available||wake.enabled,onCheckedChange=wake.onChange)
+            }
+            Text("Действие при вызове",style=MaterialTheme.typography.titleSmall)
+            listOf("live" to "Живое общение", "voice" to "Голосовой ввод").forEach { (value,label) ->
+                Row(Modifier.fillMaxWidth().clickable(enabled=wake.enabled) { wake.onAction(value) },
+                    verticalAlignment=Alignment.CenterVertically) {
+                    RadioButton(selected=wake.action==value,enabled=wake.enabled,onClick={wake.onAction(value)})
+                    Text(label)
+                }
+            }
+            Text("Режим работы",style=MaterialTheme.typography.titleSmall)
+            listOf(
+                Triple("app","Только в приложении","Локальное распознавание «Эй, Планик» только в открытом Планировыче."),
+                Triple("background","Фоновый режим","Локальное распознавание в других приложениях. Пауза на блокировке, восстановление после разблокировки.")
+            ).forEach { (value,label,description) ->
+                Row(Modifier.fillMaxWidth().clickable(enabled=wake.enabled) { wake.onListeningMode(value) },
+                    verticalAlignment=Alignment.CenterVertically) {
+                    RadioButton(selected=wake.listeningMode==value,enabled=wake.enabled,onClick={wake.onListeningMode(value)})
+                    Column(Modifier.weight(1f).padding(vertical=6.dp)) {
+                        Text(label)
+                        Text(description,style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+            Text("Русская локальная модель загружается один раз (~45 МБ).",
+                style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+            if(wake.listeningMode=="background") {
+                OutlinedButton(onClick=wake.onAutoOpen,enabled=wake.enabled,modifier=Modifier.fillMaxWidth()) {
+                    Text(if(wake.autoOpen)"Автооткрытие разрешено · Настройки" else "Разрешить автооткрытие приложения")
+                }
+                if(!wake.autoOpen)Text("Без разрешения останется тихое уведомление по кодовой фразе.",
+                    style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Spacer(Modifier.height(8.dp))
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PlanikSystemSettingsSheet(wake:PlanikWakeControls,close:()->Unit) {
+    val sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true)
+    ModalBottomSheet(onDismissRequest=close,sheetState=sheetState) {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal=20.dp,vertical=12.dp),
+            verticalArrangement=Arrangement.spacedBy(12.dp)) {
+            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
+                Text("Системный ассистент",Modifier.weight(1f),style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.Bold)
+                TextButton(onClick=close){Text("Назад")}
+            }
+            Row(verticalAlignment=Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Вызов системной кнопкой или жестом")
+                    Text("Работает независимо от «Эй, Планик».",style=MaterialTheme.typography.bodySmall)
+                }
+                Switch(checked=wake.systemEnabled,enabled=wake.available||wake.systemEnabled,onCheckedChange=wake.onSystemEnabled)
+            }
+            Text("Действие при вызове",style=MaterialTheme.typography.titleSmall)
+            listOf("live" to "Живое общение","voice" to "Голосовой ввод").forEach { (value,label) ->
+                Row(Modifier.fillMaxWidth().clickable(enabled=wake.systemEnabled){wake.onSystemAction(value)},
+                    verticalAlignment=Alignment.CenterVertically) {
+                    RadioButton(selected=wake.systemAction==value,enabled=wake.systemEnabled,onClick={wake.onSystemAction(value)})
+                    Text(label)
+                }
+            }
+            Text(if(wake.systemSelected)"Планировыч выбран системным голосовым ассистентом." else "Назначьте Планировыч помощником Android вместо текущего ассистента.",
+                style=MaterialTheme.typography.bodySmall)
+            OutlinedButton(onClick=wake.onSystemSettings,enabled=wake.systemEnabled||wake.systemSelected,modifier=Modifier.fillMaxWidth()) {
+                Text(if(wake.systemSelected)"Сменить системного ассистента" else "Назначить Планировыч ассистентом")
+            }
+            Text("Системный вызов сам по себе не требует постоянного микрофона. Для голосовой фразы включите «Эй, Планик» отдельно.",
+                style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(8.dp))
         }
     }
@@ -901,7 +1228,7 @@ private fun AndroidAccountSheet(
                     color=MaterialTheme.colorScheme.onSurfaceVariant)
             }
             HorizontalDivider()
-            Text("ИИ-кредиты: "+(user?.aiCredits ?: 0),
+            Text((if(user?.subscriptionLimit != null) "Лимит ИИ: " else "ИИ-кредиты: ")+(user?.aiBalanceLabel ?: "0"),
                 fontWeight=FontWeight.Medium)
             OutlinedButton(onClick=onSettings,modifier=Modifier.fillMaxWidth()) {
                 Icon(Icons.Default.Settings,null)

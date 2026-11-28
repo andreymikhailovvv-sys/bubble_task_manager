@@ -111,7 +111,7 @@ const confirmVerification = async (input: { tokenHash?: string; userId?: string;
   }
 };
 
-const sendAccountMail = async (recipient: string, subject: string, text: string) => {
+export const sendAccountMail = async (recipient: string, subject: string, text: string) => {
   if (!accountMailConfigured()) throw new Error('AUTH_MAIL_NOT_CONFIGURED');
   await smtpReply({
     provider: 'timeweb',

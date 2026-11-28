@@ -13,13 +13,14 @@ const MAX_WIDTH = 390;
 const MAX_HEIGHT = 555;
 
 /** A task-owned monitoring panel anchored to the AI-chat title, shared across clients. */
-export function TaskMonitoringStatuses({ taskId, enabled, tourStage = null, model = DEFAULT_TASK_AI_CHAT_MODEL, generation = 0, allowed = true, onTaskUpdated }: {
+export function TaskMonitoringStatuses({ taskId, enabled, tourStage = null, model = DEFAULT_TASK_AI_CHAT_MODEL, generation = 0, allowed = true, subscriptionAllowed = true, onTaskUpdated }: {
   taskId: string;
   enabled: boolean;
   tourStage?: 'button' | 'model' | null;
   model?: AiChatModel;
   generation?: number;
   allowed?: boolean;
+  subscriptionAllowed?: boolean;
   onTaskUpdated?: (task: Task) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -128,6 +129,7 @@ export function TaskMonitoringStatuses({ taskId, enabled, tourStage = null, mode
 
   const toggle = async (next: boolean) => {
     if (!allowed || saving) return;
+    if (next && !subscriptionAllowed) { setError('Автомониторинг недоступен на вашем тарифе. Требуется подписка «Максимум».'); return; }
     setSaving(true); setError('');
     try {
       const task = await api.updateTask(taskId, { aiMonitoringEnabled: next, aiMonitoringModel: monitorModel });

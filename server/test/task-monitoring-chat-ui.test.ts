@@ -79,12 +79,15 @@ test('monitoring unread events light up Planik badge without duplicate chat bubb
 
 
 test('Planik overlays the fullscreen composer without moving its input bar', async () => {
-  const [expanded, mascotCss, appCss] = await Promise.all([
+  const [expanded, mascotCss, appCss, wardrobeCss] = await Promise.all([
     read('../../client/src/components/ExpandedAiChat.tsx'),
     read('../../client/src/components/PlanikMascot.css'),
-    read('../../client/src/styles.css')
+    read('../../client/src/styles.css'),
+    read('../../client/src/components/MascotWardrobe.css')
   ]);
-  assert.match(expanded, /className="planik-composer-float"[\s\S]{0,320}<\/div> : null\}\s*<div ref=\{composerRef\}/);
+  assert.match(expanded, /className="planik-composer-float mascot-wardrobe-anchor"[^>]*>[\s\S]{0,500}<MascotWardrobeTrigger[\s\S]{0,100}<\/div> : null\}\s*<div ref=\{composerRef\}/);
+  assert.match(mascotCss, /\.planik-composer-float\s*\{[^}]*position:\s*absolute/);
+  assert.match(wardrobeCss, /\.planik-composer-float\.mascot-wardrobe-anchor\s*\{[^}]*position:\s*absolute/);
   assert.match(appCss, /\.ai-chat-expanded-composer-wrap\s*\{[^}]*position:\s*absolute/);
   assert.doesNotMatch(mascotCss, /\.ai-chat-expanded-composer-wrap\s*\{\s*position:\s*relative/);
   assert.match(mascotCss, /bottom:\s*calc\(0\.75rem \+ var\(--ai-composer-height/);
@@ -94,8 +97,10 @@ test('Planik overlays the fullscreen composer without moving its input bar', asy
 test('expanded task chat has monitoring control to the left of clear button, not floating below icons', async () => {
   const app = await read('../../client/src/App.tsx');
   const expanded = app.slice(app.indexOf('focused-task-ai-expanded-panel relative'), app.indexOf('<AiModelChip value={focusedAiModel}', app.indexOf('focused-task-ai-expanded-panel relative')));
-  assert.match(expanded, /<TaskMonitoringStatuses taskId=\{focusedTask\.id\}/);
-  assert.ok(expanded.indexOf('<TaskMonitoringStatuses taskId={focusedTask.id}') < expanded.indexOf('onClick={() => void clearFocusedAiDialog()}'));
+  const monitor = expanded.match(/<TaskMonitoringStatuses subscriptionAllowed=\{Boolean\(currentUser\?\.subscriptionPlan === 'max' && activeSubscription\)\} taskId=\{focusedTask\.id\}/);
+  assert.ok(monitor, 'monitoring control must target the focused task and enforce its subscription gate');
+  const clearIndex = expanded.indexOf('onClick={() => void clearFocusedAiDialog()}');
+  assert.ok(clearIndex >= 0 && monitor.index! < clearIndex);
   assert.doesNotMatch(expanded, /absolute right-5 top-16/);
 });
 
@@ -117,7 +122,7 @@ test('focus help header is one compact row with matching teal bot and task monit
   assert.match(header, /focus-task-ai-header flex shrink-0 items-center/);
   assert.match(header, /focus-task-ai-bot-icon/);
   assert.match(css, /\.focus-task-ai-bot-icon \{\s*color: color-mix\(in srgb, var\(--accent\) 80%, var\(--text-primary\)\)/);
-  assert.match(header, /<TaskMonitoringStatuses taskId=\{focusActiveTask\.id\}/);
+  assert.match(header, /<TaskMonitoringStatuses subscriptionAllowed=\{Boolean\(currentUser\?\.subscriptionPlan === 'max' && activeSubscription\)\} taskId=\{focusActiveTask\.id\}/);
   assert.ok(header.indexOf('Помощь ИИ') < header.indexOf('TaskMonitoringStatuses'));
   assert.ok(header.indexOf('TaskMonitoringStatuses') < header.indexOf('setIsFocusAiExpanded(true)'));
   assert.doesNotMatch(header, /title=\{focusActiveTask\.title\}/);
@@ -187,10 +192,10 @@ test('web Planik fires confetti and flash in sync with a stationary shadow and l
   assert.match(styles, /animation: planik-popper-flash [^;\n]* \.55s both/);
   assert.match(styles, /animation: planik-confetti-burst [^;\n]* calc\(\.55s \+ var\(--planik-stagger/);
   assert.match(styles, /planik-ground-shadow\s*\{[\s\S]{0,500}position:\s*absolute/);
-  assert.match(styles, /body\[data-theme='light'\] \.planik-body-stop-start/);
-  assert.match(notes, /mode === 'widget' && !editing \? \([\s\S]*?planik-notes-companion/);
+  assert.match(styles, /body\[data-theme='light'\] \.planik-mascot:not\(\.planik-mascot--economic\) \.planik-body-stop-start/);
+  assert.match(notes, /mode === 'widget' && !editing && !managedMascot \? \([\s\S]*?planik-notes-companion/);
   assert.match(editor, /showPlanik=\{!task\?\.id && !externalSubtask\}/);
-  assert.match(frame, /showPlanik \? <div className="planik-task-editor-companion"/);
+  assert.match(frame, /showPlanik && !managed \? <div className="planik-task-editor-companion"/);
 });
 
 

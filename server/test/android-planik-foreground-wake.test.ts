@@ -1,0 +1,49 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import test from 'node:test';
+
+const root = '../../android-app/app/src/main/';
+const read = (path: string) => readFile(new URL(root + path, import.meta.url), 'utf8');
+const pkg = 'java/ru/planirovych/app/';
+
+test('Planik foreground activation is opt-in, local and lifecycle bound', async () => {
+  const [wake, manifest, home] = await Promise.all([
+    read(pkg + 'planik/PlanikForegroundWake.kt'), read('AndroidManifest.xml'),
+    read(pkg + 'feature/home/HomeScreen.kt')
+  ]);
+  assert.match(wake, /getBoolean\("enabled_" \+ accountId, false\)/);
+  assert.match(wake, /AudioRecord\(MediaRecorder.AudioSource.VOICE_RECOGNITION/);
+  assert.doesNotMatch(wake, /SpeechRecognizer|RecognizerIntent/);
+  assert.match(wake, /Recognizer\(model, 16000f/);
+  assert.match(wake, /recognition.acceptWaveForm\(buffer,count\)/);
+  assert.match(wake, /Lifecycle\.Event\.ON_RESUME -> listener\.resume\(\)/);
+  assert.match(wake, /Lifecycle\.Event\.ON_PAUSE[\s\S]*?listener\.pause\(\)/);
+  assert.match(wake, /dispatchPlanikWake\(accountId, latestAction\)/);
+  assert.match(wake, /isKeyguardLocked/);
+  assert.match(wake, /screenAvailable\(\): Boolean = wakeDeviceUnlocked\(context\)/);
+  assert.doesNotMatch(wake, /allowLocked|WAKE_ALWAYS/);
+  assert.match(wake, /handler.postDelayed\(health, 5000L\)/);
+  assert.match(wake, /lastFrameAt>15_000L/);
+  assert.match(wake, /recoverable=true/);
+  assert.match(wake, /worker\?\.isAlive == false/);
+  assert.doesNotMatch(wake, /handler\.hasCallbacks\(/);
+  assert.match(wake, /retryScheduled = handler\.postDelayed\(retry,/);
+  assert.match(wake, /private fun cancelRetry\(\) \{[\s\S]*?retryScheduled = false/);
+  assert.match(wake, /generation\+\+/);
+  assert.match(manifest, /android\.permission\.RECORD_AUDIO/);
+  assert.match(manifest, /FOREGROUND_SERVICE_MICROPHONE/);
+  assert.doesNotMatch(manifest, /BOOT_COMPLETED/);
+  assert.match(home, /rememberPlanikWake\(state\.user\?\.id/);
+  assert.match(home, /Text\("Эй, Планик"\)/);
+});
+
+test('Every native dictation releases wake microphone before MediaRecorder and resumes afterwards', async () => {
+  const [voice, wake] = await Promise.all([
+    read(pkg + 'feature/home/AiChatVoiceInput.kt'), read(pkg + 'planik/PlanikForegroundWake.kt')
+  ]);
+  assert.match(voice, /PlanikWakeMicGate\.acquire\(wakeMicOwner\)[\s\S]*?MediaRecorder\(\)/);
+  assert.equal((voice.match(/PlanikWakeMicGate\.release\(wakeMicOwner\)/g) || []).length, 3);
+  assert.match(wake, /PlanikWakeMicGate\.busy[\s\S]*?release\(\)/);
+  assert.match(wake, /recorder\?\.stop\(\)/);
+  assert.match(wake, /input\?\.release\(\)/);
+});

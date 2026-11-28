@@ -37,10 +37,10 @@ export async function openingForTargetBalance(
 export async function recordEconomicBalanceAdjustment(
   tx: Prisma.TransactionClient, owner: string, accountId: string,
   openingBalanceMinor: bigint, targetBalanceMinor: bigint
-): Promise<void> {
+): Promise<bigint> {
   const current = openingBalanceMinor + await economicAccountMovementMinor(tx, owner, accountId);
   const delta = targetBalanceMinor - current;
-  if (delta === 0n) return;
+  if (delta === 0n) return 0n;
   await tx.economicOperation.create({data: {
     userId: owner, sourceAccountId: accountId,
     kind: delta > 0n ? 'INCOME' : 'EXPENSE',
@@ -49,4 +49,5 @@ export async function recordEconomicBalanceAdjustment(
     category: 'Корректировка', isAdjustment: true,
     occurredAt: new Date()
   }});
+  return delta;
 }

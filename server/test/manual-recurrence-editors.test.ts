@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
-import { buildManualRecurrence } from '../../client/src/lib/recurrenceSchedule.js';
+import { buildManualRecurrence, defaultEconomicRecurrence } from '../../client/src/lib/recurrenceSchedule.js';
 
 const read = (path: string) => readFile(new URL(path, import.meta.url), 'utf8');
 
@@ -42,7 +42,11 @@ test('native Android supports manual JSON schedule both on creation and task edi
     read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/MiniAppTaskFocusSheet.kt')
   ]);
   assert.match(native, /put\("rrule","FREQ="\+period\)/);
-  assert.match(native, /put\("timezone",ZoneId\.systemDefault\(\)\.id\)/);
+  // The shared editor accepts the account timezone for financial operations;
+  // ordinary task callers still default to the device timezone.
+  assert.match(native, /timeZone:String\?=null/);
+  assert.match(native, /put\("timezone",timeZone\?\.takeIf\{it\.isNotBlank\(\)\} \?: ZoneId\.systemDefault\(\)\.id\)/);
+  assert.match(native, /if\(!manualOnly\)Row/);
   assert.match(native, /put\("slots",JsonArray\(slots\)\)/);
   assert.match(native, /"manual" to "Вручную"/);
   assert.match(create, /NativeTaskRecurrenceEditor\(/);
@@ -96,4 +100,12 @@ test('both edit and creation settings scroll as full overlays rather than being 
   const createBody = mini.indexOf('className="min-h-0 flex-1 overflow-y-auto pb-24 pr-1"', createMenu);
   assert.ok(createBody > createMenu);
   assert.ok(mini.slice(createMenu, createBody).includes('miniapp-settings-scroll-area invisible-scrollbar'));
+});
+
+test('financial repeats default to the operation date each month and preserve day 31', () => {
+  const rule = defaultEconomicRecurrence('2026-11-27', 'Europe/Riga');
+  assert.equal(rule.rrule, 'FREQ=MONTHLY');
+  assert.equal(rule.timezone, 'Europe/Riga');
+  assert.deepEqual(rule.slots, [{ time: '09:00', monthDay: 27 }]);
+  assert.deepEqual(defaultEconomicRecurrence('2026-10-31', 'Europe/Riga').slots, [{ time: '09:00', monthDay: 31 }]);
 });

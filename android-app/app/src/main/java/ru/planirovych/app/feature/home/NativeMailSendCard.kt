@@ -17,12 +17,14 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.*
 
 /** Same server-owned mail draft lifecycle as the Telegram Mini App. */
 @Composable
 internal fun NativeMailSendCard(vm:HomeViewModel,draft:JsonObject,c:TaskChatColors) {
+    val billingProfile by vm.state.collectAsStateWithLifecycle()
     val draftId=draft.cardString("id")
     var mailboxId by rememberSaveable(draftId){mutableStateOf(draft.cardString("mailboxId"))}
     var sender by rememberSaveable(draftId){mutableStateOf(draft.cardString("sender"))}
@@ -162,7 +164,7 @@ internal fun NativeMailSendCard(vm:HomeViewModel,draft:JsonObject,c:TaskChatColo
                 }
             }
         }
-        if(rewriteCredits>0L)ActionCaption(
+        if(rewriteCredits>0L && billingProfile.user?.subscriptionLimit == null)ActionCaption(
             "Редактирование с ИИ: "+
                 String.format(java.util.Locale("ru"),"%.3f",rewriteCredits/1000.0)+
                 " кредитов.",c)

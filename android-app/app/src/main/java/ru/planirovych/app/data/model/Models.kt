@@ -3,6 +3,12 @@ package ru.planirovych.app.data.model
 import kotlinx.serialization.Serializable
 
 @Serializable
+data class SubscriptionLimit(val usedPercent: Int, val expiresAt: String, val planName: String, val allowanceMilli: Int? = null,
+    val daily: SubscriptionWindow? = null, val weekly: SubscriptionWindow? = null)
+@Serializable
+data class SubscriptionWindow(val capMilli: Long, val remainingMilli: Long, val remainingPercent: Int, val resetsAt: String)
+
+@Serializable
 data class CurrentUser(
     val id: String,
     val email: String? = null,
@@ -14,6 +20,7 @@ data class CurrentUser(
     val aiCredits: Int = 0,
     val aiCreditsMilli: Int = 0,
     val aiCreditsPeriod: String? = null,
+    val subscriptionLimit: SubscriptionLimit? = null,
     val aiEfficiencyCreditsSpent: Double = 0.0,
     val aiEfficiencyCreditsPeriod: String? = null,
     val timeZone: String? = null,
@@ -29,6 +36,12 @@ data class CurrentUser(
     val completedLessonIds: List<String> = emptyList(),
     val hasPassword: Boolean = false,
 ) {
+    val monthlyAiBalanceLabel: String get() = subscriptionLimit?.let { "${100 - it.usedPercent.coerceIn(0,100)}%" } ?: aiCredits.toString()
+    // Same server-computed remaining percentage as SubscriptionDailyRing.
+    // Missing window data is unknown, not a real zero or a monthly substitute.
+    val aiBalanceLabel: String get() = subscriptionLimit?.let { limit ->
+        limit.daily?.let { "${it.remainingPercent.coerceIn(0,100)}%" } ?: "…"
+    } ?: aiCredits.toString()
     val hasAccount: Boolean get() = !username.isNullOrBlank() || !email.isNullOrBlank() || !googleSub.isNullOrBlank() || hasPassword
     val displayName: String get() = name?.takeIf { it.isNotBlank() } ?: username ?: email ?: "Локальный профиль"
 }
@@ -190,6 +203,9 @@ data class TaskAiChatMessage(
     val telegramSendDraft: kotlinx.serialization.json.JsonObject?=null,
     val telegramReadDraft: kotlinx.serialization.json.JsonObject?=null,
     val mailSendDraft: kotlinx.serialization.json.JsonObject?=null,
+    val assistantSettingsProposalId:String?=null,
+    val telegramSuggestedReply:kotlinx.serialization.json.JsonObject?=null,
+    val mailSuggestedReply:kotlinx.serialization.json.JsonObject?=null,
 )
 data class TaskAiFile(val name:String,val mimeType:String,val bytes:ByteArray)
 data class TaskAiReply(
@@ -215,3 +231,15 @@ data class TaskMonitoringStatus(
     val detail:String?=null,
     val createdAt:String?=null
 )
+
+@kotlinx.serialization.Serializable
+data class MascotCatalogSkin(val id:String,val variant:String,val name:String,val description:String="",val rank:Int=0)
+@kotlinx.serialization.Serializable
+data class MascotWardrobeState(val userId:String,val rank:Int=0,val expiresAt:String?=null,val selected:Map<String,String>,val catalog:List<MascotCatalogSkin>) {
+    fun plannerSkin(owner:String?):String {
+        if(owner!=userId)return "classic"
+        val id=selected["planner"] ?: "classic"
+        val activeRank=if(expiresAt?.let{runCatching{java.time.Instant.parse(it).isAfter(java.time.Instant.now())}.getOrDefault(false)}==true)rank else 0
+        return catalog.firstOrNull{it.variant=="planner"&&it.id==id&&it.rank<=activeRank}?.id ?: "classic"
+    }
+}

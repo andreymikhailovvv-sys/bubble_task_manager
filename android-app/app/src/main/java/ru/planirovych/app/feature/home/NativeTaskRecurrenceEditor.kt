@@ -32,7 +32,10 @@ internal fun NativeTaskRecurrenceEditor(
     parsing:Boolean,
     error:String?=null,
     isEvent:Boolean=false,
-    dark:Boolean
+    dark:Boolean,
+    manualOnly:Boolean=false,
+    accent:Color?=null,
+    timeZone:String?=null
 ) {
     val ctx=LocalContext.current
     val savedSlots=remember(rule){(rule?.get("slots") as? JsonArray)
@@ -43,7 +46,7 @@ internal fun NativeTaskRecurrenceEditor(
             ?.takeIf{it in listOf("DAILY","WEEKLY","MONTHLY")}
             ?:"DAILY"
     }
-    var mode by remember{mutableStateOf(if(savedSlots.isNotEmpty())"manual"
+    var mode by remember{mutableStateOf(if(manualOnly||savedSlots.isNotEmpty())"manual"
         else if(rule!=null)"ai" else "manual")}
     var period by remember{mutableStateOf(savedPeriod)}
     val times=remember{mutableStateListOf<String>().also{list->
@@ -60,8 +63,8 @@ internal fun NativeTaskRecurrenceEditor(
         }.ifEmpty{listOf(1)})
     }}
     val activeOnManual by rememberUpdatedState(onManual)
-    val slate=if(dark)Color(0xFF466875)else Color(0xFFDDEAF0)
-    val selectedText=if(dark)Color.White else Color(0xFF234B59)
+    val slate=accent ?: if(dark)Color(0xFF466875)else Color(0xFFDDEAF0)
+    val selectedText=if(accent!=null)Color(0xFF291400) else if(dark)Color.White else Color(0xFF234B59)
     val muted=if(dark)Color(0xFFAEC3CC)else Color(0xFF617584)
     val outline=if(dark)Color(0xFF516674)else Color(0xFFD2DEE5)
     val currentTimes=times.toList()
@@ -82,7 +85,7 @@ internal fun NativeTaskRecurrenceEditor(
         })return@LaunchedEffect
         val result=buildJsonObject{
             put("rrule","FREQ="+period)
-            put("timezone",ZoneId.systemDefault().id)
+            put("timezone",timeZone?.takeIf{it.isNotBlank()} ?: ZoneId.systemDefault().id)
             put("until",JsonNull)
             put("slots",JsonArray(slots))
         }
@@ -93,7 +96,7 @@ internal fun NativeTaskRecurrenceEditor(
         containerColor=slate,contentColor=selectedText)
     val quietColors=ButtonDefaults.outlinedButtonColors(contentColor=muted)
     Column(verticalArrangement=Arrangement.spacedBy(9.dp)){
-        Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){
+        if(!manualOnly)Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){
             listOf("manual" to "Вручную","ai" to "Через ИИ").forEach{(key,label)->
                 OutlinedButton(onClick={mode=key},
                     modifier=Modifier.weight(1f),shape=RoundedCornerShape(10.dp),

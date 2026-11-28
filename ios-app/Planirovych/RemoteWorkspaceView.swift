@@ -63,6 +63,7 @@ struct RemoteWorkspaceView: View {
     @State private var showSectorSettings = false
     @State private var showAccount = false
     @State private var showAppSettings = false
+    @ObservedObject private var shortcutRouter = PlanikShortcutRouter.shared
     @State private var showTaskFilters = false
     @State private var accountName = ""
     @State private var accountUsername = ""
@@ -173,6 +174,13 @@ struct RemoteWorkspaceView: View {
                     .padding(.trailing, 22)
                     .padding(.bottom, 90)
             }
+        }
+        .onChange(of: shortcutRouter.pending?.id) { _, id in
+            guard id != nil else { return }
+            showingQuickVoice = false; quickEntryKind = nil; showingNewTask = false
+            openedTimelineHabit = nil; showCredits = false; editingTask = nil
+            showOverdue = false; showSectorSettings = false; showAccount = false
+            showAppSettings = false; showTaskFilters = false; searchFocused = false
         }
         .onChange(of: session.firstChatReactionSerial) { _, _ in
             if quickAIWaiting {
@@ -301,8 +309,8 @@ struct RemoteWorkspaceView: View {
                             Text(error).font(.footnote).foregroundStyle(.red)
                         }
                     }
-                    Section("ИИ-кредиты") {
-                        Text("\(session.account?.aiCredits ?? 0)")
+                    Section(session.account?.subscriptionLimit == nil ? "ИИ-кредиты" : "Лимит ИИ") {
+                        Text(session.account?.aiBalanceLabel ?? "0")
                     }
                     Section {
                         Button("Выйти из аккаунта", role: .destructive) {
@@ -328,6 +336,12 @@ struct RemoteWorkspaceView: View {
         .sheet(isPresented: $showAppSettings) {
             NavigationStack {
                 Form {
+                    Section("Кнопка действия") {
+                        Text("Назначьте одну из команд Планировыча в Настройки iPhone → Кнопка действия → Команда. Доступны голосовой ввод и живое общение.")
+                            .font(.footnote)
+                        Button("Голосовой ввод") { shortcutRouter.enqueue(.voice) }
+                        Button("Живое общение") { shortcutRouter.enqueue(.live) }
+                    }
                     Section("Планировыч") {
                         Button("Обновить данные") {
                             Task { await session.refresh() }
@@ -388,7 +402,7 @@ struct RemoteWorkspaceView: View {
                         Image(systemName: "circle.hexagongrid.fill")
                         .font(.system(size: 16))
                         .foregroundStyle(Color(red: 0.83, green: 0.41, blue: 0.57))
-                    Text("\(session.account?.aiCredits ?? 0)")
+                    Text(session.account?.aiBalanceLabel ?? "0")
                         .font(.system(size: 11, weight: .bold))
                         .lineLimit(1)
                 }
@@ -397,7 +411,7 @@ struct RemoteWorkspaceView: View {
                 .background(accent.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
                     }
                 .buttonStyle(.plain)
-                .accessibilityLabel("ИИ-кредиты: открыть баланс и статистику")
+                .accessibilityLabel(session.account?.subscriptionLimit == nil ? "ИИ-кредиты: открыть баланс и статистику" : "Лимит ИИ: открыть статистику")
                 Button {
                     searchExpanded.toggle()
                 } label: {

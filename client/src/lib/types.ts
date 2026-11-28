@@ -136,6 +136,7 @@ export type ChatMessage = {
   taskProposal?: AiTaskProposal | null;
   economicProposals?: import('../components/EconomicAiProposalCard').EconomicAiProposal[];
   telegramSendDraft?: TelegramInlineSendDraft;
+  assistantSettingsProposalId?: string;
   mailSendDraft?: import('./api').MailSendDraft;
   telegramSuggestedReply?: import('./api').TelegramAiSuggestedReply;
   mailSuggestedReply?: import('./api').MailAiSuggestedReply;

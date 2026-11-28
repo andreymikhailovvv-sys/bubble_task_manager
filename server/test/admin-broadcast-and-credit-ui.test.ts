@@ -58,7 +58,8 @@ test('админская рассылка поддерживает аудито�
   assert.match(telegram, /sendAdminBroadcast/);
   assert.match(admin, /Рассылка в Telegram-боте «Планировыч»/);
   assert.match(admin, /Прикрепить изображение/);
-  assert.match(admin, /Тариф для сегментации рассылок/);
+  assert.match(admin, /Управление подпиской/);
+  assert.match(admin, /Тариф также используется для сегментации рассылок/);
   assert.match(api, /adminSendBroadcast/);
   assert.match(api, /adminSetSubscriptionPlan/);
 });

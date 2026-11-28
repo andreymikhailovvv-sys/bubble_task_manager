@@ -1,4 +1,6 @@
+import { normalizeEconomicPositions, normalizeEconomicCalculation } from '../lib/economic-operation-details.js';
 import { Prisma } from '@prisma/client';
+import { ECONOMIC_BASE_CATEGORIES } from '../lib/economic-category-presets.js';
 import { prisma } from '../db/prisma.js';
 import { economicAccountMovementMinor, recordEconomicBalanceAdjustment } from './economic-account-balance.service.js';
 import { debtOperationKind, debtOperationTitle, type EconomicDebtDirection } from '../lib/economic-debt.js';
@@ -12,7 +14,9 @@ const snapshot = (entity:EconomicEntity,row:any):Snapshot => {
   if(entity==='account')return {id:row.id,name:row.name,accountType:row.accountType,creditLimitMinor:row.creditLimitMinor?.toString()??null,openingBalanceMinor:row.openingBalanceMinor.toString(),updatedAt:iso(row.updatedAt)};
   if(entity==='operation')return {id:row.id,kind:row.kind,amountMinor:row.amountMinor.toString(),
     sourceAccountId:row.sourceAccountId,targetAccountId:row.targetAccountId,category:row.category,
-    title:row.title,note:row.note,occurredAt:iso(row.occurredAt),updatedAt:iso(row.updatedAt)};
+    title:row.title,note:row.note,occurredAt:iso(row.occurredAt),updatedAt:iso(row.updatedAt),
+    ...(row.positionsJson && row.positionsJson !== '[]' ? { positionsJson: row.positionsJson } : {}),
+    ...(row.calculation ? { calculation: row.calculation } : {})};
   if(entity==='category')return {id:row.id,kind:row.kind,name:row.name,createdAt:iso(row.createdAt)};
   if(entity==='debt')return {id:row.id,direction:row.direction,counterparty:row.counterparty,amountMinor:row.amountMinor.toString(),
     paidMinor:row.paidMinor.toString(),note:row.note,dueAt:iso(row.dueAt),
@@ -174,10 +178,35 @@ async function mutate(tx:Tx,owner:string,action:EconomicAction,record:Snapshot|n
     if(transferred&&!target)no('Для перевода нужен счёт получателя.');
     const sourceAccountId=d.sourceAccountId as string;
     await owned(tx,owner,[sourceAccountId,...(target?[target]:[])]);
+    // Resolve or create the named category in the same serializable transaction
+    // as the approved operation, never during unconfirmed AI preparation.
+    let category: string | null = transferred || d.category == null ? null : String(d.category).trim();
+    if(category && (d.kind==='INCOME'||d.kind==='EXPENSE')){
+      const kind=String(d.kind);
+      const normalized=category.toLocaleLowerCase('ru-RU');
+      const preset=ECONOMIC_BASE_CATEGORIES[d.kind].find(name=>name.toLocaleLowerCase('ru-RU')===normalized);
+      if(preset)category=preset;
+      else {
+        const existing=await tx.economicCategory.findFirst({where:{userId:owner,kind,name:{equals:category,mode:'insensitive'}},orderBy:{createdAt:'asc'}});
+        if(existing)category=existing.name;
+        else {
+          if(category.length>60)no('Название новой категории не должно превышать 60 символов.');
+          const created=await tx.economicCategory.upsert({
+            where:{userId_kind_name:{userId:owner,kind,name:category}},
+            create:{userId:owner,kind,name:category},update:{}
+          });
+          category=created.name;
+        }
+      }
+    }
     const values={
       kind:String(d.kind),sourceAccountId,targetAccountId:target,
       amountMinor:BigInt(String(d.amountMinor)),title:String(d.title),
-      note:d.note==null?null:String(d.note),category:transferred?null:d.category==null?null:String(d.category),
+      note:d.note==null?null:String(d.note),category,
+      positionsJson:normalizeEconomicPositions(d.positionsJson), calculation: (()=>{
+        if(action.payload.amountMinor!==undefined&&record?.amountMinor!==action.payload.amountMinor&&action.payload.calculation===undefined)return null;
+        try{return normalizeEconomicCalculation(d.calculation,BigInt(String(d.amountMinor)));}catch(cause){throw new EconomicActionError((cause as Error).message);}
+      })(),
       occurredAt:dates(d.occurredAt)??new Date()
     };
     if(action.action==='create')return (await tx.economicOperation.create({data:{userId:owner,...values}})).id;
@@ -225,10 +254,11 @@ export function economicProposalView(row:{
     amountMinor:'Сумма',principalMinor:'Сумма кредита',paidMinor:'Выплачено',
     category:'Категория',sourceAccountId:'Счёт',targetAccountId:'Счёт получения',accountId:'Счёт долга',note:'Примечание',dueAt:'Срок возврата',
     annualRateBps:'Ставка (б.п.)',termMonths:'Срок (месяцев)',startDate:'Дата начала',
-    occurredAt:'Дата операции',lender:'Кредитор',paymentDate:'Дата платежа',
+    positionsJson:'Позиции',calculation:'Калькуляция',occurredAt:'Дата операции',lender:'Кредитор',paymentDate:'Дата платежа',
     postedToAccount:'Проводка по счёту',remindersEnabled:'Напоминания',isClosed:'Закрыт'
   };
   const display=(key:string,value:unknown)=>{
+    if(key==='positionsJson')return normalizeEconomicPositions(value)==='[]'?'нет':(JSON.parse(normalizeEconomicPositions(value)) as unknown[]).length+' поз.';
     if(value===null)return 'не указано';
     if(typeof value==='boolean')return value?'да':'нет';
     // The user-facing financial chip must never display EXPENSE / INCOME enums.
@@ -419,14 +449,14 @@ export async function undoEconomicProposal(owner:string,id:string){
       const before=row.before as Record<string,unknown>;
       const revertFields:Record<EconomicEntity,string[]>={
         account:['name','balanceMinor','accountType','creditLimitMinor'],
-        operation:['kind','amountMinor','sourceAccountId','targetAccountId','category','title','note','occurredAt'],
+        operation:['kind','amountMinor','sourceAccountId','targetAccountId','category','title','note','occurredAt','positionsJson','calculation'],
         debt:['direction','counterparty','amountMinor','paidMinor','note','dueAt','postedToAccount','accountId'],
         loan:['name','lender','principalMinor','paidMinor','annualRateBps','termMonths',
           'startDate','monthlyPaymentOverrideMinor','paymentDate','remindersEnabled','isClosed'],
         category:['name']
       };
       await mutate(tx,owner,{entity:action.entity,action:'update',targetId:entityId,
-        payload:without(before,revertFields[action.entity]) as EconomicAction['payload']},current);
+        payload:{...(action.entity==='operation'?{positionsJson:'[]',calculation:null}:{}),...without(before,revertFields[action.entity])} as EconomicAction['payload']},current);
     }
     const updated=await tx.economicAiProposal.update({
       where:{id},data:{status:'UNDONE',undoneAt:new Date(),error:null}

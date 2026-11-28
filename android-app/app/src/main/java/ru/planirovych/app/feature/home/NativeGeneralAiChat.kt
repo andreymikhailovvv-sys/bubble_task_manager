@@ -51,6 +51,8 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
+import androidx.compose.animation.core.animateFloatAsState
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -81,6 +83,30 @@ internal fun NativeGeneralAiChatPage(
     onOpenTaskAi:(String)->Unit={}
 ){
     val state by vm.generalAi.collectAsStateWithLifecycle()
+    val wardrobe by vm.mascotWardrobe.collectAsStateWithLifecycle()
+    var financeVariant by remember(userId){mutableStateOf(false)}
+    var financeMode by remember(userId){mutableStateOf("idle")}
+    var mascotLeaving by remember(userId){mutableStateOf(false)}
+    val financeSkin=wardrobe?.takeIf{it.userId==userId}?.selected?.get("economic") ?: "classic"
+    val plannerSkin=wardrobe?.plannerSkin(userId) ?: "classic"
+    val currentFinanceSkin by rememberUpdatedState(financeSkin)
+    val currentPlannerSkin by rememberUpdatedState(plannerSkin)
+    val mascotOpacity by animateFloatAsState(if(mascotLeaving)0f else 1f,tween(180),label="finance mascot swap")
+    LaunchedEffect(userId,chatVisible){
+        if(!chatVisible)return@LaunchedEffect
+        try{
+            vm.financialGesture.collect{gesture->
+                mascotLeaving=true;delay(180)
+                financeVariant=true;financeMode="idle";mascotLeaving=false
+                delay(if(currentFinanceSkin in setOf("king","banker"))1600 else 560)
+                financeMode=gesture;delay(4200)
+                mascotLeaving=true;delay(180)
+                financeMode="idle";financeVariant=false;mascotLeaving=false
+                delay(if(currentPlannerSkin=="pirate")1600 else 560)
+            }
+        }finally{financeVariant=false;financeMode="idle";mascotLeaving=false}
+    }
+    LaunchedEffect(userId,chatVisible){if(chatVisible)vm.refreshMascotWardrobe(userId)}
     val c=remember(dark){chatColors(dark)}
     val context=LocalContext.current
     val planikLauncher = rememberLauncherForActivityResult(
@@ -175,6 +201,13 @@ internal fun NativeGeneralAiChatPage(
             handledQuickLaunch=quickAiRequestId
             onQuickAiHandled(quickAiRequestId)
             speechInput()
+        }else if(quickAiMode=="assistant_chat"){
+            menuOpen=false;modelMenu=false;chatMenu=false
+            projectForm=false;projectEdit=null;renameTarget=null
+            deleteProject=null;deleteThread=null;attachError=null
+            headerCollapsed=false;reply=null
+            keyboard?.hide()
+            handledQuickLaunch=quickAiRequestId
         }else if(quickAiMode=="text"){
             handledQuickLaunch=quickAiRequestId
             onQuickAiHandled(quickAiRequestId)
@@ -200,11 +233,14 @@ internal fun NativeGeneralAiChatPage(
     var previousAssistant by remember(thread?.id){
         mutableStateOf<Pair<String?,String>?>(null)
     }
-    LaunchedEffect(thread?.id,messages.size,state.pendingMessage,state.busy,latestAssistant){
+    LaunchedEffect(thread?.id,messages.size,state.pendingMessage,state.busy,latestAssistant,chatVisible){
         val count=messages.size+(if(state.pendingMessage!=null)1 else 0)+
             (if(state.busy)1 else 0)+(if(state.busy&&state.streamText.isNotEmpty())1 else 0)
         val receivedAssistant=latestAssistant!=null && latestAssistant!=previousAssistant
-        if(!historyPositioned){
+        if(chatVisible && state.busy && thread?.id==QUICK_AI_THREAD_ID && count>0){
+            listState.scrollToItem(count-1)
+            historyPositioned=true
+        }else if(!historyPositioned){
             if(count>0)listState.scrollToItem(count-1)
             historyPositioned=true
         }else if(count>0 && receivedAssistant){
@@ -526,15 +562,12 @@ internal fun NativeGeneralAiChatPage(
                     PlanikNativeLauncher(
                         enabled = !isBusy,
                         dark = dark,
-                        mode = when {
-                            state.busy && (state.progressStatus.orEmpty().startsWith("searching_") ||
-                                state.progressStatus in listOf("listing_tasks", "reading_task", "reading_note", "reading_file", "analyzing_web_results")) -> "searching"
-                            state.busy && state.streamText.isNotBlank() -> "typing"
-                            state.busy -> "thinking"
-                            else -> "idle"
-                        },
-                        modifier = Modifier.align(Alignment.BottomEnd)
-                            .padding(end = 13.dp, bottom = composerHeight + 1.dp),
+                        skinId = if(financeVariant)financeSkin else plannerSkin,
+                        variant = if(financeVariant)"economic" else "planner",
+                        sharedArtwork = true,
+                        mode = if(financeVariant)financeMode else nativeChatMascotMode(state.busy,state.streamText.isNotBlank(),state.progressStatus),
+                        modifier = Modifier.align(Alignment.BottomEnd).alpha(mascotOpacity)
+                            .padding(end = 0.dp, bottom = (composerHeight - 29.dp).coerceAtLeast(0.dp)),
                         onClick = {
                             planikLauncher.launch(PlanikLiveActivity.intent(
                                 context, projectId = project?.id, chatId = thread.id,

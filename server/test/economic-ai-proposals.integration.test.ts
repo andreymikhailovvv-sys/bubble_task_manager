@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import { prisma } from '../src/db/prisma.js';
+import { operationRecurrenceData, dispatchEconomicOperationRepeats } from '../src/services/economic-operation-recurrence.service.js';
 import { canonicalEconomicAction } from '../src/services/economic-ai-action-validation.service.js';
 import { economicAccountMovementMinor } from '../src/services/economic-account-balance.service.js';
 import { applyEconomicProposal, editEconomicProposal, undoEconomicProposal, rejectEconomicProposal, prepareEconomicProposals } from '../src/services/economic-ai-proposals.service.js';
@@ -82,6 +83,25 @@ test('Economic AI applies and reverses real PostgreSQL ledger changes without cr
     });
     assert.equal(pendingRecord.amountMinor,7800n);
     assert.equal(pendingRecord.category,'Продукты');
+    const customName='Гольф '+suffix.slice(0,8);
+    const custom=await propose(a.id,action('operation','create',{
+      kind:'EXPENSE',title:'Тренировка',amountMinor:'1000',sourceAccountId:account.id,category:customName
+    }));
+    assert.equal(await prisma.economicCategory.count({where:{userId:a.id,name:customName}}),0);
+    const customApplied=await applyEconomicProposal(a.id,custom.id);
+    const customRow=await prisma.economicOperation.findUniqueOrThrow({where:{id:customApplied.appliedEntityId!}});
+    assert.equal(customRow.category,customName);
+    assert.equal(await prisma.economicCategory.count({where:{userId:a.id,kind:'EXPENSE',name:customName}}),1);
+    assert.equal(await prisma.economicCategory.count({where:{userId:b.id,name:customName}}),0);
+    const repeat=await propose(a.id,action('operation','create',{
+      kind:'EXPENSE',title:'Тренировка 2',amountMinor:'1000',sourceAccountId:account.id,category:customName.toUpperCase()
+    }));
+    const repeatApplied=await applyEconomicProposal(a.id,repeat.id);
+    assert.equal((await prisma.economicOperation.findUniqueOrThrow({where:{id:repeatApplied.appliedEntityId!}})).category,customName);
+    assert.equal(await prisma.economicCategory.count({where:{userId:a.id,kind:'EXPENSE',name:customName}}),1);
+    await undoEconomicProposal(a.id,repeat.id);
+    await undoEconomicProposal(a.id,custom.id);
+    await prisma.economicCategory.deleteMany({where:{userId:a.id,kind:'EXPENSE',name:customName}});
     await undoEconomicProposal(a.id,pending.id);
 
     // 2. Linked debt cashflow creates FUNDING and SETTLEMENT, then reverts both.
@@ -203,6 +223,39 @@ test('Economic AI applies and reverses real PostgreSQL ledger changes without cr
     assert.equal((await prisma.user.findUniqueOrThrow({where:{id:a.id}})).economicAiAutoApply,false);
     await prisma.user.update({where:{id:a.id},data:{economicAiAutoApply:true}});
     assert.equal((await prisma.user.findUniqueOrThrow({where:{id:a.id}})).economicAiAutoApply,true);
+
+    // Repeat a real operation in the owner's local time; even with auto-apply
+    // enabled the worker creates a pending chip, not a ledger mutation.
+    const rule = {rrule:'FREQ=DAILY',timezone:'Europe/Moscow',slots:[{time:'09:00'}]};
+    const start = new Date('2026-11-27T05:59:00Z');
+    const slot = new Date('2026-11-27T06:00:00Z');
+    const schedule = operationRecurrenceData(rule,start);
+    assert.equal(schedule.nextRepeatAt?.toISOString(),slot.toISOString());
+    const template = await prisma.economicOperation.create({data:{
+      userId:a.id,kind:'EXPENSE',title:'Подписка повтор',amountMinor:5000n,sourceAccountId:account.id,
+      ...schedule
+    }});
+    const beforeCount = await prisma.economicOperation.count({where:{userId:a.id,title:template.title}});
+    assert.equal(await dispatchEconomicOperationRepeats(start),0);
+    await Promise.all([dispatchEconomicOperationRepeats(slot),dispatchEconomicOperationRepeats(slot)]);
+    assert.equal(await dispatchEconomicOperationRepeats(slot),0);
+    const repeats = await prisma.economicAiProposal.findMany({where:{userId:a.id,message:{content:'Повтор операции «'+template.title+'»'}}});
+    assert.equal(repeats.length,1);
+    assert.equal(repeats[0].status,'PENDING');
+    assert.equal(repeats[0].autoApplied,false);
+    assert.equal(await prisma.economicOperation.count({where:{userId:a.id,title:template.title}}),beforeCount);
+    const general = await prisma.generalAiMessage.findFirstOrThrow({where:{userId:a.id,content:'Повтор операции «'+template.title+'»'}});
+    assert.deepEqual(general.economicProposalIds,[repeats[0].id]);
+    assert.equal(await prisma.systemNotification.count({where:{userId:a.id,eventKey:'economic-repeat:'+template.id+':'+slot.toISOString()}}),1);
+    await assert.rejects(()=>applyEconomicProposal(b.id,repeats[0].id),/не найден/);
+    const appliedRepeat = await applyEconomicProposal(a.id,repeats[0].id);
+    assert.equal(appliedRepeat.status,'APPLIED');
+    assert.equal(await prisma.economicOperation.count({where:{userId:a.id,title:template.title}}),beforeCount+1);
+    const copy = await prisma.economicOperation.findUniqueOrThrow({where:{id:appliedRepeat.appliedEntityId!}});
+    assert.equal(copy.recurrenceJson,null);
+    assert.equal(copy.nextRepeatAt,null);
+    await prisma.economicOperation.update({where:{id:template.id},data:operationRecurrenceData(null)});
+    assert.equal(await dispatchEconomicOperationRepeats(new Date('2026-11-28T06:00:00Z')),0);
   }finally{
     await prisma.user.deleteMany({where:{id:{in:[a.id,b.id]}}});
     await prisma.$disconnect();

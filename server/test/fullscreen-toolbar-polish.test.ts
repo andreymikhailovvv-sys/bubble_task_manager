@@ -9,7 +9,7 @@ test('fullscreen toolbar retains text labels, settings and account management', 
   const header = app.slice(start,app.indexOf('</header>',start));
   for (const part of ['/icon.png','Планировыч AI','<TelegramIntegrationsMenu','О сервисе','onClick={openProfileModal}',
     'className="auth-login-button"','className="auth-register-button"','className="auth-logout-button"',
-    'data-tour="fullscreen-workspace-settings"','data-tour="bubbles-fullscreen-exit"']) assert.ok(header.includes(part),part);
+    'data-tour="fullscreen-workspace-settings"','<FullscreenBlockMenu']) assert.ok(header.includes(part),part);
   assert.match(css, /@media \(min-width: 1200px\)/);
   assert.match(css, /\.fullscreen-workspace-toolbar--one-row \.auth-logout-button::before \{\s*content: none;/);
   assert.match(css, /\.fullscreen-mode-picker \.fullscreen-mode-picker-option \{[^}]*gap: 8px;[^}]*padding: 8px 12px;/);
@@ -31,9 +31,9 @@ test('single list and timeline remain unframed, and Planik moves with real chat'
   ]);
   assert.match(controls, /fullscreen-workspace-single--open/);
   assert.match(css, /\.fullscreen-workspace-single--open \.fullscreen-mode-surface-content > :is\(\.list-mode-canvas, \.timeline-canvas\)/);
-  assert.match(app, /!hasGeneralAiPane \? <QuickAiLauncherFrame/);
+  assert.match(app, /<QuickAiLauncherFrame\s+managedMascot/);
   assert.match(app, /inlineTarget=\{hasGeneralAiPane \? fullscreenChatTarget : null\}/);
-  assert.match(chat, /showPlanik \? <div className="planik-composer-float"/);
+  assert.match(chat, /showPlanik \? <div className="planik-composer-float(?:\s+[^"]+)?"[^>]*>/);
   assert.match(css, /\.ai-chat-expanded-backdrop\.ai-chat-expanded-embedded/);
 });
 

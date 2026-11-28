@@ -29,6 +29,12 @@ export function buildManualRecurrence(period: RecurrencePeriod, slots: Recurrenc
   const unit = period === 'DAILY' ? 'день' : period === 'WEEKLY' ? 'неделю' : 'месяц';
   return { schedule, summary: checked.length + ' раз в ' + unit };
 }
+/** New financial schedules use the selected operation day, not the device's current day. */
+export function defaultEconomicRecurrence(date: string, timezone: string): RecurrenceRule {
+  const day = Number(/^\d{4}-\d{2}-(\d{2})$/.exec(date)?.[1]);
+  return buildManualRecurrence('MONTHLY', [{ time: '09:00', monthDay: Number.isInteger(day) && day >= 1 && day <= 31 ? day : 1 }], timezone).schedule;
+}
+
 export function loadManualRecurrence(value: unknown): { period: RecurrencePeriod; slots: RecurrenceSlot[] } | null {
   if (!value || typeof value !== 'object') return null;
   const rule = value as Partial<RecurrenceRule>;

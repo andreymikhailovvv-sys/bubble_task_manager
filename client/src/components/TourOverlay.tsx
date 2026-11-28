@@ -47,8 +47,8 @@ export const PRIMARY_WORKSPACE_TOUR_STEPS: WorkspaceTourConfig[] = [
     text: 'ИИ-кредиты находятся в верхней панели. Нажмите на них, чтобы узнать расход и доступные тарифы.' },
   { id: 'workspace-settings', selector: '[data-tour="settings-panel"]',
     text: 'В настройках можно сменить тему, часовой пояс, уведомления и параметры ИИ-чекапа.' },
-  { id: 'workspace-side-rail', selector: '.fullscreen-workspace-single-rail--right .fullscreen-add-window-trigger',
-    text: 'Круглый плюс на краю добавляет второе окно. Слева есть такой же. Когда окон два, плюсы возле разделителя заменяют конкретную сторону, а бегунок регулирует пропорции.' },
+  { id: 'workspace-side-rail', selector: '[data-tour="bubbles-fullscreen-create-task"]',
+    text: 'Откройте «Добавить» → «Добавить блок». Нажмите или перетащите блок в подсвеченную область. Бегунок между двумя окнами регулирует их пропорции.' },
   { id: 'workspace-notes', selector: '.standalone-notes-inline-mount',
     text: '«Заметки» можно добавить как отдельную рабочую область. Выбранная заметка открывается внутри неё, не перекрывая весь экран.' }
 ];

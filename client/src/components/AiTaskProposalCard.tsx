@@ -3,6 +3,7 @@ import { AlertTriangle, Check, CheckCircle2, ChevronDown, ChevronUp, ClipboardCh
 import { api } from '../lib/api';
 import type { AiTaskProposal } from '../lib/types';
 import './AiTaskProposalCard.css';
+import { WorkAiMessageBody } from './WorkAiMessageBody';
 import { TaskChipFields, type TaskChipValues } from './TaskChipFields';
 
 const STATUS: Record<AiTaskProposal['status'], string> = {
@@ -24,7 +25,7 @@ const LABELS: Record<string, string> = {
   set_priority: 'Приоритет', update_task: 'Изменение', update_subtask: 'Изменение',
   change_sphere: 'Сектор', change_task_sphere: 'Сектор', clear_due_date: 'Удаление срока',
   reopen: 'Возобновление', reopen_subtask: 'Возобновление', set_notification: 'Уведомления',
-  create_note: 'Создание заметки', update_note: 'Изменение заметки', create_habit: 'Новая привычка'
+  create_note: 'Создание заметки', update_note: 'Изменение заметки', create_habit: 'Новая привычка', complete_habit: 'Выполнение привычки', update_habit: 'Изменение срока привычки'
 };
 
 type ProposalItem = AiTaskProposal['operations'][number];
@@ -113,7 +114,7 @@ export function AiTaskProposalCard({ proposal: initial, onApplied }: {
     if (initial.status === 'APPLIED') {
       if (initial.operations.some(item => ['update_note', 'create_note'].includes(item.type)))
         window.dispatchEvent(new Event('standalone-notes-updated'));
-      if (initial.operations.some(item => item.type === 'create_habit'))
+      if (initial.operations.some(item => ['create_habit','complete_habit','update_habit'].includes(item.type)))
         window.dispatchEvent(new Event(proposalAppliedEvent));
     }
   }, [initial.id]);
@@ -299,15 +300,15 @@ export function AiTaskProposalCard({ proposal: initial, onApplied }: {
                   ['PENDING','APPLIED'].includes(proposal.status)
                     ? (taskDrafts[index]?.title??item.editable.title??item.title) : item.title}</span>
                 {item.parentTitle ? <span className="ai-task-proposal__muted block text-xs">В задаче «{item.parentTitle}»</span> : null}
-                {humanDescription(item) ?
-                  <div className="ai-task-proposal__muted mt-1 break-words text-xs">{humanDescription(item)}</div> : null}
+                {(item.editable?.description || humanDescription(item) || item.details?.length) ? (
+                  <div className="ai-task-proposal__muted ai-proposal-description mt-1 text-xs" tabIndex={0}>
+                    <WorkAiMessageBody content={item.editable?.description || [humanDescription(item),...(item.details ?? [])].filter(Boolean).join('\n')}/>
+                  </div>
+                ) : null}
                 {item.editable && ['PENDING','APPLIED'].includes(proposal.status) ?
                   <div className="ai-task-proposal__muted mt-1 space-y-0.5 break-words text-xs">
-                    {item.editable.description ? <div>Описание: {item.editable.description}</div> : null}
                     {item.editable.dueDate ? <div>Срок: {formatHumanDate(item.editable.dueDate)}</div> : null}
                     {item.editable.sphereId ? <div>Сектор: {spheres.find(s=>s.id===item.editable?.sphereId)?.name??'Выбран'}</div> : null}
-                  </div> : item.details?.length ? <div className="ai-task-proposal__muted mt-1 space-y-0.5 break-words text-xs">
-                    {item.details.map((detail,j)=><div key={j}>{detail}</div>)}
                   </div> : null}
               </div>
             </div>
@@ -348,11 +349,13 @@ export function AiTaskProposalCard({ proposal: initial, onApplied }: {
               Изменить
             </button>
           ) : null}
-          <button type="button" disabled={busy} onClick={() => void undo()}
-            className="ai-task-proposal__secondary flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-xl border px-2 py-2.5 font-semibold disabled:opacity-50">
-            {busy ? <Loader2 size={15} className="animate-spin" /> : <RotateCcw size={15} />}
-            Отменить
-          </button>
+          {proposal.operations.some(item => ['complete_habit','update_habit'].includes(item.type)) ?
+            <p className="ai-task-proposal__muted text-xs">Отметки и срок можно изменить в редакторе привычки.</p> :
+            <button type="button" disabled={busy} onClick={() => void undo()}
+              className="ai-task-proposal__secondary flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-xl border px-2 py-2.5 font-semibold disabled:opacity-50">
+              {busy ? <Loader2 size={15} className="animate-spin" /> : <RotateCcw size={15} />}
+              Отменить
+            </button>}
         </div>
       ) : null}
       {!telegram && !checkup && proposal.status !== 'PENDING' ? (

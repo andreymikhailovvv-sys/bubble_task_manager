@@ -457,7 +457,6 @@ private fun TimelineDay(day:LocalDate,tasks:List<Task>,allTasks:List<Task>,
                             }.padding(vertical=9.dp),
                             verticalAlignment=Alignment.CenterVertically,
                             horizontalArrangement=Arrangement.spacedBy(8.dp)){
-                            Box(Modifier.size(7.dp).background(Color(0xFF8B5CF6),CircleShape))
                             Text("Сейчас · "+shortTime(now),
                                 color=if(dark)Color(0xFFC4B5FD) else Color(0xFF7C3AED),
                                 fontSize=11.sp,fontWeight=FontWeight.Bold)

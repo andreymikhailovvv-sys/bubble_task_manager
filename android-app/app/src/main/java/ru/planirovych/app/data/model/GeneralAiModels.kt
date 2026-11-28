@@ -88,6 +88,9 @@ fun generalAiMessage(item:JsonObject):TaskAiChatMessage{
         generatedDocument=item["generatedDocument"] as? JsonObject,
         telegramSendDraft=item["telegramSendDraft"] as? JsonObject,
         telegramReadDraft=item["telegramReadDraft"] as? JsonObject,
-        mailSendDraft=item["mailSendDraft"] as? JsonObject
+        mailSendDraft=item["mailSendDraft"] as? JsonObject,
+        assistantSettingsProposalId=(item["assistantSettingsProposalId"] as? JsonPrimitive)?.contentOrNull,
+        telegramSuggestedReply=item["telegramSuggestedReply"] as? JsonObject,
+        mailSuggestedReply=item["mailSuggestedReply"] as? JsonObject
     )
 }

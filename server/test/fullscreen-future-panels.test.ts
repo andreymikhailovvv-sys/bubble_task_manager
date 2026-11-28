@@ -15,20 +15,19 @@ test('workspace panels can replace the left or right slot and bind a task ID',as
   assert.match(types,/panels\.push\(next\)/);
   assert.match(app,/const chooseFullscreenPanel = \(index: 0 \| 1, next: FullscreenWorkspacePanel\)/);
   assert.match(app,/setFullscreenPanelSlots\(nextSlots\)/);
-  assert.match(controls,/onChoose\(0, next\)/);
-  assert.match(controls,/onChoose\(1, next\)/);
+  assert.match(controls,/onChoose\(0, placement\)/);
+  assert.match(controls,/onChoose\(1, placement\)/);
 });
 
-test('solo rail and both split side pluses open a searchable task picker',async()=>{
+test('top add menu opens a searchable draggable task picker',async()=>{
   const [app,controls]=await Promise.all([
     load('../../client/src/App.tsx'),load('../../client/src/components/FullscreenWorkspaceLayout.tsx')]);
   assert.match(controls,/export function FullscreenWorkspaceSingle/);
   assert.match(controls,/fullscreen-workspace-single-rail/);
-  assert.match(controls,/<FullscreenAddWindowMenu side="left"/);
-  assert.match(controls,/<FullscreenAddWindowMenu side="right"/);
-  assert.match(controls,/createPortal\(/);
   assert.match(controls,/placeholder="Поиск по задачам"/);
-  assert.match(controls,/choose\(\{ kind: 'task-ai', taskId: task\.id \}\)/);
+  assert.match(controls,/option\(\{ kind: 'task-ai', taskId: task\.id \}/);
+  assert.match(controls,/draggable/);
+  assert.match(app,/<FullscreenBlockMenu/);
   assert.match(app,/<FullscreenWorkspaceSingle panel=\{fullscreenPanels\[0\]\}/);
   const start=app.indexOf('data-tour="bubbles-fullscreen-toolbar"');
   assert.doesNotMatch(app.slice(start,app.indexOf('</header>',start)),/FullscreenAddWindowMenu/);
@@ -84,8 +83,8 @@ test('solo has symmetric add rails, and closing one of two panes keeps only the 
   ]);
   assert.ok(controls.includes('fullscreen-workspace-single-rail--left'));
   assert.ok(controls.includes('fullscreen-workspace-single-rail--right'));
-  assert.ok(controls.includes("onChoose('left', next)"));
-  assert.ok(controls.includes("onChoose('right', next)"));
+  assert.ok(controls.includes("onChoose('left', placement)"));
+  assert.ok(controls.includes("onChoose('right', placement)"));
   assert.ok(app.includes("side === 'left' ? [next, fullscreenPanels[0]] : [fullscreenPanels[0], next]"));
   assert.ok(app.includes("const remaining = fullscreenPanels.filter((_, position) => position !== index)"));
   assert.ok(app.includes("remaining.length"));
@@ -95,7 +94,7 @@ test('solo has symmetric add rails, and closing one of two panes keeps only the 
   assert.ok(css.includes('width: 34px'));
 });
 
-test('modal overlay hides the entire outer divider; circular pluses keep independent hitboxes',async()=>{
+test('modal overlay hides the entire outer divider and block placement targets',async()=>{
   const [app, layout, css] = await Promise.all([
     load('../../client/src/App.tsx'), load('../../client/src/components/FullscreenWorkspaceLayout.tsx'),
     load('../../client/src/styles.css')
@@ -103,9 +102,8 @@ test('modal overlay hides the entire outer divider; circular pluses keep indepen
   assert.ok(css.includes('.bubble-fullscreen-shell.fullscreen-overlay-active .fullscreen-workspace-divider,'));
   assert.ok(css.includes('.bubble-fullscreen-shell.fullscreen-overlay-active .fullscreen-focus-inner-divider'));
   assert.ok(css.includes('visibility: hidden !important;'));
-  assert.ok(css.includes('.fullscreen-workspace-divider > .fullscreen-add-window:first-child { left: -27px; }'));
   assert.ok(css.includes('border-radius: 50% !important;'));
-  assert.ok(layout.includes("closest('.fullscreen-add-window')"));
+  assert.ok(css.includes('.fullscreen-overlay-active .workspace-block-target'));
   assert.ok(app.includes("focusedPane.taskId === focusedTask.id"));
 });
 
@@ -136,10 +134,9 @@ test('all training tours use visible UI and restore the original pane layout',as
   ]);
   assert.ok(tours.includes('export const PRIMARY_WORKSPACE_TOUR_STEPS'));
   assert.ok(tours.includes("selector: '.fullscreen-mode-picker'"));
-  assert.ok(tours.includes("selector: '.fullscreen-workspace-single-rail--right .fullscreen-add-window-trigger'"));
+  assert.ok(tours.includes('selector: \'[data-tour="bubbles-fullscreen-create-task"]\''));
   assert.ok(tours.includes("selector: '.standalone-notes-inline-mount'"));
   assert.ok(app.includes("tourWorkspaceUsesPrimary ? PRIMARY_WORKSPACE_TOUR_STEPS : WORKSPACE_TOUR_STEPS"));
-  assert.ok(app.includes('setIsBubbleFullscreen(false);'));
   assert.ok(app.includes('setIsBubbleFullscreen(restore.isBubbleFullscreen);'));
   assert.ok(app.includes('setFullscreenPanelSlots(restore.fullscreenPanelSlots);'));
   assert.ok(app.includes('setFullscreenSplitRatio(restore.fullscreenSplitRatio);'));
@@ -164,4 +161,12 @@ test('embedded Focus subtask modal stays centered and smaller than its host pane
   assert.ok(css.includes('margin: auto'));
   assert.ok(app.includes('editorState.task?.parentTaskId === focusedTask?.id ? fullscreenFocusTarget : null'));
   assert.ok(frame.includes('inlineTarget ? createPortal(surface, inlineTarget) : surface'));
+});
+
+test('display-mode close is available only in a split and collapses to the remaining pane', async () => {
+  const [app, css] = await Promise.all([load('../../client/src/App.tsx'),load('../../client/src/styles.css')]);
+  assert.match(app, /fullscreenPanels\.length === 2 && !workspaceOverlayActive && <button type="button" className="fullscreen-mode-window-close"/);
+  assert.match(app, /const nextSlots: FullscreenWorkspacePanel\[\] = remaining\.length\s*\? remaining/);
+  assert.match(css, /\.notes-editor-backdrop\.notes-editor-inline\{display:block!important;position:absolute!important;inset:0!important/);
+  assert.match(css, /\.notes-editor-inline \.notes-editor-panel\{position:absolute!important;inset:0!important;width:auto!important;height:auto!important/);
 });

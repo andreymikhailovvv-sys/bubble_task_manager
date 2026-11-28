@@ -1,8 +1,10 @@
+import { effectiveAssistantDailyLimit } from './assistant-daily-limit.service.js';
+import { requireSubscriptionFeature, SubscriptionAccessError } from './subscription-access.service.js';
 import { normalizeSelectableAiChatModel } from '../lib/ai-chat-model.js';
 import { randomUUID } from 'node:crypto';
 import { Prisma, type TelegramAiChatPolicy, type TelegramAiMonitorCall } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
-import { refundAiCreditReservation, reserveAiCreditsMilliWithTransaction, settleAiCreditReservation, type AiCreditReservation } from './ai-credit-wallet.service.js';
+import { refundAiCreditReservation, modelCreditWindowMode, reserveAiCreditsMilliWithTransaction, settleAiCreditReservation, type AiCreditReservation } from './ai-credit-wallet.service.js';
 import { recordAiCreditCharge } from './ai-usage-metering.service.js';
 import { telegramUserChatCapability } from './telegram-user-client-chat-access.service.js';
 import { telegramUserClientRead } from './telegram-user-client-read.service.js';
@@ -71,6 +73,7 @@ export function availableMonitorBudget(limitMilli: number | null, spentMilli: nu
 }
 
 async function permission(userId: string) {
+  await requireSubscriptionFeature(userId,'telegram');
   const access = await telegramUserChatCapability(userId);
   if (!access.connected || !access.readEnabled) {
     throw new TelegramUserClientError(403, 'Личный Telegram недоступен для мониторинга');
@@ -257,10 +260,10 @@ async function reserveForCall(claimed: Claimed, desired: number, dayKey: string)
   const { reservation } = await reserveAiCreditsMilliWithTransaction(policy.userId, desired, async (tx, walletReservation) => {
       const rows = await tx.$queryRaw<Array<{
         id: string; isEnabled: boolean; monitorRevision: number; leaseToken: string | null;
-        creditDayKey: string | null; dailySpentMilli: number; dailyReservedMilli: number; dailyCreditLimitMilli: number | null
+        creditDayKey: string | null; dailySpentMilli: number; dailyReservedMilli: number; dailyCreditLimitMilli: number | null; dailyCreditLimitPercent: number | null
       }>>(Prisma.sql`
         SELECT "id", "isEnabled", "monitorRevision", "leaseToken", "creditDayKey",
-               "dailySpentMilli", "dailyReservedMilli", "dailyCreditLimitMilli"
+               "dailySpentMilli", "dailyReservedMilli", "dailyCreditLimitMilli", "dailyCreditLimitPercent"
         FROM "TelegramAiChatPolicy" WHERE "id" = ${policy.id} FOR UPDATE
       `);
       const row = rows[0];
@@ -269,7 +272,9 @@ async function reserveForCall(claimed: Claimed, desired: number, dayKey: string)
       }
       const spent = row.creditDayKey === dayKey ? row.dailySpentMilli : 0;
       const reserved = row.creditDayKey === dayKey ? row.dailyReservedMilli : 0;
-      const remaining = availableMonitorBudget(row.dailyCreditLimitMilli, spent, reserved);
+      const owner = row.dailyCreditLimitPercent == null ? null : await tx.user.findUnique({where:{id:policy.userId},select:{subscriptionPlan:true,subscriptionExpiresAt:true}});
+       const limit = effectiveAssistantDailyLimit(row.dailyCreditLimitMilli,row.dailyCreditLimitPercent,owner);
+       const remaining = availableMonitorBudget(limit, spent, reserved);
       if (remaining !== null && desired > remaining) {
         throw new TelegramUserClientError(402, 'Дневной лимит кредитов для переписки достигнут');
       }
@@ -284,7 +289,7 @@ async function reserveForCall(claimed: Claimed, desired: number, dayKey: string)
         data: { id: callId, policyId: policy.id, userId: policy.userId,
           reservationId: walletReservation.id, creditDayKey: dayKey, reservedMilli: desired }
       });
-  });
+  }, undefined, modelCreditWindowMode(normalizeSelectableAiChatModel(policy.monitorModel) ?? 'gpt-6-luna'));
   return { reservation, callId };
 }
 
@@ -592,6 +597,7 @@ async function processClaim(claimed: Claimed) {
         const outcome = await sendConditionalTelegramAutoReply({
           userId: policy.userId, policyId: policy.id, chatId: policy.chatId,
           messageId: reply.messageId, text: reply.text,
+          sourceText: selected.find(message => message.id === reply.messageId)?.text,
           revision: policy.monitorRevision, leaseToken: claimed.token
         });
         if (outcome === 'RATE_LIMITED') {
@@ -621,7 +627,8 @@ async function processClaim(claimed: Claimed) {
       } else if (current.mode === 'SUGGEST') {
         await publishTelegramAiReplySuggestion({
           policy: current, leaseToken: claimed.token,
-          messageId: reply.messageId, text: reply.text
+          messageId: reply.messageId, text: reply.text,
+          sourceText: selected.find(message => message.id === reply.messageId)?.text
         });
       }
     }
@@ -671,6 +678,12 @@ class TelegramAiMonitorWorker {
         if (!claimed) break;
         try { await processClaim(claimed); await release(claimed); }
         catch (error) {
+          if (error instanceof SubscriptionAccessError) {
+            // Keep the user's monitoring configuration, but avoid a tight retry loop.
+            await release(claimed, error.message, 60 * 60_000);
+            console.info('[TelegramMonitor] subscription paused', { policyId: claimed.policy.id, code: error.code });
+            continue;
+          }
           if (error instanceof TelegramUserClientError && error.statusCode === 409 &&
               error.message === 'Предыдущий запрос Telegram ещё выполняется') {
             // An interactive Telegram read has priority. Retry without showing

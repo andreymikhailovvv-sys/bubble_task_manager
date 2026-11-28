@@ -55,7 +55,7 @@ private val economicTabs = listOf(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean,
-    onQuickVoice:()->Unit={},voiceAwaiting:Boolean=false) {
+    onQuickVoice:()->Unit={},voiceAwaiting:Boolean=false,notificationLoanId:String?=null,notificationRequestId:Int=0) {
     val colors = remember(dark) { ecoColors(dark) }
     val context = LocalContext.current
     val api = remember(context) { NetworkModule.api(context) }
@@ -64,9 +64,32 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
     var economicUser by remember(userId) { mutableStateOf<JsonObject?>(null) }
     var loading by remember(userId) { mutableStateOf(true) }
     var error by remember(userId) { mutableStateOf("") }
+    var adjustmentNotice by remember(userId){mutableStateOf("")}
+    var financeGesture by remember(userId){mutableStateOf("")}
+    var financeGestureKey by remember(userId){mutableIntStateOf(0)}
+    var economicSkin by remember(userId){mutableStateOf("classic")}
+    LaunchedEffect(userId,active){
+        if(active&&!userId.isNullOrBlank())runCatching{api.mascotWardrobe()}.onSuccess{wardrobe->
+            if(wardrobe.userId==userId){
+                val selected=wardrobe.selected["economic"] ?: "classic"
+                economicSkin=wardrobe.catalog.firstOrNull{it.variant=="economic"&&it.id==selected&&it.rank<=wardrobe.rank}?.id ?: "classic"
+            }
+        }
+    }
+    LaunchedEffect(financeGestureKey){if(financeGesture.isNotBlank()){kotlinx.coroutines.delay(5500);financeGesture=""}}
+    LaunchedEffect(adjustmentNotice){if(adjustmentNotice.isNotBlank()){kotlinx.coroutines.delay(5000);adjustmentNotice=""}}
     var revision by remember(userId) { mutableIntStateOf(0) }
     var section by remember(userId) { mutableStateOf("overview") }
     var editor by remember(userId) { mutableStateOf<EcoEditorRequest?>(null) }
+    var consumedLoanNotification by remember(userId){mutableIntStateOf(0)}
+    LaunchedEffect(active,snapshot,notificationLoanId,notificationRequestId){
+        val target=notificationLoanId ?: return@LaunchedEffect
+        if(!active || notificationRequestId==consumedLoanNotification)return@LaunchedEffect
+        val record=snapshot?.ecoItems("loans")?.firstOrNull{it.ecoText("id")==target}?:return@LaunchedEffect
+        consumedLoanNotification=notificationRequestId
+        section="debts"
+        editor=EcoEditorRequest("loans",record)
+    }
     var economicMenuOpen by remember { mutableStateOf(false) }
     val economicScrimAlpha by animateFloatAsState(
         targetValue=if(economicMenuOpen)if(dark).29f else .21f else 0f,
@@ -83,6 +106,8 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
     var kindFilter by remember { mutableStateOf("") }
     var accountFilter by remember { mutableStateOf("") }
     var categoryFilter by remember { mutableStateOf("") }
+    val filterCount=listOf(kindFilter,accountFilter,categoryFilter).count{it.isNotBlank()}
+    var operationTotals by remember(userId){mutableStateOf<JsonObject?>(null)}
     var operations by remember(userId) { mutableStateOf<List<JsonObject>>(emptyList()) }
     var nextCursor by remember(userId) { mutableStateOf("") }
     var operationsBusy by remember { mutableStateOf(false) }
@@ -106,15 +131,18 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
         } finally { loading = false }
     }
     LaunchedEffect(userId, active, revision, section, kindFilter, accountFilter, categoryFilter) {
-        if (!active || userId.isNullOrBlank() || section != "operations") return@LaunchedEffect
+        if (!active || userId.isNullOrBlank() || section !in listOf("operations","overview")) return@LaunchedEffect
         operationsBusy = true
+        // Keep the existing rows visible until the new filtered response arrives.
         try {
             val result = api.economicOperations(
                 kindFilter.ifBlank { null }, accountFilter.ifBlank { null },
                 categoryFilter.ifBlank { null })
+            operationTotals=result.ecoObject("totals")
             operations = result.ecoItems("operations")
             nextCursor = result.ecoText("nextCursor")
-        } catch (cause: Exception) { error = readableEconomicError(cause) }
+        } catch (cause: kotlinx.coroutines.CancellationException) { throw cause }
+        catch (cause: Exception) { error = readableEconomicError(cause) }
         finally { operationsBusy = false }
     }
     fun refresh() { revision++ }
@@ -134,16 +162,13 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
                 // would otherwise duplicate a financial record.
                 editor=null
                 error=""
-                // A changed account may remove an operation from the currently
-                // filtered list. Show all operations after updating.
-                if(resource=="operations"){
-                    kindFilter=""
-                    accountFilter=""
-                    categoryFilter=""
-                    runCatching{api.economicOperations(null,null,null)}.onSuccess{updated->
-                        operations=updated.ecoItems("operations")
-                        nextCursor=updated.ecoText("nextCursor")
-                    }.onFailure{error="Изменения сохранены, но список операций ещё не обновился."}
+                if(resource=="operations"&&record==null){
+                    financeGesture=when(payload.ecoText("kind")){"INCOME"->"income";"EXPENSE"->"expense";else->""}
+                    financeGestureKey++
+                }
+                result.ecoObject("adjustment")?.let{adjustment->
+                    val amount=adjustment.ecoText("amountMinor")
+                    if(amount.isNotBlank())adjustmentNotice="Добавлена корректирующая операция на сумму "+(if(!amount.startsWith("-"))"+" else "")+ecoRubles(amount)+" на счёт "+adjustment.ecoText("accountName")
                 }
                 runCatching{api.economicSnapshot()}.onSuccess{snapshot=it}
                     .onFailure{error="Изменения сохранены, но финансовый обзор пока не обновился."}
@@ -348,12 +373,24 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
                                 EcoPanelHeader("Последние операции",
                                     current.ecoObject("totals").ecoNumber("operationCount").toString()+" записей всего",
                                     "Все операции",colors,{section="operations"})
-                                val recent=current.ecoItems("recent")
-                                if(recent.isEmpty()) EcoEmpty("Пока нет операций. Начните с первой записи.",colors)
-                                recent.forEach { op ->
-                                    EcoOperationRow(op,current,colors,
-                                        onEdit={ record,resource -> if(resource=="missing-debt")section="debts" else editor=EcoEditorRequest(resource,record) },
-                                        onDelete={ remove("operations",op) })
+                                Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,
+                                    horizontalArrangement=Arrangement.spacedBy(10.dp)){
+                                    EcoOperationTotals(operationTotals,operationsBusy,colors,Modifier.weight(1f))
+                                    EcoOperationsFilterButton(filterCount,colors){filtersOpen=true}
+                                }
+                                val recent=operations.take(8)
+                                // The outer overview LazyColumn owns vertical scrolling.
+                                Column(Modifier.fillMaxWidth()){
+                                    if(recent.isEmpty()&&!operationsBusy) EcoEmpty("Нет операций по выбранным фильтрам",colors)
+                                    recent.forEach { op ->
+                                        EcoOperationRow(op,current,colors,
+                                            onEdit={ record,resource -> if(resource=="missing-debt")section="debts" else editor=EcoEditorRequest(resource,record) },
+                                            onDelete={ remove("operations",op) })
+                                    }
+                                }
+                                Spacer(Modifier.height(8.dp))
+                                Box(Modifier.fillMaxWidth(),contentAlignment=Alignment.Center){
+                                    EcoInlineAction("Показать все операции",colors){section="operations"}
                                 }
                             }
                         }
@@ -394,37 +431,40 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
                             EcoSectionActions("История доходов, расходов, переводов и долговых движений.",
                                 colors,emptyList())
                             EcoPanel(colors) {
+                                Text("Последние операции",fontSize=15.sp,fontWeight=FontWeight.SemiBold,color=colors.text)
                                 Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,
-                                    horizontalArrangement=Arrangement.SpaceBetween) {
-                                    Text("Последние операции",fontSize=15.sp,fontWeight=FontWeight.SemiBold,color=colors.text)
-                                    IconButton(onClick={filtersOpen=true}) {
-                                        Icon(Icons.Default.FilterList,"Фильтры операций",
-                                            tint=if(kindFilter.isNotBlank()||accountFilter.isNotBlank()||
-                                                categoryFilter.isNotBlank()) colors.gold else colors.goldSoft)
+                                    horizontalArrangement=Arrangement.spacedBy(10.dp)){
+                                    EcoOperationTotals(operationTotals,operationsBusy,colors,Modifier.weight(1f))
+                                    EcoOperationsFilterButton(filterCount,colors){filtersOpen=true}
+                                }
+                                Box(Modifier.fillMaxWidth().height(3.dp)) {
+                                    if (operationsBusy) LinearProgressIndicator(Modifier.fillMaxWidth(),color=colors.gold)
+                                }
+                                Column(Modifier.fillMaxWidth().height(520.dp)
+                                    .verticalScroll(rememberScrollState())){
+                                    if(operations.isEmpty()&&!operationsBusy)
+                                        EcoEmpty("Нет операций по выбранным фильтрам",colors)
+                                    operations.forEach { op ->
+                                        EcoOperationRow(op,current,colors,
+                                            onEdit={ record,resource -> if(resource=="missing-debt")section="debts" else editor=EcoEditorRequest(resource,record) },
+                                            onDelete={remove("operations",op)})
                                     }
-                                }
-                                if (operationsBusy) LinearProgressIndicator(Modifier.fillMaxWidth(),color=colors.gold)
-                                if(operations.isEmpty()&&!operationsBusy)
-                                    EcoEmpty("Нет операций по выбранным фильтрам",colors)
-                                operations.forEach { op ->
-                                    EcoOperationRow(op,current,colors,
-                                        onEdit={ record,resource -> if(resource=="missing-debt")section="debts" else editor=EcoEditorRequest(resource,record) },
-                                        onDelete={remove("operations",op)})
-                                }
-                                if(nextCursor.isNotBlank()) {
-                                    Spacer(Modifier.height(10.dp))
-                                    EcoInlineAction("Показать ещё 50 операций",colors) {
-                                        if(!operationsBusy) {
-                                            operationsBusy=true
-                                            scope.launch {
-                                                try {
-                                                    val result=api.economicOperations(
-                                                        kindFilter.ifBlank{null},accountFilter.ifBlank{null},
-                                                        categoryFilter.ifBlank{null},nextCursor)
-                                                    operations=operations+result.ecoItems("operations")
-                                                    nextCursor=result.ecoText("nextCursor")
-                                                } catch(cause:Exception){error=readableEconomicError(cause)}
-                                                finally { operationsBusy=false }
+                                    if(nextCursor.isNotBlank()) {
+                                        Spacer(Modifier.height(10.dp))
+                                        EcoInlineAction("Показать ещё 50 операций",colors) {
+                                            if(!operationsBusy) {
+                                                operationsBusy=true
+                                                scope.launch {
+                                                    try {
+                                                        val result=api.economicOperations(
+                                                            kindFilter.ifBlank{null},accountFilter.ifBlank{null},
+                                                            categoryFilter.ifBlank{null},nextCursor)
+                                                        operationTotals=result.ecoObject("totals")
+                                                        operations=(operations+result.ecoItems("operations")).distinctBy{it.ecoText("id")}
+                                                        nextCursor=result.ecoText("nextCursor")
+                                                    } catch(cause:Exception){error=readableEconomicError(cause)}
+                                                    finally { operationsBusy=false }
+                                                }
                                             }
                                         }
                                     }
@@ -559,6 +599,23 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
                 }
             }
         }
+        if(financeGesture.isNotBlank()){
+            key(financeGestureKey){
+                SharedMascotArtwork(economicSkin,dark,financeGesture,
+                    Modifier.align(Alignment.BottomEnd).padding(end=16.dp,bottom=100.dp).size(148.dp,138.dp),
+                    variant="economic")
+            }
+        }
+        if(adjustmentNotice.isNotBlank()){
+            Surface(Modifier.align(Alignment.TopCenter).padding(horizontal=12.dp,vertical=8.dp),
+                color=if(dark)Color(0xFF25352B) else Color(0xFFE7F6EB),shape=RoundedCornerShape(14.dp),shadowElevation=6.dp){
+                Row(Modifier.padding(horizontal=12.dp,vertical=10.dp),verticalAlignment=Alignment.CenterVertically){
+                    Icon(Icons.Default.Check,null,tint=colors.green)
+                    Text(adjustmentNotice,Modifier.weight(1f).padding(horizontal=8.dp),color=colors.text,fontSize=13.sp)
+                    IconButton(onClick={adjustmentNotice=""}){Icon(Icons.Default.Close,"Закрыть",tint=colors.muted)}
+                }
+            }
+        }
         if(filtersOpen && current!=null) {
             // Separate anchored sheet: filter controls do not alter the operations list height.
             ModalBottomSheet(
@@ -568,20 +625,25 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
                 containerColor=colors.panel,contentColor=colors.text,
                 dragHandle={BottomSheetDefaults.DragHandle(color=colors.muted)}
             ) {
-                Column(Modifier.fillMaxWidth().height(370.dp).navigationBarsPadding()
+                Column(Modifier.fillMaxWidth().height(425.dp).navigationBarsPadding()
                     .padding(horizontal=18.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
                     Text("Фильтры операций",color=colors.text,
                         fontWeight=FontWeight.Bold,fontSize=20.sp)
                     EcoSelect("Тип операции",kindFilter,
                         listOf("" to "Все типы","EXPENSE" to "Расходы","INCOME" to "Доходы",
                             "TRANSFER" to "Переводы","DEBTS" to "Долговые операции"),colors){kindFilter=it}
-                    EcoSelect("Счёт",accountFilter,
+                    EcoOperationChoices("Счёт",accountFilter,
                         listOf("" to "Все счета")+
                             current.ecoItems("accounts").map { it.ecoText("id") to it.ecoText("name") },
                         colors){accountFilter=it}
                     EcoSelect("Категория",categoryFilter,listOf("" to "Все категории")+
-                        (ecoCategories(current,"EXPENSE")+ecoCategories(current,"INCOME"))
+                        (ecoCategories(current,"EXPENSE")+ecoCategories(current,"INCOME")+listOf("Долги","Корректировка"))
                             .distinct().map { it to it },colors){categoryFilter=it}
+                    OutlinedButton(onClick={
+                        kindFilter="";accountFilter="";categoryFilter=""
+                    },enabled=filterCount>0,modifier=Modifier.fillMaxWidth()){
+                        Text("Сбросить фильтры",color=if(filterCount>0)colors.text else colors.muted)
+                    }
                     Button(onClick={filtersOpen=false},modifier=Modifier.fillMaxWidth(),
                         colors=ButtonDefaults.buttonColors(
                             containerColor=if(dark) colors.gold else colors.goldSoft)){
@@ -613,7 +675,12 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
             AlertDialog(
                 onDismissRequest={removing=null},
                 title={Text("Удалить запись?",color=colors.text)},
-                text={Text("Это действие нельзя отменить.",color=colors.muted)},
+                text={Text(when{
+                    selection.resource=="operations"&&selection.record.ecoText("debtPhase")=="FUNDING"->"Будет отменено получение или выдача денег и удалён связанный долг."
+                    selection.resource=="operations"&&selection.record.ecoText("debtPhase")=="SETTLEMENT"->"Погашение будет отменено, долг снова станет непогашенным."
+                    selection.resource=="operations"&&selection.record.ecoBool("isAdjustment")->"Корректировка остатка счёта будет отменена."
+                    else->"Это действие нельзя отменить."
+                },color=colors.muted)},
                 confirmButton={
                     TextButton(enabled=!busy,onClick={
                         if(busy)return@TextButton
@@ -848,7 +915,7 @@ private fun EcoOperationRow(op:JsonObject,snapshot:JsonObject,colors:EcoColors,
         }
         Text((if(credit)"+" else if(debit)"−" else "")+ecoRubles(op.ecoText("amountMinor")),
             fontSize=12.sp,color=amountColor,fontWeight=FontWeight.SemiBold,maxLines=1)
-        if(linked==null && op.ecoText("debtId").isBlank() && !op.ecoBool("isAdjustment")) {
+        run {
             IconButton(onClick=onDelete,modifier=Modifier.size(27.dp)) {
                 Icon(Icons.Default.Delete,"Удалить",Modifier.size(16.dp),tint=colors.muted)
             }
@@ -963,5 +1030,38 @@ private fun EcoLoanMetric(label:String,value:String,colors:EcoColors,modifier:Mo
         Text(label,fontSize=10.sp,color=colors.muted,lineHeight=13.sp)
         Text(value,fontSize=12.sp,color=colors.text,fontWeight=FontWeight.Medium,
             maxLines=2,overflow=TextOverflow.Ellipsis,lineHeight=15.sp)
+    }
+}
+
+@Composable
+private fun EcoOperationsFilterButton(count:Int,colors:EcoColors,onClick:()->Unit){
+    IconButton(onClick=onClick){
+        Box{
+            Icon(Icons.Default.FilterList,"Фильтры операций: "+count,tint=if(count>0)colors.gold else colors.goldSoft)
+            if(count>0)Box(Modifier.align(Alignment.TopEnd).offset(x=7.dp,y=(-5).dp).size(16.dp).background(colors.gold,CircleShape),contentAlignment=Alignment.Center){
+                Text(count.toString(),fontSize=9.sp,color=Color(0xFF281703),fontWeight=FontWeight.Bold)
+            }
+        }
+    }
+}
+@Composable
+private fun EcoOperationTotals(totals:JsonObject?,loading:Boolean,colors:EcoColors,
+    modifier:Modifier=Modifier.fillMaxWidth()){
+    if(totals==null){
+        Text(if(loading)"Загружаем итог…" else "Итог недоступен",
+            modifier=modifier.padding(vertical=8.dp),color=colors.muted,fontSize=11.sp)
+        return
+    }
+    Row(modifier.padding(vertical=8.dp),horizontalArrangement=Arrangement.spacedBy(7.dp),
+        verticalAlignment=Alignment.CenterVertically){
+        listOf("Получено" to "receivedMinor","Потрачено" to "spentMinor","Итого" to "netMinor").forEach{(label,key)->
+            val raw=totals.ecoText(key).ifBlank{"0"}
+            val sign=when(key){"receivedMinor"->"+";"spentMinor"->"−";else->if(raw.startsWith("-")||raw=="0")"" else "+"}
+            Column(Modifier.weight(1f)){
+                Text(label,color=colors.muted,fontSize=10.sp,maxLines=1,overflow=TextOverflow.Ellipsis)
+                Text(sign+ecoRubles(raw),color=colors.text,fontSize=12.sp,
+                    fontWeight=FontWeight.SemiBold,maxLines=1,overflow=TextOverflow.Ellipsis)
+            }
+        }
     }
 }

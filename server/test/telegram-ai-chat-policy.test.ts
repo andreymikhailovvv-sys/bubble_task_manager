@@ -1,3 +1,5 @@
+import { effectiveAssistantDailyLimit, validateAssistantDailyPercent } from '../src/services/assistant-daily-limit.service.js';
+import { buildAssistantChanges } from '../src/services/assistant-settings-proposal.service.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -198,7 +200,9 @@ test('wider Telegram settings put profile tags above one-column sliders and use 
   assert.ok(ui.indexOf('telegram-ai-profile-list') < ui.indexOf('aria-label="Настройки участия в переписке"'));
   assert.match(css, /telegram-ai-slider-setting__marks span/);
   assert.match(css, /telegram-ai-slider-setting__labels span/);
-  assert.match(css, /scrollbar-gutter: stable/);
+  assert.match(css, /scrollbar-gutter: auto/);
+  assert.match(css, /scrollbar-width: none/);
+  assert.match(css, /\.telegram-ai-settings-scroll::-webkit-scrollbar\s*\{\s*display: none/);
 });
 
 test('Telegram assistant live monitor status colors and closed settings work in both themes', () => {
@@ -244,4 +248,31 @@ test('Telegram assistant accordion headers show neutral 1–4 circles without co
   for (const state of ['active', 'paused']) {
     assert.match(css, new RegExp('\\.telegram-ai-monitor-status--' + state + ' \\{'));
   }
+});
+
+test('assistant subscription cap supports zero and follows the current tariff',()=>{
+  const now=new Date('2026-11-27T12:00:00Z'), owner={subscriptionPlan:'start',subscriptionExpiresAt:new Date('2026-12-01T00:00:00Z')};
+  assert.equal(effectiveAssistantDailyLimit(50000,0,owner,now),0);
+  assert.equal(effectiveAssistantDailyLimit(50000,50,owner,now),75000);
+  assert.equal(effectiveAssistantDailyLimit(50000,100,{...owner,subscriptionPlan:'pro'},now),300000);
+  assert.equal(effectiveAssistantDailyLimit(50000,null,owner,now),50000);
+  assert.equal(effectiveAssistantDailyLimit(50000,100,null,now),0);
+  for(const invalid of [-1,101,1.1,'20'])assert.throws(()=>validateAssistantDailyPercent(invalid));
+});
+test('assistant settings changes preserve untouched rules and do not accept a target or credentials',()=>{
+  const current={summaryInstructions:'Кратко',suggestWhen:'',suggestHow:'',autoReplyWhen:'',autoReplyHow:'',taskCreationWhen:'',replyMode:'OBSERVE'};
+  assert.deepEqual(buildAssistantChanges(current,{summaryInstructions:'Кратко. С датами.',replyMode:null,targetId:'other',passwordCipher:'secret'}),[{field:'summaryInstructions',before:'Кратко',after:'Кратко. С датами.'}]);
+  assert.deepEqual(buildAssistantChanges(current,{summaryInstructions:null}),[]);
+  assert.throws(()=>buildAssistantChanges(current,{replyMode:'INVALID'}));
+  assert.throws(()=>buildAssistantChanges(current,{summaryInstructions:'x'.repeat(2001)}));
+});
+
+test('subscription percent uses the shared styled slider with 101 values and five visible marks', () => {
+  const ui = readFileSync(new URL('../../client/src/components/TelegramAiAssistantSettings.tsx', import.meta.url), 'utf8');
+  const mail = readFileSync(new URL('../../client/src/components/MailAssistantSettings.tsx', import.meta.url), 'utf8');
+  assert.match(ui, /Array\.from\(\{length:101\}/);
+  assert.match(ui, /\['0%', '25%', '50%', '75%', '100%'\]/);
+  assert.match(ui, /<SettingSlider title="Доля дневного лимита"[\s\S]*?markEvery=\{25\} onChange=\{onChange\}/);
+  assert.match(ui, /max=\{options\.length - 1\} step=\{1\}/);
+  assert.match(mail, /<AssistantPercentSlider/);
 });

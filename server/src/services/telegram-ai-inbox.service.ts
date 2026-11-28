@@ -209,7 +209,7 @@ export async function publishTelegramAiSummary(input: {
 
 /** Publish an editable, owner-approved reply chip only to the matching managed AI thread. */
 export async function publishTelegramAiReplySuggestion(input: {
-  policy: TelegramAiChatPolicy; leaseToken: string; messageId: number; text: string;
+  policy: TelegramAiChatPolicy; leaseToken: string; messageId: number; text: string; sourceText?: string;
 }) {
   const { policy } = input;
   if (!Number.isSafeInteger(input.messageId) || input.messageId <= 0 || !input.text.trim()) return false;
@@ -226,7 +226,8 @@ export async function publishTelegramAiReplySuggestion(input: {
       create: {
         id: eventId, userId: policy.userId, policyId: policy.id, messageId: input.messageId,
         taskModeAtPublish: 'NONE', botStatus: 'SKIPPED',
-        content: '💬 Предлагаю ответить в Telegram · ' + clip(policy.chatTitle, 90),
+        content: '💬 Предлагаю ответить в Telegram · ' + clip(policy.chatTitle, 90) +
+          (input.sourceText?.trim() ? '\n\nВ ответ на сообщение:\n' + input.sourceText.trim().slice(0,4096) : ''),
         summary: { taskSuggestions: [] },
         model: policy.monitorModel,
         suggestedReplyMessageId: input.messageId, suggestedReplyText: input.text.trim().slice(0, 1000)

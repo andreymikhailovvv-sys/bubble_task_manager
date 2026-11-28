@@ -1,3 +1,4 @@
+import { announcePlanikSend } from './PlanikSendGesture';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import './TelegramMessageQuickShare.css';
@@ -15,9 +16,9 @@ const defaultNoteTitle = (text: string) => {
   const line = text.split(/\r?\n/).map((part) => part.trim()).find(Boolean) ?? '';
   return line ? `Из чата: ${line.slice(0, 140)}`.slice(0, 160) : 'Из чата с ИИ';
 };
-type Props = { text: string; compact?: boolean; initialNoteSphereId?: string | null };
+type Props = { hideCreditCost?: boolean; text: string; compact?: boolean; initialNoteSphereId?: string | null };
 
-export function TelegramMessageQuickShare({ text, initialNoteSphereId = null }: Props) {
+export function TelegramMessageQuickShare({ text, initialNoteSphereId = null, hideCreditCost = false }: Props) {
   const [open, setOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -108,13 +109,14 @@ export function TelegramMessageQuickShare({ text, initialNoteSphereId = null }: 
         const next = await api.telegramQuickSendStatus(job.id);
         if (!active || !alive.current) return;
         setJob(next);
-        const creditSuffix = next.rewriteCreditsSpentMilli > 0
+        const creditSuffix = !hideCreditCost && next.rewriteCreditsSpentMilli > 0
           ? ` Списано ${formatShareCredits(next.rewriteCreditsSpentMilli)} ИИ-кредитов за изменение текста.`
           : '';
         if (next.state === 'QUEUED' && next.stage === 'SEND' && next.rewriteCreditsSpentMilli > 0) {
           setToast(`Telegram: текст изменён через ИИ, отправка в очереди.${creditSuffix}`);
         }
         if (next.state === 'DONE') {
+          if(next.sentCount > 0) announcePlanikSend('telegram-send',next.id);
           setToast((next.unknownCount
             ? `Telegram: отправлено ${next.sentCount}; результат неизвестен для ${next.unknownCount}. Проверьте вручную.`
             : next.failedCount
@@ -234,7 +236,7 @@ export function TelegramMessageQuickShare({ text, initialNoteSphereId = null }: 
       await api.createStandaloneNote({ title: noteTitle.trim() || 'Из чата с ИИ', content, groupId: noteGroupId || null });
       if (!alive.current) return;
       window.dispatchEvent(new Event('standalone-notes-updated'));
-      setToast(`Сообщение сохранено в заметках.${rewriteCreditsSpentMilli > 0 ? ' Списано ' + formatShareCredits(rewriteCreditsSpentMilli) + ' ИИ-кредитов за изменение текста.' : ''}`);
+      setToast(`Сообщение сохранено в заметках.${!hideCreditCost && rewriteCreditsSpentMilli > 0 ? ' Списано ' + formatShareCredits(rewriteCreditsSpentMilli) + ' ИИ-кредитов за изменение текста.' : ''}`);
       setOpen(false);
     } catch (cause) {
       if (alive.current) setError(cause instanceof Error ? cause.message : 'Не удалось сохранить заметку');
@@ -278,10 +280,11 @@ export function TelegramMessageQuickShare({ text, initialNoteSphereId = null }: 
       });
       if (!alive.current) return;
       setJob(accepted);
+      if(accepted.state === 'DONE' && accepted.sentCount > 0) announcePlanikSend('telegram-send',accepted.id);
       setToast((modeToSend === 'REWRITE_AND_SEND'
         ? 'Запрос будет обработан ИИ и отправлен выбранным пользователям.'
         : 'Сообщение принято к отправке в Telegram.') +
-        (rewriteCreditsSpentMilli > 0 ? ' Ранее списано ' + formatShareCredits(rewriteCreditsSpentMilli) + ' ИИ-кредитов за предварительное редактирование.' : ''));
+        (!hideCreditCost && rewriteCreditsSpentMilli > 0 ? ' Ранее списано ' + formatShareCredits(rewriteCreditsSpentMilli) + ' ИИ-кредитов за предварительное редактирование.' : ''));
       setOpen(false);
     } catch (e) {
       if (alive.current) setError(e instanceof Error ? e.message : 'Не удалось принять запрос на отправку');
@@ -492,7 +495,7 @@ export function TelegramMessageQuickShare({ text, initialNoteSphereId = null }: 
             <>
               <p className="telegram-quick-share__subtitle flex items-center gap-2 text-sm font-semibold"><Sparkles size={16} /> Изменённое сообщение</p>
               <p className="telegram-quick-share__muted text-xs">{destination === 'notes' ? 'Заметка: ' + (noteTitle.trim() || 'Без названия') : 'Получатели: ' + selectedNames.join(', ')}</p>
-              {rewriteCreditsSpentMilli > 0 ? <p role="status" className="telegram-quick-share__muted text-xs">Списано за ИИ-редактирование: {formatShareCredits(rewriteCreditsSpentMilli)} кредитов</p> : null}
+              {!hideCreditCost && rewriteCreditsSpentMilli > 0 ? <p role="status" className="telegram-quick-share__muted text-xs">Списано за ИИ-редактирование: {formatShareCredits(rewriteCreditsSpentMilli)} кредитов</p> : null}
               {destination === 'notes' ? (
                 <textarea value={modifiedText} rows={7} onChange={(event) => setModifiedText(event.target.value)}
                   className="telegram-quick-share__textarea block max-h-72 w-full resize-y overflow-y-auto rounded-xl border p-3 text-sm"

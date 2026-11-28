@@ -68,6 +68,27 @@ data class HomeState(val loading: Boolean = true, val user: CurrentUser? = null,
     val profileBusy:Boolean=false,val profileError:String?=null)
 class HomeViewModel(private val repository: WorkspaceRepository, private val themes: ThemePreferences) : ViewModel() {
     private val mutable = MutableStateFlow(HomeState())
+    private val wardrobeMutable=MutableStateFlow<MascotWardrobeState?>(null)
+    val mascotWardrobe=wardrobeMutable.asStateFlow()
+    private val wardrobeMutex=Mutex()
+    fun refreshMascotWardrobe(userId:String?) {
+        if(wardrobeMutable.value?.userId!=userId)wardrobeMutable.value=null
+        if(userId==null)return
+        viewModelScope.launch {
+            wardrobeMutex.withLock {
+                try {
+                    val result=repository.loadMascotWardrobe()
+                    if(mutable.value.user?.id==userId&&result.userId==userId)wardrobeMutable.value=result
+                } catch(e:kotlinx.coroutines.CancellationException){throw e} catch(_:Exception){}
+            }
+        }
+    }
+    suspend fun equipMascotSkin(id:String) = wardrobeMutex.withLock {
+        val owner=mutable.value.user?.id ?: error("Войдите в аккаунт")
+        val result=repository.equipMascotSkin(id)
+        check(mutable.value.user?.id==owner&&result.userId==owner){"Аккаунт изменился"}
+        wardrobeMutable.value=result
+    }
     private val taskAiMutable=MutableStateFlow(TaskAiChatState())
     private val taskProposalAutoApplyMutable=MutableStateFlow<Boolean?>(null)
     val taskProposalAutoApply=taskProposalAutoApplyMutable.asStateFlow()
@@ -75,8 +96,25 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
     suspend fun economicProposalOptions():JsonObject=repository.economicProposalOptions()
     suspend fun economicProposalEdit(id:String,payload:JsonObject):JsonObject=
         repository.editEconomicProposal(id,payload)
-    suspend fun economicProposalAction(id:String,action:String):JsonObject=
-        repository.economicProposalAction(id,action)
+    private val financialGestureMutable=MutableSharedFlow<String>(extraBufferCapacity=32)
+    val financialGesture=financialGestureMutable.asSharedFlow()
+    private val celebratedFinancialIds=LinkedHashSet<String>()
+    private fun announceAppliedFinancial(proposal:JsonObject){
+        if(proposal.aiString("status")!="APPLIED" || proposal.aiString("entity")!="operation" ||
+            proposal.aiString("action")!="create")return
+        val id=proposal.aiString("id")
+        val mode=when((proposal["payload"] as? JsonObject)?.aiString("kind")){
+            "INCOME"->"income"; "EXPENSE"->"expense"; else->return
+        }
+        if(id.isBlank()||!celebratedFinancialIds.add(id))return
+        if(celebratedFinancialIds.size>500)celebratedFinancialIds.remove(celebratedFinancialIds.first())
+        financialGestureMutable.tryEmit(mode)
+    }
+    suspend fun economicProposalAction(id:String,action:String):JsonObject{
+        val result=repository.economicProposalAction(id,action)
+        if(action=="approve")announceAppliedFinancial(result)
+        return result
+    }
     suspend fun economicAutoApply():Boolean=repository.economicPreferences()
     suspend fun setEconomicAutoApply(enabled:Boolean):Boolean=
         repository.setEconomicPreferences(enabled)
@@ -357,6 +395,8 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
                     }
                 }
                 val answer=response.aiString("answer")
+                (response["economicProposals"] as? JsonArray).orEmpty()
+                    .mapNotNull{it as? JsonObject}.forEach(::announceAppliedFinancial)
                 if(chatId==QUICK_AI_THREAD_ID){
                     val remote=repository.loadQuickAiHistory()
                     generalAiMutable.update{state->state.copy(
@@ -377,7 +417,7 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
                         }
                         listOf("webSearchUsed","webSources","webCitations",
                             "generatedDocument","taskProposal","economicProposals","telegramSendDraft",
-                            "telegramReadDraft","mailSendDraft","telegramSuggestedReply").forEach{key->
+                            "telegramReadDraft","mailSendDraft","telegramSuggestedReply","mailSuggestedReply","assistantSettingsProposalId").forEach{key->
                             response[key]?.let{put(key,it)}
                         }
                     }
@@ -410,8 +450,10 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
                 }
                 generalAiMutable.update{it.copy(
                     busy=false,progressStatus=null,streamText="",pendingMessage=null,error=null)}
+                refreshCreditsBalance()
                 onDone()
             }catch(e:Throwable){
+                refreshCreditsBalance()
                 // A retry must keep the same requestId; server idempotency
                 // prevents duplicate tool actions / credit charges.
                 generalAiMutable.update{it.copy(
@@ -425,6 +467,9 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
     suspend fun telegramSendTargets()=repository.telegramSendTargets()
     suspend fun telegramQuickSend(payload:JsonObject)=repository.telegramQuickSend(payload)
     suspend fun telegramQuickSendStatus(id:String)=repository.telegramQuickSendStatus(id)
+    suspend fun assistantSettingsProposal(id:String)=repository.assistantSettingsProposal(id)
+    suspend fun applyAssistantSettingsProposal(id:String)=repository.applyAssistantSettingsProposal(id)
+    suspend fun sendSuggestedReply(id:String,text:String,mail:Boolean)=repository.sendSuggestedReply(id,text,mail)
     suspend fun mailAccounts()=repository.mailAccounts()
     suspend fun mailRecentRecipients()=repository.mailRecentRecipients()
     suspend fun mailDraftStatus(id:String)=repository.mailDraftStatus(id)
@@ -669,17 +714,26 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
                 .onSuccess(onResult).onFailure{onError(it.userMessage())}
         }
     }
-    fun refreshCreditsBalance(){
-        viewModelScope.launch{
-            runCatching{repository.establishSession()}.onSuccess{profile->
+    private val creditRefreshMutex=Mutex()
+    suspend fun refreshCreditsBalanceNow(){
+        val owner=mutable.value.user?.id?:return
+        creditRefreshMutex.withLock {
+            if(mutable.value.user?.id!=owner)return@withLock
+            try {
+                val profile=repository.establishSession()
                 mutable.update { current ->
-                    if (current.user != null && current.user.id != profile.id) {
+                    if(current.user?.id!=owner)current
+                    else if(profile.id!=owner){
                         Log.e("PlanikWorkspace", "Account changed during credit refresh; preserving current workspace")
                         current.copy(taskError="Аккаунт на сервере отличается от открытого в Android. Данные задач сохранены; войдите в исходный аккаунт.")
-                    } else current.copy(user=profile)
+                    }else current.copy(user=profile)
                 }
-            }
+            }catch(e:kotlinx.coroutines.CancellationException){throw e}
+            catch(e:Exception){Log.w("PlanikWorkspace","Credit balance refresh failed",e)}
         }
+    }
+    fun refreshCreditsBalance(){
+        viewModelScope.launch{refreshCreditsBalanceNow()}
     }
     fun updateProfile(name:String,username:String,email:String,password:String,
                       onSaved:()->Unit={}) {

@@ -1,3 +1,6 @@
+import { READ_ASSISTANT_SETTINGS_TOOL, PROPOSE_ASSISTANT_SETTINGS_TOOL, readAssistantSettings, prepareAssistantSettings } from './assistant-settings-proposal.service.js';
+import { fileToolFailure, terminalFileToolAnswer } from './ai-file-operations.service.js';
+import { getSubscriptionRank, premiumToolFeature, featureAccessError } from './subscription-access.service.js';
 import { randomUUID } from 'node:crypto';
 import { prisma } from '../db/prisma.js';
 import { telegramUserChatCapability } from './telegram-user-client-chat-access.service.js';
@@ -10,7 +13,9 @@ import { plannerToolsService, authorizePlannerActionReferences, PLANNER_OPERATIO
 import { personalNotesToolsService, mergeTaskAndNoteSearchResults, validateNoteSearchInput } from './personal-notes-tools.service.js';
 import { validateAiCreateNoteArgs, validateAiUpdateNoteArgs } from './ai-create-note.service.js';
 import type { NoteProposalAction, CreateNoteProposalAction } from './ai-task-proposal.service.js';
-import { validateAiCreateHabitArgs, type CreateHabitProposalAction } from './ai-create-habit.service.js';
+import { validateAiCreateHabitArgs, validateAiHabitDuration, validateAiHabitCompletion, aiHabitDateKey, type CreateHabitProposalAction, type ExistingHabitProposalAction } from './ai-create-habit.service.js';
+import { habitService } from './habit.service.js';
+import { editTaskDescription, DESCRIPTION_FORMAT_GUIDE } from './ai-task-description.service.js';
 import { providerNanoUsdToMilliCredits, recordAiCreditCharge, recordOpenAiUsageShadow, type OpenAiUsage } from './ai-usage-metering.service.js';
 import { refundDynamicResponsesCall, runDynamicResponsesCall, settleDynamicResponsesCall, type DynamicResponsesCall } from './dynamic-responses-billing.service.js';
 import { OPENAI_WEB_SEARCH_COST_NANO_USD } from '../config/openai-pricing.js';
@@ -92,18 +97,47 @@ export const AI_CHAT_OPENAI_TOOLS = [
   },
   {
     type: 'function', name: 'create_habit', strict: true,
-    description: 'Подготовить новую ПРИВЫЧКУ с расписанием для подтверждения пользователем. Вызывай только по явной просьбе создать привычку, а не задачу или напоминание. Укажи название, эмодзи, повторение DAILY (ежедневно), WEEKDAYS (определённые дни недели) или INTERVAL (каждые N дней), число повторов в день и уведомления в формате HH:mm по локальному времени пользователя. weekdays: 0 — воскресенье, 1 — понедельник ... 6 — суббота. Для DAILY и WEEKDAYS intervalDays=null; для остальных типов weekdays=[]. reminderTimes=[] означает без уведомлений. Не утверждай о создании до подтверждения карточки.',
+    description: 'Подготовить новую ПРИВЫЧКУ с расписанием для подтверждения пользователем. Вызывай только по явной просьбе создать привычку, а не задачу или напоминание. Укажи название, эмодзи, повторение DAILY (ежедневно), WEEKDAYS (определённые дни недели) или INTERVAL (каждые N дней), число повторов в день и уведомления в формате HH:mm по локальному времени пользователя. weekdays: 0 — воскресенье, 1 — понедельник ... 6 — суббота. Для DAILY и WEEKDAYS intervalDays=null; для остальных типов weekdays=[]. reminderTimes=[] означает без уведомлений. Срок: FOREVER без срока, UNTIL_DATE с endDate YYYY-MM-DD, REPEAT_COUNT с totalRepeatTarget (общее количество выполнений, не дневная норма); неиспользуемые поля null. Не утверждай о создании до подтверждения карточки.',
     parameters: { type: 'object', additionalProperties: false,
-      required: ['name', 'icon', 'recurrenceType', 'weekdays', 'intervalDays', 'reminderTimes', 'targetCount'],
+      required: ['name', 'icon', 'recurrenceType', 'weekdays', 'intervalDays', 'reminderTimes', 'targetCount', 'durationMode', 'endDate', 'totalRepeatTarget'],
       properties: {
         name: { type: 'string' }, icon: { type: 'string' },
         recurrenceType: { type: 'string', enum: ['DAILY', 'WEEKDAYS', 'INTERVAL'] },
         weekdays: { type: 'array', items: { type: 'integer', minimum: 0, maximum: 6 } },
         intervalDays: { type: ['integer', 'null'] },
         reminderTimes: { type: 'array', items: { type: 'string' } },
-        targetCount: { type: 'integer', minimum: 1, maximum: 99 }
+        targetCount: { type: 'integer', minimum: 1, maximum: 99 },
+        durationMode: { type: 'string', enum: ['FOREVER','UNTIL_DATE','REPEAT_COUNT'] },
+        endDate: nullable('string'), totalRepeatTarget: { type: ['integer','null'] }
       }
     }
+  },
+  {
+    type: 'function', name: 'list_habits', strict: true,
+    description: 'Получить активные привычки пользователя, их расписание, дневную норму, сегодняшний прогресс и общий срок. Обязательно вызови перед отметкой или изменением привычки. Не угадывай ID.',
+    parameters: { type: 'object', additionalProperties: false, required: [], properties: {} }
+  },
+  {
+    type: 'function', name: 'complete_habit', strict: true,
+    description: 'Подготовить отметку выполнения привычки на текущий локальный день. Сначала list_habits. amount=null означает одно выполнение, amount=N — добавить N выполнений, fullDay=true — закрыть остаток дневной нормы (не завершить привычку навсегда). Не превышай норму. Только по просьбе или явному сообщению пользователя о выполнении, не по планам на будущее. Действие ожидает подтверждения или автоприменения.',
+    parameters: { type: 'object', additionalProperties: false, required: ['habitId','amount','fullDay'], properties: {
+      habitId: { type:'string' }, amount: { type:['integer','null'], minimum:1, maximum:99 }, fullDay: { type:'boolean' }
+    } }
+  },
+  {
+    type: 'function', name: 'update_habit', strict: true,
+    description: 'Изменить срок существующей привычки после list_habits. FOREVER без срока; UNTIL_DATE до endDate YYYY-MM-DD; REPEAT_COUNT до totalRepeatTarget суммарных выполнений с начала привычки. Остальные настройки не меняются. Подготовка карточки, не немедленная запись.',
+    parameters: { type:'object', additionalProperties:false, required:['habitId','durationMode','endDate','totalRepeatTarget'], properties:{
+      habitId:{type:'string'}, durationMode:{type:'string',enum:['FOREVER','UNTIL_DATE','REPEAT_COUNT']},
+      endDate:nullable('string'), totalRepeatTarget:{type:['integer','null']}
+    } }
+  },
+  {
+    type: 'function', name: 'edit_task_description', strict: true,
+    description: 'Изменить описание существующей задачи или подзадачи. Для текущей задачи можно сразу вызвать get_task по её ID; для других сначала search_tasks или list_tasks, затем обязательно get_task. append добавляет только новый фрагмент в конец, replace передаёт полный итоговый текст (для правки в середине сохрани остальное). ' + DESCRIPTION_FORMAT_GUIDE + ' Формат text для обычного текста, html для оформленного. Подготовка подтверждаемого изменения.',
+    parameters: {type:'object',additionalProperties:false,required:['itemId','mode','format','content'],properties:{
+      itemId:{type:'string'}, mode:{type:'string',enum:['append','replace']}, format:{type:'string',enum:['text','html']}, content:{type:'string'}
+    }}
   },
   {
     type: 'function', name: 'update_note', strict: true,
@@ -329,12 +363,17 @@ export async function runAiChatToolLoop(options: ToolLoopOptions) {
   throw new Error(`Превышен безопасный лимит обращений к модели (${MAX_PROVIDER_CALLS}).`);
 }
 
-export async function askAiChatWithTools(input: { userId: string; model: string; messages: unknown[]; userTimeZone: string; apiKey: string; actionRequestId: string; assistantReplyContext?: AssistantReplyToolContext; autoApplyTaskActions?: boolean; dynamicBilling?: boolean; fileTools?: FileToolContext; requiredLookupTool?: 'search_workspace' | 'search_notes' | 'create_note'; onProgress?: (status: import('./ai-chat-progress.js').AiChatProgressStatus) => void; onTextDelta?: (delta: string) => void; onTextReset?: () => void }) {
+export async function askAiChatWithTools(input: { userId: string; model: string; messages: unknown[]; userTimeZone: string; apiKey: string; actionRequestId: string; assistantReplyContext?: AssistantReplyToolContext; autoApplyTaskActions?: boolean; autoApplyEconomicActions?: boolean; dynamicBilling?: boolean; fileTools?: FileToolContext; requiredLookupTool?: 'search_workspace' | 'search_notes' | 'create_note'; onProgress?: (status: import('./ai-chat-progress.js').AiChatProgressStatus) => void; onTextDelta?: (delta: string) => void; onTextReset?: () => void }) {
+  const rank = await getSubscriptionRank(input.userId);
   const requestId = input.actionRequestId; const startedAt = Date.now();
   // Freeze relative dates when the user's request starts, not on later approval.
   const dateResolutionNow = new Date(startedAt);
   const resolvedItemIds = new Set<string>(); const resolvedSphereIds = new Set<string>();
-  const preparedTaskActions: Array<PlannerActionInput | NoteProposalAction | CreateNoteProposalAction | CreateHabitProposalAction> = [];
+  const preparedTaskActions: Array<PlannerActionInput | NoteProposalAction | CreateNoteProposalAction | CreateHabitProposalAction | ExistingHabitProposalAction> = [];
+  const readDescriptions = new Map<string, { description: string | null; parentTaskId: string | null }>();
+  const readHabits = new Map<string, { updatedAt: string }>();
+  const preparedHabitIds = new Set<string>();
+  const editedDescriptionIds = new Set<string>();
   const resolvedNoteIds = new Set<string>();
   const observedFinancialVersions = new Map<string,string>();
   let readFinancialContext = false;
@@ -348,6 +387,7 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
   let generatedDocument: GeneratedDocumentMeta | null = null;
   let telegramSendDraft: TelegramInlineSendDraft | null = null;
   let mailSendDraft: MailSendDraft | null = null;
+  let assistantSettingsProposalId: string | null = null;
   let mailReadUsed = false;
   let telegramReadDraft: TelegramReadDraft | null = null;
   let imageCreditsSpentMilli = 0;
@@ -386,7 +426,7 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
   };
   const webSources: WebSource[] = []; const webCitations: WebCitation[] = [];
   if (webSearchAvailable) {
-    try { webReservation = await reserveAiCreditsMilli(input.userId, WEB_SEARCH_CALL_CREDITS_MILLI); }
+    try { webReservation = await reserveAiCreditsMilli(input.userId, WEB_SEARCH_CALL_CREDITS_MILLI, undefined, 'premium'); }
     catch (error) { if (error instanceof Error && error.message === 'Недостаточно AI кредитов') webSearchAvailable = false; else throw error; }
   }
   emitProgress('analyzing_request');
@@ -402,7 +442,9 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
       initialInput: input.messages,
       consumeAdditionalInput: () => extraProviderInput.splice(0),
       finalizeAfterTool: (name, result) => name === 'edit_file' && generatedDocument && result && typeof result === 'object' && (result as { ok?: unknown }).ok === true
-        ? String((result as { message?: unknown }).message || 'Файл изменён. Новая версия прикреплена к сообщению.') : null,
+        ? String((result as { message?: unknown }).message || 'Файл изменён. Новая версия прикреплена к сообщению.') : name === 'generate_image' && generatedDocument && result && typeof result === 'object' && (result as { ok?: unknown }).ok === true
+          ? 'Изображение готово. Файл прикреплён к сообщению.'
+          : terminalFileToolAnswer(name, result),
       request: async (requestInput) => {
         if (hasPreviewText) { input.onTextReset?.(); hasPreviewText = false; }
         const providerCallIndex = providerCallCount + 1;
@@ -414,7 +456,7 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
         const requiredLookup = providerCallIndex === 1 && input.requiredLookupTool && !isForcedFinalRound
           ? input.requiredLookupTool : null;
         const includeWebSearch = !isForcedFinalRound && !requiredLookup && webSearchAvailable && !webSearchUsed;
-        const assistantReplyTools = input.assistantReplyContext ? [PREPARE_ASSISTANT_REPLY_TOOL] : [];
+        const assistantReplyTools = input.assistantReplyContext ? [PREPARE_ASSISTANT_REPLY_TOOL, READ_ASSISTANT_SETTINGS_TOOL, PROPOSE_ASSISTANT_SETTINGS_TOOL] : [];
         const tools = includeWebSearch ? [...AI_CHAT_OPENAI_TOOLS, ...assistantReplyTools, AI_CHAT_WEB_SEARCH_TOOL] : [...AI_CHAT_OPENAI_TOOLS, ...assistantReplyTools];
         const toolChoice = requiredLookup
           ? { type: 'function' as const, name: requiredLookup }
@@ -467,7 +509,13 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
         return payload;
       },
       executeTool: async (name, value, round) => {
+        const feature = premiumToolFeature(name);
+        const unavailable = feature ? featureAccessError(rank, feature) : null;
         toolOperations.push(name);
+        if (unavailable) {
+          console.info('[AI tools] subscription denied', { requestId, operation: name, code: unavailable.code, requiredPlan: unavailable.requiredPlan });
+          return fileToolFailure(unavailable, '', unavailable.code);
+        }
         
         const progressByTool: Record<string, import('./ai-chat-progress.js').AiChatProgressStatus> = {
           search_workspace: 'searching_workspace',
@@ -475,6 +523,9 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
           read_note: 'reading_note',
           create_note: 'applying_changes',
           create_habit: 'applying_changes',
+          complete_habit: 'applying_changes',
+          update_habit: 'applying_changes',
+          edit_task_description: 'applying_changes',
           search_tasks: 'searching_tasks',
           list_tasks: 'listing_tasks',
           get_task: 'reading_task',
@@ -575,9 +626,22 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
             throw cause;
           }
         }
+        if(name==='read_assistant_settings'||name==='propose_assistant_settings'){
+          const context=input.assistantReplyContext;
+          if(!context)return {ok:false,code:'NOT_AN_ASSISTANT_CHAT'};
+          const denied=featureAccessError(rank,context.kind==='telegram'?'telegram':'mail');
+          if(denied)return {ok:false,code:denied.code,message:denied.message};
+          if(name==='read_assistant_settings')return readAssistantSettings(input.userId,context);
+          if(assistantSettingsProposalId)return {ok:false,code:'ALREADY_PREPARED'};
+          const result=await prepareAssistantSettings(input.userId,context,value);
+          if(result.ok)assistantSettingsProposalId=result.id;
+          return result;
+        }
         if (name === 'prepare_assistant_reply') {
           const context = input.assistantReplyContext;
           if (!context) return { ok: false, code: 'NOT_AN_ASSISTANT_CHAT' };
+          const assistantError = featureAccessError(rank, context.kind === 'telegram' ? 'telegram' : 'mail');
+          if (assistantError) return {ok:false,code:assistantError.code,message:assistantError.message};
           const replyArgs = value as Record<string, unknown>;
           const text = typeof replyArgs.text === 'string' ? replyArgs.text.trim() : '';
           const sourceMessageId = typeof replyArgs.sourceMessageId === 'string' ? replyArgs.sourceMessageId.trim() : '';
@@ -648,6 +712,50 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
             return { ok: true, prepared: true, needsRecipientSelection: !result.draft.recipientId, message: 'Карточка с текстом и получателем добавлена к ответу. Сообщение НЕ отправлено. Отправка только по нажатию пользователя.' };
           }
           return result;
+        }
+        if (name === 'list_habits') {
+          const dateKey = aiHabitDateKey(dateResolutionNow, input.userTimeZone);
+          const habits = await habitService.list(input.userId);
+          readHabits.clear();
+          return { dateKey, habits: habits.map(habit => {
+            readHabits.set(habit.id, { updatedAt: habit.updatedAt.toISOString() });
+            return { id: habit.id, name: habit.name, icon: habit.icon, recurrenceType: habit.recurrenceType,
+              weekdays: habit.weekdays, intervalDays: habit.intervalDays, targetCount: habit.targetCount,
+              todayCompleted: habit.stats.find(stat => stat.dateKey === dateKey)?.amount ?? 0,
+              completedTotal: habit.completedTotal, durationMode: habit.durationMode,
+              endDate: habit.endDate?.toISOString().slice(0,10) ?? null, totalRepeatTarget: habit.totalRepeatTarget,
+              reminderTimes: habit.reminderTimes };
+          }) };
+        }
+        if (name === 'complete_habit' || name === 'update_habit') {
+          if (preparedTaskActions.length >= MAX_BATCH_TASK_ACTIONS) return { ok:false, code:'TOO_MANY_ACTIONS' };
+          try {
+            const data = value as Record<string, unknown>;
+            const habitId = data.habitId;
+            if (typeof habitId !== 'string' || !readHabits.has(habitId)) throw new TypeError('Сначала получите привычку через list_habits.');
+            if (preparedHabitIds.has(habitId)) throw new TypeError('Изменение этой привычки уже подготовлено в текущем запросе.');
+            const payload = name === 'complete_habit'
+              ? { ...validateAiHabitCompletion(data), dateKey: aiHabitDateKey(dateResolutionNow, input.userTimeZone) }
+              : validateAiHabitDuration(data);
+            preparedTaskActions.push({ operation: name, habitId, expectedUpdatedAt: readHabits.get(habitId)!.updatedAt, ...payload });
+            preparedHabitIds.add(habitId);
+            return { ok:true, status:'prepared', message:'Изменение привычки ожидает подтверждения.' };
+          } catch (error) { return { ok:false, code:'INVALID_HABIT', message: error instanceof Error ? error.message : 'Неверные параметры привычки.' }; }
+        }
+        if (name === 'edit_task_description') {
+          if (preparedTaskActions.length >= MAX_BATCH_TASK_ACTIONS) return { ok:false, code:'TOO_MANY_ACTIONS' };
+          try {
+            const data = value as Record<string, unknown>;
+            const itemId = data.itemId;
+            if (typeof itemId !== 'string' || !readDescriptions.has(itemId)) throw new TypeError('Сначала прочитайте описание через get_task.');
+            if (editedDescriptionIds.has(itemId)) throw new TypeError('Описание уже подготовлено к изменению.');
+            const old = readDescriptions.get(itemId)!;
+            const description = editTaskDescription(old.description, data.content, data.mode, !!old.parentTaskId, data.format);
+            const action = { operation:'set_description' as const, itemId, parentTaskId:null, title:null, description, dueDate:null, importance:null, urgency:null, notifyBeforeMinutes:null, sphereId:null, location:null, expectedDescription:old.description };
+            preparedTaskActions.push(action);
+            editedDescriptionIds.add(itemId);
+            return { ok:true,status:'prepared',message:'Описание подготовлено к изменению; исходный текст сохранён при append.' };
+          } catch (error) { return { ok:false,code:'INVALID_DESCRIPTION',message:error instanceof Error ? error.message : 'Некорректное описание.' }; }
         }
         if (name === 'create_habit') {
           if (habitCreated) return { ok: false, code: 'HABIT_ALREADY_PREPARED', message: 'Привычка уже предложена в этом запросе.' };
@@ -766,7 +874,9 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
           if (typeof id !== 'string') return { ok: false, code: 'INVALID_ID', message: 'id обязателен.' };
           const item = await plannerToolsService.getItem(input.userId, id);
           if (!item) return { ok: false, code: 'ITEM_NOT_FOUND', message: 'Объект не найден.' };
-          resolvedItemIds.add(item.id); emitProgress('analyzing_retrieved_context'); return { ok: true, item };
+          resolvedItemIds.add(item.id);
+          readDescriptions.set(item.id, { description: item.description ?? null, parentTaskId: item.parentTaskId ?? null });
+          emitProgress('analyzing_retrieved_context'); return { ok: true, item };
         }
         if (name === 'list_sectors') {
           const spheres = await plannerToolsService.listSpheres(input.userId); spheres.forEach((sphere: { id: string }) => resolvedSphereIds.add(sphere.id)); return spheres;
@@ -779,6 +889,7 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
             return { ok: false, code: 'TOO_MANY_ACTIONS', message: 'Лимит предложений изменений исчерпан.' };
           }
           if (!PLANNER_OPERATIONS.includes(action.operation)) return { ok: false, code: 'INVALID_ACTION' };
+          if (action.operation === 'set_description') return { ok:false, code:'USE_DESCRIPTION_EDITOR', message:'Для описания используй get_task и edit_task_description, чтобы не потерять существующий текст.' };
           const invalid = await authorizePlannerActionReferences(input.userId, action, resolvedItemIds, resolvedSphereIds, plannerToolsService.getItem);
           if (invalid) return invalid;
           preparedTaskActions.push(action);
@@ -830,7 +941,9 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
             }
             return result.response;
           } catch (error) {
-            return { ok: false, code: 'FILE_OPERATION_FAILED', message: error instanceof Error ? error.message : 'Операция над файлом не выполнена.' };
+            const failure = fileToolFailure(error, 'Операция над файлом не выполнена.', 'FILE_OPERATION_FAILED');
+            console.warn('[AI file tool] failed', { requestId, operation: name, code: failure.code });
+            return failure;
           }
         }
         if (name === 'generate_image') {
@@ -850,18 +963,25 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
             imageCreditsSpentMilli += result.creditsSpentMilli;
             return { ok: true, image: { id: result.document.id, fileName: result.document.fileName, mimeType: result.document.mimeType } };
           } catch (error) {
-            return { ok: false, code: 'IMAGE_GENERATION_FAILED', message: error instanceof Error ? error.message : 'Не удалось создать изображение.' };
+            const failure = fileToolFailure(error, 'Не удалось создать изображение.', 'IMAGE_GENERATION_FAILED');
+            console.warn('[AI file tool] failed', { requestId, operation: name, code: failure.code });
+            return failure;
           } finally {
             emitProgress('forming_answer');
           }
         }
         if (name === 'create_word_document' || name === 'create_excel_workbook') {
           if (generatedDocument) return { ok: false, code: 'DOCUMENT_ALREADY_CREATED', message: 'Файл для этого ответа уже создан.' };
-          generatedDocument = name === 'create_excel_workbook'
-            ? await excelWorkbookService.create({ userId: input.userId, spec: value })
-            : await wordDocumentService.create({ userId: input.userId, spec: value });
-          console.info('[AI tools] document created', { requestId, userId: input.userId, documentId: generatedDocument.id, fileName: generatedDocument.fileName, size: generatedDocument.size });
-          return { ok: true, document: generatedDocument };
+          try {
+            generatedDocument = name === 'create_excel_workbook'
+              ? await excelWorkbookService.create({ userId: input.userId, spec: value })
+              : await wordDocumentService.create({ userId: input.userId, spec: value });
+            console.info('[AI tools] document created', { requestId, userId: input.userId, documentId: generatedDocument.id, fileName: generatedDocument.fileName, size: generatedDocument.size });
+            return { ok: true, document: generatedDocument };
+          } catch {
+            console.warn('[AI file tool] failed', { requestId, operation: name, code: 'DOCUMENT_CREATION_FAILED' });
+            return { ok: false, code: 'DOCUMENT_CREATION_FAILED', message: 'Не удалось создать документ. Проверьте параметры и повторите запрос.' };
+          }
         }
         return { ok: false, code: 'UNKNOWN_TOOL', message: 'Неизвестный инструмент.' };
       }
@@ -906,7 +1026,7 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
         }});
         return saveEconomicProposals(tx,input.userId,message.id,preparedFinancialActions);
       });
-      const autoApply=(await prisma.user.findUnique({
+      const autoApply=input.autoApplyEconomicActions === true || (await prisma.user.findUnique({
         where:{id:input.userId},select:{economicAiAutoApply:true}
       }))?.economicAiAutoApply===true;
       let applied=0,failed=0;
@@ -951,7 +1071,7 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
         : taskProposal.status === 'PENDING'
           ? 'Подготовил изменения. Просмотрите карточку и нажмите «Принять».'
           : 'Изменения не применены: ' + (taskProposal.error || 'Не удалось выполнить операцию.') + ' Задача не создана, повторно подтверждать нечего.')
-      : loop.answer) + (financialResult ? '\n\n'+financialResult : ''), economicProposals, telegramSendDraft, telegramReadDraft, mailSendDraft, mailReadUsed, taskProposal, model: input.model, taskDataChanged: taskProposal?.status === 'APPLIED', actionReports, undoOperations, generatedDocument, imageCreditsSpentMilli: imageCreditsSpentMilli + fileEditCreditsSpentMilli, webSearchUsed, webSources, webCitations, billing: { mode: input.dynamicBilling ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli }, workflowDiagnostics: { providerStreaming: true, webSearchProgressObserved, providerCalls: loop.providerCalls, toolCalls: loop.toolCalls, toolOperations, batchToolCalls, batchActionsRequested, batchActionsSucceeded, batchActionsFailed, inputTokensTotal, outputTokensTotal, webSearchUsed, webSearchCallsActual, webSearchCallsBilled, webSearchLimit: MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, webSearchLimitExceeded: webSearchCallsActual > MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, webSearchDuplicateItems, webSearchSearchItemsRaw, webSearchCreditsMilliBilled, providerWebSearchCostMilli, webSearchCalls: webSearchCallsActual, webSearchCreditsMilli: webSearchCreditsMilliBilled, webSourceCount: webSources.length } };
+      : loop.answer) + (financialResult ? '\n\n'+financialResult : ''), economicProposals, telegramSendDraft, telegramReadDraft, mailSendDraft, assistantSettingsProposalId, mailReadUsed, taskProposal, model: input.model, taskDataChanged: taskProposal?.status === 'APPLIED', actionReports, undoOperations, generatedDocument, imageCreditsSpentMilli: imageCreditsSpentMilli + fileEditCreditsSpentMilli, webSearchUsed, webSources, webCitations, billing: { mode: input.dynamicBilling ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli }, workflowDiagnostics: { providerStreaming: true, webSearchProgressObserved, providerCalls: loop.providerCalls, toolCalls: loop.toolCalls, toolOperations, batchToolCalls, batchActionsRequested, batchActionsSucceeded, batchActionsFailed, inputTokensTotal, outputTokensTotal, webSearchUsed, webSearchCallsActual, webSearchCallsBilled, webSearchLimit: MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, webSearchLimitExceeded: webSearchCallsActual > MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, webSearchDuplicateItems, webSearchSearchItemsRaw, webSearchCreditsMilliBilled, providerWebSearchCostMilli, webSearchCalls: webSearchCallsActual, webSearchCreditsMilli: webSearchCreditsMilliBilled, webSourceCount: webSources.length } };
   } catch (error) {
     await Promise.all(dynamicCalls.map((call) => refundDynamicResponsesCall(call)));
     if (webReservation) await refundAiCreditReservation(webReservation);

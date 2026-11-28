@@ -10,7 +10,7 @@ test('Timeline events and reminders cannot leak into Bubbles or List when modes 
   assert.match(app, /filterWorkspaceTasks\(activeTasks, fullscreenPaneFilters\.bubbles\)/);
   assert.match(app, /filterWorkspaceTasks\(activeTasks, fullscreenPaneFilters\.list\)/);
   assert.match(app, /filterWorkspaceTasks\(activeTimelineItems,/);
-  assert.match(app, /tasks=\{isBubbleFullscreen \? fullscreenBubbleTasks : visibleTasks\}/);
+  assert.match(app, /tasks=\{basicStep \? basicRootTasks : isBubbleFullscreen \? fullscreenBubbleTasks : visibleTasks\}/);
   assert.match(app, /const fullscreenListTasks = sortWorkspaceList\(fullscreenListTasksFiltered\)/);
   assert.match(app, /const timelineRootTasks = \[\.\.\.timelineFilteredRootTasks\]/);
   assert.doesNotMatch(app, /\(isTimelineMode \? activeTimelineItems : activeTasks\)\.filter/);
@@ -50,8 +50,8 @@ test('split bubbles display scrollable viewport-safe hover cards outside clipped
     load('../../client/src/styles.css')
   ]);
   assert.match(bubbles, /compact && hoveredBubble && compactHoverPoint/);
-  assert.match(bubbles, /timeline-hover-card pointer-events-auto fixed/);
-  assert.match(bubbles, /overflow-y-auto rounded-lg/);
+  assert.match(bubbles, /timeline-hover-card bubble-compact-hover-shell pointer-events-auto fixed/);
+  assert.match(bubbles, /bubble-compact-hover-scroll overflow-y-auto/);
   assert.match(bubbles, /compactBubbleHoverPlacement\(/);
   assert.match(bubbles, /onMouseEnter=\{cancelHoverExit\} onMouseLeave=\{scheduleHoverExit\}/);
   assert.match(bubbles, /noteHtmlToPlainText\(hoveredBubble\.task\.description/);
@@ -60,4 +60,12 @@ test('split bubbles display scrollable viewport-safe hover cards outside clipped
   assert.match(bubbles, /setCompactHoverPoint\(null\)/);
   assert.match(css, /\.timeline-hover-card \{/);
   assert.match(css, /\.fullscreen-pane-filter-popover \{/);
+});
+
+test('active time, sector and search filters omit empty bubble sectors without changing filter selections',async()=>{
+  const app=await load('../../client/src/App.tsx');
+  assert.ok(app.includes("sectorIds === null && fullscreenPaneFilters.bubbles.timeFilter === 'all' && !search.trim()"));
+  assert.ok(app.includes('const classicBubbleSpheres = useMemo'));
+  assert.ok(app.includes('new Set(fullscreenBubbleTasks.map(task => task.sphereId))'));
+  assert.ok(app.includes('return selected.filter(sphere => populated.has(sphere.id));'));
 });

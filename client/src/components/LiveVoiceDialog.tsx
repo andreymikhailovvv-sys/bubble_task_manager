@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Loader2, Maximize2, Mic, MicOff, Minimize2, PhoneOff, Radio } from 'lucide-react';
 import { PlanikMascot } from './PlanikMascot';
+import type { MascotWardrobeState } from '../lib/api';
 import { AiStreamingMessageBody } from './AiStreamingMessageBody';
 import { hasPlanikActionSurface } from '../lib/planikLiveVoicePresentation';
 import { speechSafeVoiceToolAnswer } from '../lib/voice-task-links';
@@ -19,6 +20,12 @@ export type LiveVoiceContext =
 export type LiveVoiceMessage = { role: 'user' | 'assistant'; id: string; text: string };
 export type LiveVoiceToolCompletion = { question: string; kind: 'task' | 'chat'; result: AiChatResult | TaskAssistantResult };
 export type LiveVoiceProgressStatus = AiChatProgressStatus | TaskAiProgressStatus;
+
+export function resolveLiveMascot(wardrobe:MascotWardrobeState):{skinId:string;name:string} {
+  const skin=wardrobe.catalog.find(item=>item.variant==='planner'&&item.id===wardrobe.selected.planner);
+  const rank=wardrobe.expiresAt&&new Date(wardrobe.expiresAt).getTime()>Date.now()?wardrobe.rank:0;
+  return skin&&skin.rank<=rank?{skinId:skin.id,name:skin.name}:{skinId:'classic',name:'Верный помощник'};
+}
 
 type Phase = 'connecting' | 'listening' | 'speaking' | 'thinking' | 'ended' | 'error';
 type VoiceEvent = { type?: string; data?: string; text?: string; id?: string; callId?: string; question?: string; message?: string; creditsSpentMilli?: number; responseId?: string; itemId?: string; contentIndex?: number };
@@ -66,6 +73,29 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveTool
   onLiveActionReveal?: () => void;
 }) {
   const [phase, setPhase] = useState<Phase>('connecting');
+  const [showCreditCost, setShowCreditCost] = useState(false);
+  const [appearance, setAppearance] = useState<{skinId:string;name:string}|null>(null);
+  useEffect(() => {
+    let alive = true;
+    // This session uses an independent React root, so the composer's
+    // MascotIdentityContext is not inherited. Load the authenticated wardrobe
+    // directly, including its current server-validated subscription rights.
+    const userRequest=api.getMe();
+    void userRequest.then(({ user }) => { if (alive) setShowCreditCost(!user.subscriptionLimit); }).catch(() => undefined);
+    const loadAppearance=async()=>{
+      try {
+        const [{user},wardrobe]=await Promise.all([userRequest,api.getMascotWardrobe()]);
+        if(!alive)return;
+        if(wardrobe.userId!==user.id)throw new Error('Аккаунт изменился');
+        setAppearance(resolveLiveMascot(wardrobe));
+      } catch {
+        if(alive)setAppearance({skinId:'classic',name:'Верный помощник'});
+      }
+    };
+    void loadAppearance();
+    return () => { alive = false; };
+  }, []);
+  const mascotName=appearance?.name??'Планик';
   useEffect(() => {
     if (window.location.pathname !== '/android-planik') return;
     // The Android host only removes its loading veil after the actual
@@ -596,7 +626,8 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveTool
     <span className="planik-live-avatar" data-phase={mood}
       style={{ '--voice-level': level } as React.CSSProperties}>
       <span className="planik-live-avatar-glow" aria-hidden="true" />
-      <PlanikMascot size="sidekick" busy={phase === 'thinking'} />
+      {appearance ? <PlanikMascot size="sidekick" variant="planner" skinId={appearance.skinId}
+        previewMode={phase==='thinking'?'thinking':'idle'}/> : <Loader2 className="planik-live-avatar-loading" size={30} aria-label="Загружаем образ"/>}
       <span className="planik-live-avatar-ring" aria-hidden="true" />
     </span>
   );
@@ -604,12 +635,13 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveTool
   // A portal keeps the overlay outside scrollable chat/composer containers.
   // Switching full/compact view never remounts this component or the audio session.
   return createPortal(collapsed ? (
-    <aside className="planik-live-compact" data-phase={mood} aria-label="Планик: живое общение">
+    <aside className="planik-live-compact" data-phase={mood} aria-label={mascotName+': живое общение'}>
       <button type="button" className="planik-live-compact-expand"
         onClick={() => setCollapsed(false)} title="Развернуть разговор с Плаником"
         aria-label="Развернуть разговор с Плаником">
         {voiceAvatar}
         <span className="planik-live-compact-state">
+          <strong>{mascotName}</strong>
           {muted ? 'Без микрофона' : phase === 'ended' || phase === 'error' ? 'Откройте диалог' : phaseLabel}
         </span>
       </button>
@@ -623,12 +655,12 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveTool
     </aside>
   ) : (
     <section className="planik-live-fullscreen" role="dialog" aria-modal="true"
-      data-telegram={telegramChrome ? 'true' : 'false'} aria-label="Живое общение с Плаником">
+      data-telegram={telegramChrome ? 'true' : 'false'} aria-label={'Живое общение: '+mascotName}>
       <div className="planik-live-stage">
         <header className="planik-live-header">
           <div className="planik-live-brand">
             <span className="planik-live-brand-dot" aria-hidden="true" />
-            <span><strong>Планик</strong></span>
+            <span><strong>{mascotName}</strong><small>Планик · живое общение</small></span>
           </div>
           <button type="button" className="planik-live-minimize"
             onClick={() => setCollapsed(true)} aria-label="Свернуть живое общение">
@@ -658,13 +690,13 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveTool
               ) : null}
               {liveMessages.map(message => (
                 <article key={message.id} className={`planik-live-transcript-message is-${message.role}`}>
-                  <div className="planik-live-transcript-author">{message.role === 'user' ? 'Вы' : 'Планик'}</div>
+                  <div className="planik-live-transcript-author">{message.role === 'user' ? 'Вы' : mascotName}</div>
                   <div className="planik-live-markdown"><AiStreamingMessageBody content={message.text} /></div>
                 </article>
               ))}
               {caption ? (
                 <article className="planik-live-transcript-message is-assistant is-streaming">
-                  <div className="planik-live-transcript-author">Планик · говорит</div>
+                  <div className="planik-live-transcript-author">{mascotName} · говорит</div>
                   <div className="planik-live-markdown"><AiStreamingMessageBody content={caption} /></div>
                 </article>
               ) : null}
@@ -694,9 +726,9 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveTool
           </div>
           <div className="planik-live-meta">
             <span><Radio size={13}/> {minute}:{second}</span>
-            <span title={creditsSpentMilli === null
+            {showCreditCost ? <span title={creditsSpentMilli === null
               ? 'Предварительная оценка и зарезервированные кредиты не показываются. Итог после закрытия сеанса.'
-              : 'Фактическая сумма проведённого списания.'}>{cost}</span>
+              : 'Фактическая сумма проведённого списания.'}>{cost}</span> : null}
           </div>
         </footer>
       </div>

@@ -26,8 +26,8 @@ android {
         applicationId = "ru.planirovych.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 24
-        versionName = "1.0.22"
+        versionCode = 28
+        versionName = "1.0.26"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "API_BASE_URL", "\"${project.findProperty("API_BASE_URL") ?: "https://planirovych.ru/"}\"")
     }
@@ -74,6 +74,11 @@ dependencies {
     implementation(libs.androidx.compose.material.icons)
     // Render the actual Planik SVG natively instead of an unreliable transparent WebView.
     implementation("com.caverock:androidsvg:1.4")
+    implementation("io.noties.markwon:core:4.6.2")
+    implementation("io.noties.markwon:ext-tables:4.6.2")
+    // Continuous, offline wake detection with Android native AARs.
+    implementation("net.java.dev.jna:jna:5.18.1@aar")
+    implementation("com.alphacephei:vosk-android:0.3.75@aar")
     implementation(libs.retrofit.core)
     implementation(libs.retrofit.serialization)
     implementation(libs.okhttp)

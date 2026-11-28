@@ -1,3 +1,4 @@
+export type SubscriptionWindow = { capMilli: number; remainingMilli: number; remainingPercent: number; resetsAt: string };
 import type { AiChatModel, ChatAttachmentPayload, ChatMessage, ChatMode, GeneratedDocument, Habit, Sphere, Task, TaskAttachment, TaskComment, WebCitation, WebSource, TelegramInlineSendDraft, TelegramReadDraft, TelegramReadApproval } from './types';
 
 export type TaskMonitoringStatus = { id: string; label: string; detail?: string | null; createdAt: string };
@@ -267,7 +268,8 @@ async function askWorkAiStreaming(path: string, question: string, textEvents?: A
   } finally { reader.releaseLock(); }
 }
 
-export type AiChatResult = { suggestedChatTitle?: string; economicProposals?: import('../components/EconomicAiProposalCard').EconomicAiProposal[]; taskProposal?: import('./types').AiTaskProposal | null; answer: string; model: string; telegramSendDraft?: TelegramInlineSendDraft | null; mailSendDraft?: MailSendDraft | null; telegramReadDraft?: TelegramReadDraft | null; taskDataChanged: boolean; actionReports?: string[]; generatedDocument?: GeneratedDocument | null; undoOperations?: Array<{ taskId: string; previous: { dueDate: string | null; status: 'TODO' | 'IN_PROGRESS' | 'DONE' } }>; webSearchUsed: boolean; webSources?: WebSource[]; webCitations?: WebCitation[]; billing?: AiBilling };
+export type AssistantSettingsProposal = {id:string;kind:'telegram'|'mail';targetLabel:string;status:'PENDING'|'APPLIED'|'CONFLICT'|'APPLYING';changes:Array<{field:string;before:string;after:string}>};
+export type AiChatResult = { assistantSettingsProposalId?: string | null; suggestedChatTitle?: string; economicProposals?: import('../components/EconomicAiProposalCard').EconomicAiProposal[]; taskProposal?: import('./types').AiTaskProposal | null; answer: string; model: string; telegramSendDraft?: TelegramInlineSendDraft | null; mailSendDraft?: MailSendDraft | null; telegramReadDraft?: TelegramReadDraft | null; taskDataChanged: boolean; actionReports?: string[]; generatedDocument?: GeneratedDocument | null; undoOperations?: Array<{ taskId: string; previous: { dueDate: string | null; status: 'TODO' | 'IN_PROGRESS' | 'DONE' } }>; webSearchUsed: boolean; webSources?: WebSource[]; webCitations?: WebCitation[]; billing?: AiBilling };
 export async function readAiChatNdjson(stream: ReadableStream<Uint8Array>, onStatus?: (status: AiChatProgressStatus) => void, textEvents?: AiTextStreamCallbacks): Promise<AiChatResult> {
   const reader = stream.getReader(); const decoder = new TextDecoder(); let buffer = ''; let result: AiChatResult | null = null;
   const consume = (line: string) => { if (!line.trim()) return; const event = JSON.parse(line) as { type: string; status?: AiChatProgressStatus; result?: AiChatResult; message?: string; text?: string }; if (event.type === 'status' && event.status) onStatus?.(event.status); else if (event.type === 'delta' && typeof event.text === 'string') textEvents?.onTextDelta?.(event.text); else if (event.type === 'reset') textEvents?.onTextReset?.(); else if (event.type === 'result' && event.result) result = event.result; else if (event.type === 'error') throw new Error(event.message || 'Ошибка чата ИИ'); };
@@ -298,6 +300,9 @@ export type CurrentUser = {
   aiCredits?: number;
   aiCreditsMilli?: number;
   aiCreditsPeriod?: string;
+  subscriptionPlan?: 'free' | SubscriptionPlanKey;
+  subscriptionExpiresAt?: string | null;
+  subscriptionLimit?: { usedPercent: number; expiresAt: string; planName: string; allowanceMilli?: number; daily?: SubscriptionWindow; weekly?: SubscriptionWindow } | null;
   aiEfficiencyCreditsSpent?: number;
   aiEfficiencyCreditsPeriod?: string;
   timeZone?: string | null;
@@ -317,6 +322,9 @@ export type CurrentUser = {
   hasPassword?: boolean;
 };
 export type SubscriptionLinks = { start: string; pro: string; max: string };
+export type SubscriptionPlanKey = keyof SubscriptionLinks;
+export type SubscriptionPlan = { key: SubscriptionPlanKey; name: string; creditsAmount: number; price: number };
+export type SubscriptionPurchase = { id: string; planKey: SubscriptionPlanKey; creditsAmount: number; price: number; status: string; activated: boolean };
 export type CreditPackKey = 'credit_start' | 'credit_pro' | 'credit_max';
 export type CreditPack = { key: CreditPackKey; name: string; creditsAmount: number; price: number; isActive: boolean };
 export type CreditPackLinks = Record<CreditPackKey, string>;
@@ -342,8 +350,20 @@ export type AdminUser = {
   aiCredits: number;
   aiCreditsPeriod: string;
   subscriptionPlan: AdminSubscriptionPlan;
+  subscriptionExpiresAt: string | null;
+  aiIncludedCreditsMilli: number;
+  aiBonusCreditsMilli: number;
+  aiPurchasedCreditsMilli: number;
+  isGuest: boolean;
   telegramLinked: boolean;
   createdAt: string;
+};
+export type AdminSubscriptionChange = {
+  id: string; action: 'grant' | 'replace' | 'cancel' | 'noop';
+  previousPlan: AdminSubscriptionPlan; nextPlan: AdminSubscriptionPlan;
+  previousExpiresAt: string | null; nextExpiresAt: string | null;
+  previousIncludedMilli: number; nextIncludedMilli: number;
+  reason: string; createdAt: string;
 };
 export type TelegramIntegrationStatus = TelegramUserClientAuthStatus & {
   botConnected: boolean;
@@ -398,6 +418,7 @@ export type TelegramAiChatSettings = {
   historyMessageLimit: 10 | 30 | 50 | 100 | null;
   /** NULL disables the per-chat daily cap; it never bypasses the wallet balance. */
   dailyCreditLimitMilli: number | null;
+  dailyCreditLimitPercent?: number | null;
 };
 export type TelegramAiAssistantInbox = {
   projectId: string;
@@ -548,7 +569,15 @@ export type AdminWorkCreditHistory = { id:string;kind:string;deltaMilli:number;c
 
 
 
+export type MascotVariant = 'planner' | 'economic';
+export type MascotSkin = { id:string; variant:MascotVariant; name:string; description:string; rank:0|2|3 };
+export type MascotWardrobeState = { userId:string; rank:number; expiresAt:string|null; selected:Record<MascotVariant,string>; catalog:MascotSkin[] };
+
 export const api = {
+  getAssistantSettingsProposal: (id:string) => request<AssistantSettingsProposal>('/api/assistant-settings-proposals/'+encodeURIComponent(id)),
+  applyAssistantSettingsProposal: (id:string) => request<AssistantSettingsProposal>('/api/assistant-settings-proposals/'+encodeURIComponent(id)+'/apply',{method:'POST'}),
+  getMascotWardrobe: () => request<MascotWardrobeState>('/api/mascot-wardrobe'),
+  equipMascotSkin: (variant:MascotVariant,skinId:string) => request<MascotWardrobeState>('/api/mascot-wardrobe',{method:'PUT',body:JSON.stringify({variant,skinId})}),
   transcribeVoice: (input: { audioBase64: string; mimeType: string; durationSeconds: number }) =>
     request<{ text: string; creditsSpentMilli: number }>('/api/ai/audio/transcribe', {
       method: 'POST', body: JSON.stringify(input)
@@ -654,6 +683,9 @@ export const api = {
     body: JSON.stringify({ projects: stripAiChatProjectDisplayPreviews(projects) })
   }),
   generateAiCheckupNow: () => request<{ message: ChatMessage }>('/api/ai/checkup/generate', { method: 'POST', body: '{}' }),
+  getPrimarySidebarOrder: () => request<{ order: string[] }>('/api/user/primary-sidebar-order'),
+  savePrimarySidebarOrder: (order: string[], initialize = false) =>
+    request<{ order: string[] }>('/api/user/primary-sidebar-order', { method: 'PUT', body: JSON.stringify({ order, initialize }) }),
   updateUserSettings: (payload: { timeZone?: string; morningAiCheckupEnabled?: boolean; browserNotificationsEnabled?: boolean; morningAiCheckupTime?: string; aiCheckupSchedules?: AiCheckupSchedule[]; offerTaskCompletionReport?: boolean }) =>
     request<{ user: CurrentUser }>('/api/user/settings', { method: 'PATCH', body: JSON.stringify(payload) }),
   register: (payload: { login: string; email: string; password: string; name?: string; consentAccepted: boolean }) => request<{ user: CurrentUser; emailDelivery?: 'SENT' | 'FAILED' | 'NOT_REQUESTED' }>('/api/auth/register', { method: 'POST', body: JSON.stringify(payload) }),
@@ -740,6 +772,7 @@ export const api = {
     request<{ url: string }>(`/api/tasks/${id}/calendar/ics-link`, { method: 'POST', body: JSON.stringify(payload) }),
   recordEfficiencyEvent: (payload: { delta: number; bucket: 'task' | 'habit' | 'ai' | 'focus' }) =>
     request<Pick<CurrentUser, 'efficiencyScore' | 'efficiencyTaskScore' | 'efficiencyHabitScore' | 'efficiencyAiScore' | 'efficiencyFocusScore' | 'efficiencyLastActivityAt'>>('/api/efficiency/events', { method: 'POST', body: JSON.stringify(payload) }),
+  claimBasicTrainingOffer: () => request<{ show: boolean }>('/api/training/basic/claim', { method: 'POST' }),
   completeTrainingLesson: (lessonId: string) =>
     request<{ awarded: boolean; reward: number; user: CurrentUser }>(`/api/training/lessons/${lessonId}/complete`, { method: 'POST' }),
   getHabits: () => request<Habit[]>('/api/habits'),
@@ -877,6 +910,14 @@ export const api = {
       body: JSON.stringify(payload)
     }),
   getSubscriptionLinks: () => request<{ links: SubscriptionLinks }>('/api/subscription-links'),
+  getSubscriptionPlans: () => request<{ plans: SubscriptionPlan[]; paymentProvider: 'yookassa' | null; purchaseAvailable: boolean; automaticRenewal: boolean }>('/api/subscription-plans'),
+  createSubscriptionPurchase: (payload: { planKey: SubscriptionPlanKey; clientRequestId: string; clientSurface: 'web' | 'miniapp'; receiptEmail?: string }) =>
+    request<{ purchaseId: string; status: string; confirmationUrl: string | null }>(`/api/payments/yookassa/subscriptions/${payload.planKey}`, {
+      method: 'POST', body: JSON.stringify({ clientRequestId: payload.clientRequestId, clientSurface: payload.clientSurface,
+        ...(payload.receiptEmail ? { receiptEmail: payload.receiptEmail } : {}) })
+    }),
+  getSubscriptionPurchaseStatus: (purchaseId: string) =>
+    request<{ purchase: SubscriptionPurchase }>(`/api/payments/yookassa/subscription-purchases/${encodeURIComponent(purchaseId)}`),
   getCreditPacks: () => request<{ packs: CreditPack[]; paymentProvider: 'yookassa' | null; purchaseAvailable: boolean }>('/api/credit-packs'),
   createCreditPurchase: (payload: { packKey: CreditPackKey; clientRequestId: string; clientSurface: 'web' | 'miniapp'; receiptEmail?: string }) =>
     request<{ purchaseId: string; status: string; confirmationUrl: string | null }>(`/api/payments/yookassa/credit-packs/${payload.packKey}`, { method: 'POST', body: JSON.stringify({ clientRequestId: payload.clientRequestId, clientSurface: payload.clientSurface, ...(payload.receiptEmail ? { receiptEmail: payload.receiptEmail } : {}) }) }),
@@ -990,7 +1031,7 @@ export const api = {
       body: JSON.stringify(payload)
     }),
   adminAddCredits: (payload: { password: string; userId: string; creditsToAdd: number }) =>
-    request<{ user: { id: string; aiCredits: number; aiCreditsMilli: number; aiCreditsPeriod: string } }>(`/api/admin/users/${payload.userId}/credits`, {
+    request<{ user: { id: string; aiCredits: number; aiCreditsMilli: number; aiCreditsPeriod: string; subscriptionPlan: AdminSubscriptionPlan; subscriptionExpiresAt: string | null; aiIncludedCreditsMilli: number; aiBonusCreditsMilli: number; aiPurchasedCreditsMilli: number } }>(`/api/admin/users/${payload.userId}/credits`, {
       method: 'POST',
       body: JSON.stringify({ password: payload.password, creditsToAdd: payload.creditsToAdd })
     }),
@@ -1020,10 +1061,15 @@ export const api = {
     const fileNameMatch = disposition.match(/filename="?([^";]+)"?/i);
     return { blob: await response.blob(), fileName: fileNameMatch?.[1] ?? `credit-usage-${payload.month}.xls` };
   },
-  adminSetSubscriptionPlan: (payload: { password: string; userId: string; subscriptionPlan: AdminSubscriptionPlan }) =>
-    request<{ user: { id: string; subscriptionPlan: AdminSubscriptionPlan } }>(`/api/admin/users/${payload.userId}/subscription`, {
-      method: 'POST',
-      body: JSON.stringify({ password: payload.password, subscriptionPlan: payload.subscriptionPlan })
+  adminSetSubscriptionPlan: (payload: {
+    password: string; userId: string; subscriptionPlan: AdminSubscriptionPlan; requestId: string;
+    expectedPeriod: string; expectedPlan: AdminSubscriptionPlan; expectedExpiresAt: string | null; reason: string;
+  }) => request<{ user: Pick<AdminUser, 'id' | 'subscriptionPlan' | 'subscriptionExpiresAt' | 'aiCreditsPeriod' | 'aiCredits' | 'aiIncludedCreditsMilli' | 'aiBonusCreditsMilli' | 'aiPurchasedCreditsMilli' | 'isGuest'>; changed: boolean; replay: boolean }>(`/api/admin/users/${encodeURIComponent(payload.userId)}/subscription`, {
+    method: 'POST', body: JSON.stringify(payload)
+  }),
+  adminGetSubscriptionHistory: (password: string, userId: string) =>
+    request<{ history: AdminSubscriptionChange[] }>(`/api/admin/users/${encodeURIComponent(userId)}/subscription-history`, {
+      method: 'POST', body: JSON.stringify({ password })
     }),
   adminSendBroadcast: (payload: { password: string; target: AdminBroadcastTarget; userId?: string; text: string; image?: AdminBroadcastImage | null }) =>
     request<{ requested: number; sent: number; failed: number }>('/api/admin/broadcasts', {
@@ -1042,7 +1088,7 @@ export type MailAccountSettings = {
   taskCreationWhen: string; taskIntervalMinutes: number;
   summaryIntervalMinutes: number; summaryInstructions: string;
   monitorModel: 'gpt-6-luna' | 'gpt-6.1-terra' | 'gpt-6.1-sol';
-  dailyCreditLimitMilli: number | null; notifyImportant: boolean;
+  dailyCreditLimitMilli: number | null; dailyCreditLimitPercent?: number | null; notifyImportant: boolean;
   instructions: string;
 };
 export type MailAccountConnect = MailAccountSettings & {

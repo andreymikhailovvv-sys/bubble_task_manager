@@ -7,11 +7,11 @@ import { api, type TelegramIntegrationStatus } from '../lib/api';
 import './TelegramIntegrationsMenu.css';
 
 type Integration = 'bot' | 'android' | 'messages' | 'assistant' | 'email';
-type Props = { onConnectBot: () => void; tourIntegration?: 'messages' | 'assistant' | 'email' | null; embedded?: boolean };
+type Props = { onConnectBot: () => void; tourIntegration?: Integration | null; onTourOpenAssistant?: () => void; embedded?: boolean };
 const RUNNING = ['starting', 'qr', 'password_required', 'verifying_password'];
 type MenuPlacement = { left: number; top?: number; bottom?: number; width: number; maxHeight: number };
 
-export function TelegramIntegrationsMenu({ onConnectBot, tourIntegration = null, embedded = false }: Props) {
+export function TelegramIntegrationsMenu({ onConnectBot, tourIntegration = null, onTourOpenAssistant, embedded = false }: Props) {
   const [open, setOpen] = useState(embedded);
   const [embeddedTarget,setEmbeddedTarget]=useState<HTMLDivElement|null>(null);
   const [expanded, setExpanded] = useState<Integration | null>(null);
@@ -34,7 +34,7 @@ export function TelegramIntegrationsMenu({ onConnectBot, tourIntegration = null,
 
   useEffect(() => {
     if(embedded){setOpen(true);setEmbeddedTarget(popupRef.current);return;}
-    if (tourIntegration) { setOpen(true); setExpanded(null); } else setOpen(false);
+    if (tourIntegration) { setOpen(true); setExpanded(tourIntegration === 'bot' || tourIntegration === 'android' ? tourIntegration : null); } else setOpen(false);
   }, [tourIntegration,embedded]);
   const cancelClose = useCallback(() => {
     if (closeTimeout.current) clearTimeout(closeTimeout.current);
@@ -188,7 +188,7 @@ export function TelegramIntegrationsMenu({ onConnectBot, tourIntegration = null,
               const isEmail = kind === 'email';
               const enabled = isEmail ? mailConnected : isBot ? botConnected : isAssistant ? Boolean(status?.connected && status.readEnabled) : connected;
               return (
-                <div key={kind} data-tour={kind === 'messages' ? 'integration-messages' : kind === 'assistant' ? 'integration-assistant' : kind === 'email' ? 'integration-email' : undefined} className="integration-menu__item mb-2 rounded-xl border">
+                <div key={kind} data-tour={kind === 'messages' ? 'integration-messages' : kind === 'assistant' ? 'integration-assistant' : kind === 'email' ? 'integration-email' : kind === 'bot' ? 'integration-bot' : 'integration-android'} className="integration-menu__item mb-2 rounded-xl border">
                   <button type="button" className="flex w-full items-center gap-2 p-3 text-left" aria-expanded={expanded === kind}
                     onClick={() => expandIntegration(kind)}>
                     <span className="integration-menu__symbol flex h-9 w-9 shrink-0 items-center justify-center rounded-xl">{isAndroid ? <Smartphone size={19}/> : isEmail ? <Mail size={19}/> : isBot ? <Smartphone size={19}/> : isAssistant ? <Bot size={19}/> : <Send size={18}/>}</span>
@@ -201,7 +201,7 @@ export function TelegramIntegrationsMenu({ onConnectBot, tourIntegration = null,
                   </button>
                   {expanded === kind && (
                     <div className="integration-menu__details border-t px-3 pb-3 pt-2">
-                      <p className="integration-menu__muted text-xs leading-relaxed">{isAndroid ? 'Нативный Планировыч для Android: задачи, привычки и ИИ-чат. Скачать официальную APK или получить новую версию можно на странице приложения.' : isEmail ? 'Подключите Яндекс Почту или Mail.ru: сводки новых писем, отслеживание обязательств и предложения задач. Только чтение через IMAP, без отправки писем.' : isBot
+                      <p className="integration-menu__muted text-xs leading-relaxed">{isAndroid ? 'Нативный Планировыч для Android: задачи, привычки и ИИ-чат. Скачать официальную APK или получить новую версию можно на странице приложения.' : isEmail ? 'Подключите Яндекс Почту или Mail.ru: сводки новых писем, отслеживание обязательств и предложения задач. Чтение через IMAP и отправка через SMTP: ответы после подтверждения или автоматически по заданным правилам.' : isBot
                         ? 'Получайте уведомления, используйте Telegram Mini App и управляйте задачами через бота Планировыча.'
                         : isAssistant
                           ? 'Выберите личные и групповые чаты, укажите инструкции, уровень анализа, режим работы и лимиты кредитов. На первом этапе настройки сохраняются без фонового чтения и автоответов.'
@@ -209,6 +209,7 @@ export function TelegramIntegrationsMenu({ onConnectBot, tourIntegration = null,
                       <button type="button" className="integration-menu__action mt-3 w-full rounded-xl px-3 py-2 text-sm font-semibold"
                         onClick={() => {
                           setOpen(false);
+                          if (onTourOpenAssistant && kind === tourIntegration && (isAssistant || isEmail)) { onTourOpenAssistant(); return; }
                           if (isBot) onConnectBot();
                           else if (isAndroid) window.location.assign('/android');
                           else if (isAssistant) setAssistantDialogOpen(true);

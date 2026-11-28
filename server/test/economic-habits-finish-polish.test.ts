@@ -30,7 +30,7 @@ test('Android greys only completed emoji glyphs and preserves circular progress'
  const detail=read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/NativeHabitDetailSheet.kt');
  assert.match(helper,/ColorFilter\.colorMatrix/);
  assert.match(helper,/setToSaturation\(0f\)/);
- assert.match(main,/habitEmojiCompletionFilter\(dueToday && count>=target\)/);
+ assert.match(main,/habitEmojiCompletionFilter\(completed\)/);
  assert.match(legacy,/habitEmojiCompletionFilter\(scheduledToday && amount>=target\)/);
  assert.match(detail,/habitEmojiCompletionFilter\(amount>=habit\.targetCount/);
  assert.match(main,/sweepAngle=progress\*360f/);

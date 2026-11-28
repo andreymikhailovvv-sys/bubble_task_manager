@@ -1,6 +1,6 @@
 import { openAiFetch } from '../lib/openai-fetch.js';
 import { calculateAffordableOutputTokens, calculateMaximumRequestCreditsMilli, calculateOpenAiUsageCost, recordAiCreditCharge, recordOpenAiUsageShadow, type OpenAiUsage } from './ai-usage-metering.service.js';
-import { refundAiCreditReservation, reserveAiCreditsMilliUpTo, settleAiCreditReservation, type AiCreditReservation } from './ai-credit-wallet.service.js';
+import { refundAiCreditReservation, reserveAiCreditsMilliUpTo, modelCreditWindowMode, settleAiCreditReservation, type AiCreditReservation } from './ai-credit-wallet.service.js';
 import { readOpenAiResponsesStreamWithRecovery, retrieveOpenAiResponse } from './openai-responses-stream.service.js';
 
 export type DynamicTextFeature = 'ai_chat' | 'ai_chat_planner' | 'general_assistant' | 'recurrence' | 'generate_subtasks' | 'generate_task' | 'optimize_timeline' | 'overdue_postpone' | 'notes_quick_rewrite' | 'telegram_quick_rewrite' | 'mail_quick_rewrite' | 'daily_checkup';
@@ -158,7 +158,7 @@ export async function runDynamicResponsesCall(input: { userId: string; actionId:
   if (inputTokens === null) throw new Error('AI_DYNAMIC_PREFLIGHT_FAILED: OpenAI input token preflight returned invalid usage');
   const minimum = calculateMaximumRequestCreditsMilli({ model, inputTokens, maxOutputTokens: limits.min }).totalCreditsMilli;
   const desired = calculateMaximumRequestCreditsMilli({ model, inputTokens, maxOutputTokens: limits.max }).totalCreditsMilli;
-  const reservation = await reserveAiCreditsMilliUpTo(input.userId, minimum, desired);
+  const reservation = await reserveAiCreditsMilliUpTo(input.userId, minimum, desired, undefined, modelCreditWindowMode(model));
   const inputCost = calculateMaximumRequestCreditsMilli({ model, inputTokens, maxOutputTokens: 0 }).inputCreditsMilli;
   const affordable = calculateAffordableOutputTokens(model, inputTokens, Math.max(0, reservation.totalMilli - inputCost));
   const maxOutputTokens = Math.max(limits.min, Math.min(limits.max, affordable));

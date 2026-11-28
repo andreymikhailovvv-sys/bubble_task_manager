@@ -1,25 +1,32 @@
-import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ChangeEvent, type CSSProperties } from 'react';
-import { ArrowDownLeft, ArrowRightLeft, ArrowUpRight, BookOpen, Check, ChevronRight, CircleDollarSign, CreditCard, Landmark, LayoutDashboard, Loader2, MessageCircle, Paperclip, Mic, Pencil, Plus, Send, Settings2, Sparkles, Trash2, WalletCards, X } from 'lucide-react';
+import { announceEconomicOperation, FINANCIAL_MASCOT_EVENT, type FinancialMascotMode } from './components/EconomicMoneyGesture';
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type ChangeEvent, type CSSProperties } from 'react';
+import { ArrowDownLeft, ArrowRightLeft, ArrowUpRight, BookOpen, Check, ChevronDown, ChevronRight, ChevronUp, CircleDollarSign, CreditCard, Landmark, LayoutDashboard, Loader2, MessageCircle, Paperclip, Mic, Pencil, Plus, Send, Settings2, Sparkles, Trash2, WalletCards, X } from 'lucide-react';
 import type { KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import ModuleRail from './components/ModuleRail';
 import { PlanikMascot } from './components/PlanikMascot';
+import { MascotIdentityContext, useMascotSurface } from './components/MascotPresence';
+import { useMascotWardrobe, MascotWardrobeDialog, MascotWardrobeTrigger } from './components/MascotWardrobe';
 import { EconomicAiProposalCard, type EconomicAiProposal } from './components/EconomicAiProposalCard';
 import { askEconomicStream, ECONOMIC_ACCEPTED_FILE_TYPES, validateEconomicFiles, type EconomicAssistantStage } from './lib/economicAssistantStream';
 // Load the existing Planik transcription dialog only when Economic chat opens.
 const EconomicVoiceInput = lazy(() => import('./components/VoiceInputButton').then(m => ({ default: m.VoiceInputButton })));
 
 import { loadThemePreference, resolveThemeMode } from './lib/autoTheme';
-import { annuityEstimate, formatMinorRub as money, minorToRublesInput as inputMoney, rublesToMinor as parseMoney } from './lib/economicMoney';
+import { annuityEstimate, formatMinorRub as money, minorToRublesInput as inputMoney, rublesToMinor as parseMoney, groupMoneyInput, calculateMoneyInput, isMoneyExpression, moneyCalculationPreview, readEconomicPositions } from './lib/economicMoney';
 import { formatCreditsSpent } from './lib/credits';
+import { api, type CurrentUser } from './lib/api';
 import './EconomicApp.css';
 import EconomicReport from './EconomicReport';
+import { TaskRecurrenceConfigurator, type RecurrenceDraftFields } from './components/TaskRecurrenceConfigurator';
+import { defaultEconomicRecurrence } from './lib/recurrenceSchedule';
+import { useScrollFade } from './hooks/useScrollFade';
 
 type Kind = 'INCOME' | 'EXPENSE' | 'TRANSFER' | 'DEBT_BORROWED' | 'DEBT_LENT' | 'DEBT_REPAID' | 'DEBT_RETURNED';
 type Section = 'overview' | 'accounts' | 'operations' | 'debts' | 'categories' | 'report';
 type Dialog = { kind: 'account' | 'operation' | 'debt' | 'loan' | 'category'; id?: string } | null;
 type Account = { id: string; name: string; isPrimary: boolean; currency: string; openingBalanceMinor: string; balanceMinor: string; accountType: 'STANDARD' | 'CREDIT_CARD'; creditLimitMinor: string | null };
-type Operation = { id: string; kind: Kind; amountMinor: string; title: string; note: string | null; category: string | null; sourceAccountId: string; targetAccountId: string | null; occurredAt: string; debtId: string | null; debtPhase: string | null; isAdjustment: boolean };
+type Operation = { id: string; kind: Kind; amountMinor: string; title: string; note: string | null; category: string | null; sourceAccountId: string; targetAccountId: string | null; occurredAt: string; debtId: string | null; debtPhase: string | null; isAdjustment: boolean; positionsJson?: string; calculation?: string | null; recurrenceJson?: Record<string, unknown> | null };
 type Debt = { id: string; direction: 'OWE' | 'OWED_TO_ME'; counterparty: string; amountMinor: string; paidMinor: string; postedToAccount: boolean; accountId: string | null; dueAt: string | null; note: string | null; isClosed: boolean };
 type Loan = { id: string; name: string; lender: string | null; principalMinor: string; paidMinor: string; monthlyPaymentOverrideMinor: string | null; paymentDate: string | null; remindersEnabled: boolean; annualRateBps: number; termMonths: number; startDate: string; isClosed: boolean };
 type EconomicUser = { id: string; name: string | null; username: string | null; timeZone: string | null; telegramLinked: boolean };
@@ -83,22 +90,28 @@ function RepaymentProgress({ paid, total }: { paid: string; total: string }) {
   </div>;
 }
 
-function EconomicMascot({ onClick, active, busy, progress }: {
-  onClick: () => void; active: boolean; busy: boolean; progress: string | null;
+function EconomicMascot({ onClick, onHover, onLeave, active, busy, progress, skinId, onOpenWardrobe, modal, arrivalKey }: {
+  onClick: () => void; onHover: () => void; onLeave: () => void; active: boolean; busy: boolean; progress: string | null; skinId:string; onOpenWardrobe:()=>void; modal:boolean; arrivalKey:number;
 }) {
-  return <button className={'econ-mascot ' + (active ? 'active' : '')}
-    type="button" onClick={onClick}
+  return <div className="mascot-wardrobe-anchor econ-mascot-dressing" data-managed-mascot-launcher="economic" data-mascot-surface={modal?'modal':'workspace'} onPointerEnter={event => { if (event.pointerType === 'mouse') onHover(); }} onPointerLeave={event => { if (event.pointerType === 'mouse') onLeave(); }}><button className={'econ-mascot ' + (active ? 'active' : '')}
+    type="button" onClick={event => { if (event.detail > 0 && window.matchMedia('(hover: hover) and (pointer: fine)').matches) onHover(); else onClick(); }}
     aria-label={active ? 'Закрыть помощника Экономыч AI' : 'Открыть помощника Экономыч AI'}
-    aria-expanded={active} aria-controls="econ-assistant-dialog" title="Помощник Экономыч AI">
-    <PlanikMascot variant="economic" size="launcher" busy={busy} progress={progress} />
+    aria-expanded={active} aria-controls="econ-assistant-dialog">
+    <PlanikMascot variant="economic" size="launcher" busy={busy} progress={progress} skinId={skinId} arrivalKey={arrivalKey} />
     <span className="econ-mascot-pulse" aria-hidden="true" />
-  </button>;
+  </button><MascotWardrobeTrigger onClick={onOpenWardrobe}/></div>;
 }
 
 export default function EconomicApp({ mobile = false, embeddedInMiniApp = false, themeOverride, mobileSafeTop = 0, mobileSafeBottom = 0 }: {
   mobile?: boolean; embeddedInMiniApp?: boolean; themeOverride?: 'light' | 'dark'; mobileSafeTop?: number; mobileSafeBottom?: number;
 }) {
   const [user, setUser] = useState<EconomicUser | null>(null);
+  const wardrobe = useMascotWardrobe(user?.id);
+  const mascotSurface = useMascotSurface(!mobile && Boolean(user));
+  const selectedEconomicSkin = wardrobe.selected('economic');
+  const [mobileFinanceMode,setMobileFinanceMode]=useState<FinancialMascotMode|null>(null);
+  useEffect(()=>{if(!mobile)return;let timer=0;const listener=(event:Event)=>{const mode=(event as CustomEvent).detail;if(mode!=='income'&&mode!=='expense')return;window.clearTimeout(timer);setMobileFinanceMode(mode);timer=window.setTimeout(()=>setMobileFinanceMode(null),4200);};window.addEventListener(FINANCIAL_MASCOT_EVENT,listener);return()=>{window.clearTimeout(timer);window.removeEventListener(FINANCIAL_MASCOT_EVENT,listener);};},[mobile]);
+  const mascotIdentity = useMemo(() => mobile ? null : ({variant:'economic' as const,skinId:selectedEconomicSkin}), [mobile,selectedEconomicSkin]);
   const [appearance, setAppearance] = useState<'light' | 'dark'>('dark');
   const effectiveAppearance = themeOverride ?? appearance;
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
@@ -110,11 +123,86 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
   const [bannerHidden, setBannerHidden] = useState(false);
   const [reportRevision, setReportRevision] = useState(0);
   const [form, setForm] = useState<Record<string, string>>({});
+  const [repeatOperation, setRepeatOperation] = useState(false);
+  const [recurrence, setRecurrence] = useState<RecurrenceDraftFields>({});
+  const formScrollRef = useRef<HTMLDivElement>(null);
+  const scrollToRepeatRef = useRef(false);
+  const [miniappNavHeight, setMiniappNavHeight] = useState<number | null>(null);
+  useScrollFade(formScrollRef, !!dialog);
+  useLayoutEffect(() => {
+    if (!embeddedInMiniApp) return;
+    const nav = document.querySelector<HTMLElement>('.miniapp-shell .miniapp-bottom-navigation');
+    if (!nav) return;
+    const measure = () => {
+      const height = nav.getBoundingClientRect().height;
+      if (height > 0) setMiniappNavHeight(height);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(nav);
+    return () => observer.disconnect();
+  }, [embeddedInMiniApp, mobileSafeBottom]);
+  useLayoutEffect(() => {
+    if (dialog?.kind !== 'operation' || !repeatOperation || !scrollToRepeatRef.current) return;
+    scrollToRepeatRef.current = false;
+    const node = formScrollRef.current;
+    if (!node) return;
+    const frame = requestAnimationFrame(() => node.scrollTo({
+      top: node.scrollHeight,
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'
+    }));
+    return () => cancelAnimationFrame(frame);
+  }, [dialog, repeatOperation]);
+  const [positions, setPositions] = useState<Array<{name:string; amount:string}>>([]);
+  const [adjustmentNotice, setAdjustmentNotice] = useState('');
+  useEffect(() => { if (!adjustmentNotice) return; const timer = window.setTimeout(() => setAdjustmentNotice(''), 5000); return () => window.clearTimeout(timer); }, [adjustmentNotice]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [assistantOpen, setAssistantOpen] = useState(false);
+  // A short grace period bridges the space between the floating mascot and
+  // the chat. Entering either cancels the same pending close.
+  const assistantCloseTimer = useRef<number | null>(null);
+  const cancelAssistantClose = useCallback(() => {
+    if (assistantCloseTimer.current !== null) window.clearTimeout(assistantCloseTimer.current);
+    assistantCloseTimer.current = null;
+  }, []);
+  const openAssistant = useCallback(() => {
+    cancelAssistantClose();
+    setAssistantOpen(true);
+  }, [cancelAssistantClose]);
+  const closeAssistant = useCallback(() => {
+    cancelAssistantClose();
+    setAssistantOpen(false);
+  }, [cancelAssistantClose]);
+  const scheduleAssistantClose = useCallback(() => {
+    cancelAssistantClose();
+    assistantCloseTimer.current = window.setTimeout(() => {
+      assistantCloseTimer.current = null;
+      setAssistantOpen(false);
+    }, 220);
+  }, [cancelAssistantClose]);
+  useEffect(() => cancelAssistantClose, [cancelAssistantClose]);
+  const toggleAssistant = useCallback(() => {
+    cancelAssistantClose();
+    setAssistantOpen(previous => !previous);
+  }, [cancelAssistantClose]);
+  const [showCreditCost, setShowCreditCost] = useState(false);
+  useEffect(() => {
+    if (!assistantOpen) return;
+    let alive = true;
+    setShowCreditCost(false);
+    void api.getMe().then(({ user }) => { if (alive) setShowCreditCost(!user.subscriptionLimit); }).catch(() => undefined);
+    return () => { alive = false; };
+  }, [assistantOpen]);
   const [assistantQuestion, setAssistantQuestion] = useState('');
+  const composerRef = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => { const node = composerRef.current; if (!node) return; node.style.height = 'auto'; node.style.height = Math.min(130, Math.max(40, node.scrollHeight + 2)) + 'px'; }, [assistantQuestion, assistantOpen]);
+  const [creditProfile, setCreditProfile] = useState<CurrentUser | null>(null);
+  const creditOwner = user?.id;
+  useEffect(() => { if (mobile || !creditOwner) return; let stopped = false, running = false; const refresh = async () => { if (running || document.visibilityState !== 'visible') return; running = true; try { const {user: profile} = await api.getMe(); if (!stopped && profile.id === creditOwner) setCreditProfile(profile); } catch { /* Retry on next refresh */ } finally { running = false; } }; void refresh(); const timer = window.setInterval(refresh, 60_000); window.addEventListener('focus',refresh); return () => { stopped = true; window.clearInterval(timer); window.removeEventListener('focus',refresh); }; }, [mobile,creditOwner]);
+  const creditLimit = creditProfile?.id === creditOwner ? creditProfile?.subscriptionLimit : null;
+  const dailyRemaining = creditLimit ? creditLimit.daily?.remainingPercent ?? 100-creditLimit.usedPercent : null;
   const [assistantBusy, setAssistantBusy] = useState(false);
   const [assistantStage, setAssistantStage] = useState<EconomicAssistantStage | 'reading_files' | 'refreshing_finances' | null>(null);
   const [assistantError, setAssistantError] = useState('');
@@ -152,11 +240,15 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
     if (node) node.scrollTop = node.scrollHeight;
   }, [assistantOpen, snapshot?.assistantMessages.length, assistantBusy, assistantStage, assistantError]);
   const [operations, setOperations] = useState<Operation[]>([]);
+  const [operationTotals,setOperationTotals]=useState<{receivedMinor:string;spentMinor:string;netMinor:string}|null>(null);
+  const operationRequestRef=useRef(0);
+
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [operationsBusy, setOperationsBusy] = useState(false);
   const [kindFilter, setKindFilter] = useState('');
   const [accountFilter, setAccountFilter] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
+  const activeFilterCount=[kindFilter,accountFilter,categoryFilter].filter(Boolean).length;
   const [newCategoryOpen, setNewCategoryOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newCategorySaving, setNewCategorySaving] = useState(false);
@@ -166,9 +258,9 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
     try { setBannerHidden(localStorage.getItem('btm:' + user.id + ':economic-banner-hidden') === '1'); }
     catch { setBannerHidden(false); }
   }, [user?.id]);
-  const hideBanner = () => {
-    setBannerHidden(true);
-    if (user?.id) try { localStorage.setItem('btm:' + user.id + ':economic-banner-hidden', '1'); } catch { /* Private mode */ }
+  const setBannerVisibility = (hidden: boolean) => {
+    setBannerHidden(hidden);
+    if (user?.id) try { localStorage.setItem('btm:' + user.id + ':economic-banner-hidden', hidden ? '1' : '0'); } catch { /* Private mode */ }
   };
   useEffect(() => {
     if (!addMenuOpen) return;
@@ -186,12 +278,22 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
       if (target instanceof Element && !target.closest('.econ-filters-control')) setFiltersOpen(false);
     };
     document.addEventListener('pointerdown', closeOutside, true);
-    return () => document.removeEventListener('pointerdown', closeOutside, true);
+    const closeOnEscape=(event: globalThis.KeyboardEvent)=>{if(event.key==='Escape')setFiltersOpen(false);};
+    document.addEventListener('keydown',closeOnEscape);
+    return ()=>{
+      document.removeEventListener('pointerdown',closeOutside,true);
+      document.removeEventListener('keydown',closeOnEscape);
+    };
   }, [filtersOpen]);
   const refresh = useCallback(async () => {
     setSnapshot(await economicRequest<Snapshot>('/snapshot'));
     setReportRevision(value => value+1);
   }, []);
+  useEffect(() => {
+    if (!assistantOpen || !user?.id) return;
+    const timer = window.setInterval(() => { void refresh().catch(() => undefined); }, 15000);
+    return () => window.clearInterval(timer);
+  }, [assistantOpen, user?.id, refresh]);
   // Native Android pager keeps WebView warm while other tabs are open.
   // Re-read finance when its tab becomes active, including proposals prepared
   // by the general AI voice widget while the finance tab was out of view.
@@ -249,32 +351,41 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
   }, [user?.id]);
 
   const loadOperations = useCallback(async (append = false, cursor?: string | null) => {
+    const requestId=++operationRequestRef.current;
     setOperationsBusy(true);
+    // Preserve the visible list while the new filtered data loads: clearing it
+    // here collapses the page and causes the viewport to jump.
     try {
       const params = new URLSearchParams();
       if (kindFilter) params.set('kind', kindFilter);
       if (accountFilter) params.set('accountId', accountFilter);
       if (categoryFilter) params.set('category', categoryFilter);
       if (append && cursor) params.set('cursor', cursor);
-      const response = await economicRequest<{ operations: Operation[]; nextCursor: string | null }>('/operations?' + params.toString());
+      const response = await economicRequest<{ operations: Operation[]; nextCursor: string | null; totals:{receivedMinor:string;spentMinor:string;netMinor:string} }>('/operations?' + params.toString());
+      if(requestId!==operationRequestRef.current)return;
+      setOperationTotals(response.totals);
       setOperations(prev => append ? prev.concat(response.operations) : response.operations);
       setNextCursor(response.nextCursor);
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Не удалось загрузить операции'); }
-    finally { setOperationsBusy(false); }
+    } catch (cause) { if(requestId===operationRequestRef.current)setError(cause instanceof Error ? cause.message : 'Не удалось загрузить операции'); }
+    finally { if(requestId===operationRequestRef.current)setOperationsBusy(false); }
   }, [kindFilter, accountFilter, categoryFilter]);
-  useEffect(() => { if (section === 'operations' && snapshot) void loadOperations(); }, [section, snapshot?.totals.operationCount, kindFilter, accountFilter, categoryFilter]);
+  useEffect(() => { if ((section === 'operations'||section==='overview') && snapshot) void loadOperations(); }, [section, reportRevision, snapshot?.totals.operationCount, kindFilter, accountFilter, categoryFilter]);
 
-  const formSet = (key: string, value: string) => setForm(prev => ({ ...prev, [key]: value }));
+  const formSet = (key: string, value: string) => setForm(prev => ({ ...prev, [key]: ['amount','balance','paid','creditLimit','monthlyOverride'].includes(key) ? groupMoneyInput(value) : value }));
   const openDialog = (kind: NonNullable<Dialog>['kind'], item?: Account | Operation | Debt | Loan | Category) => {
     setError('');
+    scrollToRepeatRef.current = false;
     setNewCategoryOpen(false);
     setNewCategoryName('');
     const fields: Record<string, string> = {};
+    setPositions(kind === 'operation' ? readEconomicPositions((item as Operation | undefined)?.positionsJson).map(p => ({name:p.name,amount:inputMoney(p.amountMinor)})) : []);
     if (kind === 'operation') {
       const op = item as Operation | undefined;
+      setRepeatOperation(Boolean(op?.recurrenceJson));
+      setRecurrence({ recurrenceJson: op?.recurrenceJson ?? null });
       fields.kind = op?.kind || 'EXPENSE';
       fields.title = op?.title || '';
-      fields.amount = op ? inputMoney(op.amountMinor) : '';
+      fields.amount = op ? op.calculation || inputMoney(op.amountMinor) : '';
       fields.category = op?.category || '';
       fields.sourceAccountId = op?.sourceAccountId || snapshot?.accounts.find(a => a.isPrimary)?.id || snapshot?.accounts[0]?.id || '';
       fields.targetAccountId = op?.targetAccountId || '';
@@ -312,7 +423,8 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
   };
   const submitDialog = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!dialog) return;
+    if (!dialog || saving) return;
+    const complete = (event.nativeEvent as SubmitEvent).submitter?.getAttribute('data-complete') === 'true';
     setSaving(true); setError('');
     try {
       const idPath = dialog.id ? '/' + encodeURIComponent(dialog.id) : '';
@@ -325,17 +437,21 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
           ...(dialog.id && form.isPrimary === 'yes' && form.accountType !== 'CREDIT_CARD' ? { isPrimary: true } : {}) };
       } else if (dialog.kind === 'operation') {
         path = '/operations';
-        payload = { kind: form.kind, title: form.title, amountMinor: parseMoney(form.amount),
+        if (repeatOperation && !recurrence.recurrenceJson) throw new Error('Настройте корректное расписание повторений');
+        if (!form.sourceAccountId || (form.kind === 'TRANSFER' && (!form.targetAccountId || form.sourceAccountId === form.targetAccountId))) throw new Error('Выберите счета операции');
+        payload = { kind: form.kind, title: form.title, amountMinor: calculateMoneyInput(form.amount),
+          calculation: isMoneyExpression(form.amount) ? form.amount : null,
+          positionsJson: JSON.stringify(positions.filter(p=>p.name.trim() || p.amount.trim()).map(p=>{ if(!p.name.trim()) throw new Error('Укажите название позиции'); return {name:p.name.trim(),amountMinor:parseMoney(p.amount,true)}; })),
           sourceAccountId: form.sourceAccountId, targetAccountId: form.kind === 'TRANSFER' ? form.targetAccountId : null,
           category: form.kind === 'TRANSFER' ? null : form.category, note: form.note || null,
-          occurredAt: new Date(form.date + 'T12:00:00').toISOString() };
+          occurredAt: new Date(form.date + 'T12:00:00').toISOString(), recurrenceJson: repeatOperation ? recurrence.recurrenceJson : null };
       } else if (dialog.kind === 'debt') {
         path = '/debts';
         payload = { direction: form.direction, counterparty: form.counterparty, amountMinor: parseMoney(form.amount),
           note: form.note || null, dueAt: form.date ? new Date(form.date + 'T12:00:00').toISOString() : null,
-          paidMinor: parseMoney(form.paid || '0'), postedToAccount: form.postedToAccount === 'yes',
+          paidMinor: parseMoney(complete ? form.amount : form.paid || '0'), postedToAccount: form.postedToAccount === 'yes',
           accountId: form.postedToAccount === 'yes' ? form.accountId : null,
-          ...(dialog.id ? { isClosed: form.isClosed === 'yes' } : {}) };
+          ...(dialog.id ? { isClosed: complete || form.isClosed === 'yes' } : {}) };
       } else if (dialog.kind === 'loan') {
         path = '/loans';
         const rate = Number((form.rate || '').replace(',', '.'));
@@ -347,11 +463,13 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
           monthlyPaymentOverrideMinor: form.monthlyOverride.trim() ? parseMoney(form.monthlyOverride) : null,
           paymentDate: form.paymentDate ? new Date(form.paymentDate + 'T12:00:00Z').toISOString() : null,
           remindersEnabled: form.remindersEnabled === 'yes',
-          ...(dialog.id ? { isClosed: form.isClosed === 'yes' } : {}) };
+          ...(dialog.id ? { isClosed: complete || form.isClosed === 'yes' } : {}) };
       } else {
         path = '/categories'; payload = { kind: form.kind, name: form.name };
       }
-      await economicRequest(path + idPath, dialog.id ? 'PATCH' : 'POST', payload);
+      const result = await economicRequest<{adjustment?:{amountMinor:string;accountName:string}|null}>(path + idPath, dialog.id ? 'PATCH' : 'POST', payload);
+      if(dialog.kind==='operation'&&!dialog.id)announceEconomicOperation(form.kind);
+      if (result.adjustment) setAdjustmentNotice('Добавлена корректирующая операция на сумму ' + (BigInt(result.adjustment.amountMinor)>0n?'+':'') + money(result.adjustment.amountMinor) + ' на счёт ' + result.adjustment.accountName);
       setDialog(null);
       await refresh();
       if (section === 'operations') await loadOperations();
@@ -380,8 +498,9 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
   const categoryInputKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'Enter') { event.preventDefault(); void createInlineCategory(); }
   };
-  const remove = async (type: 'accounts' | 'operations' | 'debts' | 'loans' | 'categories', id: string) => {
-    if (!window.confirm('Удалить запись? Это действие нельзя отменить.')) return;
+  const remove = async (type: 'accounts' | 'operations' | 'debts' | 'loans' | 'categories', id: string, operation?:Operation) => {
+    const message=operation?.debtPhase==='FUNDING'?'Отменить получение или выдачу долга? Связанный долг будет удалён.':operation?.debtPhase==='SETTLEMENT'?'Отменить погашение? Долг снова станет непогашенным.':operation?.isAdjustment?'Отменить корректировку баланса?':'Удалить запись? Это действие нельзя отменить.';
+    if (!window.confirm(message)) return;
     setError('');
     try {
       await economicRequest('/' + type + '/' + encodeURIComponent(id), 'DELETE');
@@ -417,6 +536,8 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
     try {
       const reply = await askEconomicStream(question, files, stage => setAssistantStage(stage));
       if (typeof reply.autoApply === 'boolean') setEconomicAutoApply(reply.autoApply);
+      const recorded=reply.proposals?.find(p=>p.status==='APPLIED'&&p.entity==='operation'&&p.action==='create');
+      if(recorded)announceEconomicOperation(recorded.payload?.kind);
       setAssistantStage('refreshing_finances');
       // Keep the actual answer visible if the subsequent snapshot refresh fails.
       setSnapshot(prev => prev ? { ...prev,
@@ -456,6 +577,52 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
     ...baseCategories[kind], ...(snapshot?.categories.filter(c => c.kind === kind).map(c => c.name) || [])
   ]));
   const accountName = (id: string | null) => snapshot?.accounts.find(a => a.id === id)?.name || 'Счёт';
+  const resetOperationFilters=()=>{
+    setKindFilter('');
+    setAccountFilter('');
+    setCategoryFilter('');
+  };
+  const operationFilters=()=> <div className="econ-filters-control">
+    <button type="button"
+      className={'econ-filters-toggle'+(activeFilterCount?' active':'')}
+      title="Фильтры операций" aria-label="Фильтры операций"
+      aria-expanded={filtersOpen} aria-controls="economic-operation-filters"
+      onClick={()=>setFiltersOpen(value=>!value)}>
+      <Settings2 size={19}/>
+      {activeFilterCount>0&&<span className="econ-filter-count">{activeFilterCount}</span>}
+    </button>
+    {filtersOpen&&<div id="economic-operation-filters" className="econ-filters" role="group" aria-label="Фильтры операций">
+      <div className="econ-filters-popover-title">
+        <strong>Фильтры операций</strong>
+        <button type="button" onClick={()=>setFiltersOpen(false)} aria-label="Закрыть фильтры"><X size={16}/></button>
+      </div>
+      <label>Тип операции<select value={kindFilter} onChange={e=>setKindFilter(e.target.value)} aria-label="Тип операции">
+        <option value="">Все типы</option><option value="EXPENSE">Расходы</option>
+        <option value="INCOME">Доходы</option><option value="TRANSFER">Переводы</option>
+        <option value="DEBTS">Долговые операции</option>
+      </select></label>
+      <div className="econ-operation-choice"><span>Счёт</span><div className="econ-operation-accounts" role="group" aria-label="Счёт">
+        <button type="button" aria-pressed={!accountFilter} onClick={()=>setAccountFilter('')}>Все счета</button>
+        {snapshot?.accounts.map(a=><button type="button" key={a.id} aria-pressed={accountFilter===a.id} onClick={()=>setAccountFilter(a.id)}><strong>{a.name}</strong><small>{money(a.balanceMinor)}</small></button>)}
+      </div></div>
+      <label>Категория<select value={categoryFilter} onChange={e=>setCategoryFilter(e.target.value)} aria-label="Категория">
+        <option value="">Все категории</option>
+        {[...new Set([...categories('EXPENSE'),...categories('INCOME'),'Долги','Корректировка'])].map(c=><option value={c} key={c}>{c}</option>)}
+      </select></label>
+      <button type="button" className="econ-filters-reset" onClick={resetOperationFilters}
+        disabled={!activeFilterCount}>Сбросить фильтры</button>
+    </div>}
+  </div>;
+  const operationSummary=()=> <div className="econ-filter-totals" aria-live="polite"
+    title="Денежные движения по всем совпавшим записям, без переводов между счетами">
+    {operationTotals
+      ? <>
+        <span>Получено <strong className="INCOME">+{money(operationTotals.receivedMinor)}</strong></span>
+        <span>Потрачено <strong className="EXPENSE">−{money(operationTotals.spentMinor)}</strong></span>
+        <span>Итого <strong>{BigInt(operationTotals.netMinor)>0n?'+':''}{money(operationTotals.netMinor)}</strong></span>
+      </>
+      : <span>{operationsBusy?'Загружаем итог…':'Итог недоступен'}</span>}
+  </div>;
   const operationRow = (op: Operation) => {
     const linkedDebt = op.debtId ? snapshot?.debts.find(d => d.id === op.debtId) : undefined;
     const isCredit = creditKinds.has(op.kind);
@@ -489,8 +656,8 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
             <BookOpen size={16}/></button>
         : <>
             {!op.isAdjustment && <button className="econ-icon-button" type="button" title="Редактировать" aria-label={'Редактировать ' + op.title} onClick={event => { event.stopPropagation(); openDialog('operation', op); }}><Pencil size={15}/></button>}
-            {!op.isAdjustment && <button className="econ-icon-button econ-delete" type="button" title="Удалить" aria-label={'Удалить ' + op.title} onClick={event => { event.stopPropagation(); void remove('operations', op.id); }}><Trash2 size={15}/></button>}
           </>}
+      <button className="econ-icon-button econ-delete" type="button" title="Удалить" aria-label={'Удалить ' + op.title} onClick={event => { event.stopPropagation(); void remove('operations', op.id,op); }}><Trash2 size={15}/></button>
     </div>;
   };
 
@@ -575,8 +742,10 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
     accounts: () => openDialog('account'), operations: () => openDialog('operation'),
     categories: () => openDialog('category')
   };
-  return <div className={'econ-root ' + (effectiveAppearance === 'light' ? 'econ-light' : '') + (mobile ? ' econ-mobile-workspace' : '')}
+  return <MascotIdentityContext.Provider value={mascotIdentity}><div className={'econ-root ' + (effectiveAppearance === 'light' ? 'econ-light' : '') + (mobile ? ' econ-mobile-workspace' : '')}
     style={embeddedInMiniApp ? { '--econ-mobile-safe-bottom': mobileSafeBottom + 'px' } as CSSProperties : undefined}>
+    {adjustmentNotice && createPortal(<div className="econ-adjustment-toast" role="status"><Check size={18}/><span>{adjustmentNotice}</span><button type="button" onClick={()=>setAdjustmentNotice('')} aria-label="Закрыть"><X size={17}/></button></div>,document.body)}
+    {mobile && mobileFinanceMode && createPortal(<div className="econ-mobile-finance-mascot" aria-hidden="true"><PlanikMascot variant="economic" skinId={selectedEconomicSkin} previewMode={mobileFinanceMode} size="launcher"/></div>,document.body)}
     {!mobile && <ModuleRail active="economic"/>}
     <div className="econ-shell">
       {!mobile && <aside className="econ-nav">
@@ -586,7 +755,7 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
         <div className="econ-nav-foot"><span className="econ-avatar">{(user.name || user.username || 'П')[0].toUpperCase()}</span><div><strong>{user.name || user.username || 'Пользователь'}</strong><small>Личный бюджет · RUB</small></div></div>
       </aside>}
       <main className="econ-main">
-        <header className="econ-topbar"><div><div className="econ-eyebrow">{mobile ? 'ФИНАНСОВЫЙ ПОМОЩНИК' : 'ПЛАНИРОВЫЧ / ЭКОНОМЫЧ AI'}</div><h1>{mobile || section === 'overview' ? 'Экономыч AI' : sectionTitles[section]}</h1></div><div className="econ-top-actions"><button className="econ-add-global" data-economic-create-operation type="button"
+        <header className="econ-topbar"><div><div className="econ-eyebrow">{mobile ? 'ФИНАНСОВЫЙ ПОМОЩНИК' : 'ПЛАНИРОВЫЧ / ЭКОНОМЫЧ AI'}</div><h1>{mobile || section === 'overview' ? 'Экономыч AI' : sectionTitles[section]}</h1></div><div className="econ-top-actions">{!mobile && <a href="/?openCredits=1" className="econ-limit-badge" aria-label="Лимиты и подписки">{dailyRemaining !== null ? <><span className="econ-limit-ring" style={{background:`conic-gradient(var(--ec-orange2) ${dailyRemaining}%, var(--ec-border) 0)`}} aria-hidden="true"/><span>Лимит {dailyRemaining}%</span></> : <><Sparkles size={16}/><span>{creditProfile?.id === creditOwner && creditProfile?.aiCredits != null ? `${creditProfile.aiCredits} кр.` : 'Лимиты'}</span></>}</a>}<button className="econ-add-global" data-economic-create-operation type="button"
   aria-label="Добавить финансовую запись" aria-expanded={addMenuOpen}
   onClick={() => setAddMenuOpen(v => !v)}><Plus size={18}/> Добавить</button>
   {addMenuOpen && !embeddedInMiniApp && createMenu}</div></header>
@@ -600,7 +769,8 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
         </nav>}
         {error && <div className="econ-error" role="alert"><span>{error}</span><button type="button" aria-label="Скрыть ошибку" onClick={() => setError('')}><X size={16}/></button></div>}
         {section === 'overview' && <>
-          {!bannerHidden && <div className="econ-intro"><div><span className="econ-kicker"><span className="econ-intro-star">✦</span> Личные финансы без хаоса</span><h2>Держите деньги<br/><em>под контролем.</em></h2><p>Баланс, повседневные траты, долги и кредиты в одном спокойном пространстве.</p></div><div className="econ-intro-illustration" aria-hidden="true"><div className="econ-coin-big">₽</div><div className="econ-coin-small">₽</div><div className="econ-intro-orbit"/></div><button type="button" className="econ-intro-hide" onClick={hideBanner} aria-label="Скрыть баннер">Скрыть</button></div>}
+          {!bannerHidden ? <div className="econ-intro" id="econ-welcome-banner"><div><span className="econ-kicker"><span className="econ-intro-star">✦</span> Личные финансы без хаоса</span><h2>Держите деньги<br/><em>под контролем.</em></h2><p>Баланс, повседневные траты, долги и кредиты в одном спокойном пространстве.</p></div><div className="econ-intro-illustration" aria-hidden="true"><div className="econ-coin-big">₽</div><div className="econ-coin-small">₽</div><div className="econ-intro-orbit"/></div><button type="button" className="econ-intro-hide" onClick={() => setBannerVisibility(true)} aria-expanded="true" aria-label="Свернуть приветственный блок" title="Свернуть блок"><ChevronUp size={18}/></button></div>
+          : <button type="button" className="econ-intro-restore" onClick={() => setBannerVisibility(false)} aria-expanded="false"><ChevronDown size={16}/> Развернуть приветственный блок</button>}
           <div className="econ-stats">
             <article className="econ-stat"><div className="econ-stat-label"><WalletCards size={18}/> Общий баланс</div><strong>{wholeRubles(snapshot.totals.balanceMinor)}</strong><small>Денежные счета без кредитного лимита</small></article>
             <article className="econ-stat"><div className="econ-stat-label"><ArrowDownLeft size={18}/> Доходы за месяц</div><strong className="econ-positive">{wholeRubles(snapshot.totals.monthIncomeMinor)}</strong><small>Без переводов между счетами</small></article>
@@ -632,7 +802,17 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
               </div>
             </section>
           </div>
-          <section className="econ-card econ-recent"><div className="econ-card-header"><div><h2>Последние операции</h2><p>{snapshot.totals.operationCount ? snapshot.totals.operationCount + ' записей всего' : 'Здесь появятся доходы и расходы'}</p></div><button type="button" onClick={() => setSection('operations')}>Все операции <ChevronRight size={16}/></button></div>{snapshot.recent.length ? snapshot.recent.map(operationRow) : <div className="econ-empty">Пока нет операций. Начните с первой записи.</div>}</section>
+          <section className="econ-card econ-recent">
+            <div className="econ-card-header"><div>
+              <h2>Последние операции</h2>
+              <p>{snapshot.totals.operationCount?snapshot.totals.operationCount+' записей всего':'Здесь появятся доходы и расходы'}</p>
+            </div><button type="button" onClick={()=>setSection('operations')}>Все операции <ChevronRight size={16}/></button></div>
+            <div className="econ-operations-toolbar">{operationSummary()}{operationFilters()}</div>
+            <div className={'econ-operation-results econ-recent-results'+(operationsBusy?' is-loading':'')} aria-busy={operationsBusy}>
+              {operations.length?operations.slice(0,8).map(operationRow):<div className="econ-empty">{operationsBusy?'Загружаем…':'Нет операций по выбранным фильтрам'}</div>}
+            </div>
+            <button className="econ-recent-show-all" type="button" onClick={() => setSection('operations')}>Показать все операции <ChevronRight size={16}/></button>
+          </section>
         </>}
         {section !== 'overview' && <div className="econ-section-content">
           <div className="econ-section-heading">
@@ -652,8 +832,16 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
             </div>
           </div>
           {section === 'report' && <EconomicReport revision={reportRevision}/>}
-          {section === 'accounts' && <div className="econ-collection-grid">{snapshot.accounts.map(a => <article className="econ-card econ-account-detail" key={a.id}><div className="econ-card-top"><span className="econ-account-symbol">{a.accountType === 'CREDIT_CARD' ? <CreditCard size={22}/> : <Landmark size={22}/>}</span>{a.isPrimary && <span className="econ-tag">Основной</span>}</div><h3>{a.name}</h3><strong>{money(a.balanceMinor)}</strong><p>{a.accountType === 'CREDIT_CARD' ? 'Доступно из лимита ' + money(a.creditLimitMinor || '0') : 'Текущий баланс счёта'}</p><div className="econ-row-actions"><button type="button" onClick={() => openDialog('account', a)}><Pencil size={15}/> Изменить</button>{!a.isPrimary && <>{a.accountType !== 'CREDIT_CARD' && <button type="button" onClick={() => void economicRequest('/accounts/' + a.id, 'PATCH', { isPrimary: true }).then(refresh).catch(e => setError(e.message))}><Check size={15}/> Основным</button>}<button type="button" onClick={() => void remove('accounts', a.id)}><Trash2 size={15}/></button></>}</div></article>)}</div>}
-          {section === 'operations' && <section className="econ-card econ-operations-list"><div className="econ-filters-control">{mobile && <div className="econ-filters-toggle-row"><h2 className="econ-operations-heading">Последние операции</h2><button type="button" className={'econ-filters-toggle' + ((kindFilter||accountFilter||categoryFilter) ? ' active' : '')} title="Фильтры операций" aria-label="Фильтры операций" aria-expanded={filtersOpen} aria-controls="economic-operation-filters" onClick={()=>setFiltersOpen(value=>!value)}><Settings2 size={19}/></button></div>}{(!mobile || filtersOpen) && <div id="economic-operation-filters" className="econ-filters">{mobile && <div className="econ-filters-popover-title"><strong>Фильтры операций</strong><button type="button" onClick={()=>setFiltersOpen(false)} aria-label="Закрыть фильтры"><X size={16}/></button></div>}<select value={kindFilter} onChange={e => setKindFilter(e.target.value)} aria-label="Тип операции"><option value="">Все типы</option><option value="EXPENSE">Расходы</option><option value="INCOME">Доходы</option><option value="TRANSFER">Переводы</option><option value="DEBTS">Долговые операции</option></select><select value={accountFilter} onChange={e => setAccountFilter(e.target.value)} aria-label="Счёт"><option value="">Все счета</option>{snapshot.accounts.map(a => <option value={a.id} key={a.id}>{a.name}</option>)}</select><select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} aria-label="Категория"><option value="">Все категории</option>{[...new Set([...categories('EXPENSE'), ...categories('INCOME')])].map(c => <option value={c} key={c}>{c}</option>)}</select></div>}</div>{operations.length ? operations.map(operationRow) : <div className="econ-empty">{operationsBusy ? 'Загружаем…' : 'Нет операций по выбранным фильтрам'}</div>}{nextCursor && <button className="econ-load-more" disabled={operationsBusy} type="button" onClick={() => void loadOperations(true, nextCursor)}>{operationsBusy ? 'Загрузка…' : 'Показать ещё 50 операций'}</button>}</section>}
+          {section === 'accounts' && <div className="econ-collection-grid">{snapshot.accounts.map(a => <article className="econ-card econ-account-detail" key={a.id} role="button" tabIndex={0} aria-label={`Настроить счёт ${a.name}`} onClick={event => { if (!(event.target as Element).closest("button,a")) openDialog("account",a); }} onKeyDown={event => { if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); openDialog("account",a); } }}><div className="econ-card-top"><span className="econ-account-symbol">{a.accountType === 'CREDIT_CARD' ? <CreditCard size={22}/> : <Landmark size={22}/>}</span>{a.isPrimary && <span className="econ-tag">Основной</span>}</div><h3>{a.name}</h3><strong>{money(a.balanceMinor)}</strong><p>{a.accountType === 'CREDIT_CARD' ? 'Доступно из лимита ' + money(a.creditLimitMinor || '0') : 'Текущий баланс счёта'}</p><div className="econ-row-actions"><button type="button" onClick={() => openDialog('account', a)}><Pencil size={15}/> Изменить</button>{!a.isPrimary && <>{a.accountType !== 'CREDIT_CARD' && <button type="button" onClick={() => void economicRequest('/accounts/' + a.id, 'PATCH', { isPrimary: true }).then(refresh).catch(e => setError(e.message))}><Check size={15}/> Основным</button>}<button type="button" onClick={() => void remove('accounts', a.id)}><Trash2 size={15}/></button></>}</div></article>)}</div>}
+          {section==='operations'&&<section className="econ-card econ-operations-list">
+            <h2 className="econ-operations-heading">Последние операции</h2>
+            <div className="econ-operations-toolbar">{operationSummary()}{operationFilters()}</div>
+            <div className={'econ-operation-results econ-operations-results'+(operationsBusy?' is-loading':'')} aria-busy={operationsBusy}>
+              {operations.length?operations.map(operationRow):<div className="econ-empty">{operationsBusy?'Загружаем…':'Нет операций по выбранным фильтрам'}</div>}
+              {nextCursor&&<button className="econ-load-more" disabled={operationsBusy} type="button"
+                onClick={()=>void loadOperations(true,nextCursor)}>{operationsBusy?'Загрузка…':'Показать ещё 50 операций'}</button>}
+            </div>
+          </section>}
           {section === 'debts' && <>
             <div className="econ-subsection-heading"><BookOpen size={19}/><h2>Долги</h2><small>{snapshot.debts.filter(d => !d.isClosed).length}</small></div>
             <div className="econ-collection-grid">
@@ -688,13 +876,14 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
       </main>
     </div>
 
-    {!mobile && <EconomicMascot active={assistantOpen} busy={assistantBusy} progress={assistantStage} onClick={() => setAssistantOpen(v => !v)}/>}
-    {!mobile && assistantOpen && <section id="econ-assistant-dialog" className="econ-assistant" role="dialog" aria-label="Экономыч AI, финансовый помощник">
+    {!mobile && <EconomicMascot modal={mascotSurface.modal} arrivalKey={mascotSurface.arrivalKey} active={assistantOpen} busy={assistantBusy} progress={assistantStage} skinId={wardrobe.selected('economic')} onOpenWardrobe={wardrobe.show} onHover={openAssistant} onLeave={scheduleAssistantClose} onClick={toggleAssistant}/>}
+    {wardrobe.open&&<MascotWardrobeDialog wardrobe={wardrobe} variant="economic" theme={effectiveAppearance}/>}
+    {!mobile && assistantOpen && <section id="econ-assistant-dialog" className={"econ-assistant" + (mascotSurface.modal ? " econ-assistant--above-modal" : "")} role="dialog" aria-label="Экономыч AI, финансовый помощник" onPointerEnter={event => { if (event.pointerType === 'mouse') cancelAssistantClose(); }} onPointerLeave={event => { if (event.pointerType === 'mouse') scheduleAssistantClose(); }}>
       <div className="econ-assistant-head">
         <div><span className="econ-assistant-avatar">₽</span>
           <div><strong>Экономыч AI</strong><small>Финансовый помощник</small></div>
         </div>
-        <button type="button" onClick={() => setAssistantOpen(false)} aria-label="Закрыть"><X size={18}/></button>
+        <button type="button" onClick={closeAssistant} aria-label="Закрыть"><X size={18}/></button>
       </div>
       <div className="econ-assistant-body" ref={assistantScrollRef}>
         <div className="econ-insight-table">
@@ -722,7 +911,7 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
                   onAutoApplyChange={changeEconomicAutoApply}
                   onRefresh={refresh}/>
               )}
-              {m.role === 'assistant' && typeof m.creditsSpentMilli === 'number' && m.creditsSpentMilli > 0 &&
+              {showCreditCost && m.role === 'assistant' && typeof m.creditsSpentMilli === 'number' && m.creditsSpentMilli > 0 &&
                 <div className="econ-message-credits" aria-label="Стоимость ответа ИИ">
                   <Sparkles size={11}/> Потрачено: {formatCreditsSpent(m.creditsSpentMilli)}
                 </div>}
@@ -764,7 +953,7 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
           <button type="button" className="econ-attach-button" disabled={assistantBusy}
             onClick={() => assistantFilePickerRef.current?.click()} title="Прикрепить файл"
             aria-label="Прикрепить файл"><Paperclip size={17}/></button>
-          <textarea aria-label="Вопрос Экономычу AI" placeholder="Спросить об операциях и бюджете"
+          <textarea ref={composerRef} aria-label="Вопрос Экономычу AI" placeholder="Спросить об операциях и бюджете"
             value={assistantQuestion} onChange={e => setAssistantQuestion(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault(); void sendAssistantMessage(assistantQuestion); } }}
@@ -782,7 +971,7 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
 
     {mobile && embeddedInMiniApp && !dialog && createPortal(
       <div className={'econ-root econ-mobile-create' + (effectiveAppearance === 'light' ? ' econ-light' : '')}
-        style={{ '--econ-mobile-safe-bottom': mobileSafeBottom + 'px' } as CSSProperties}>
+        style={{ '--econ-mobile-safe-bottom': mobileSafeBottom + 'px', ...(miniappNavHeight !== null ? { '--econ-miniapp-nav-height': miniappNavHeight + 'px' } : {}) } as CSSProperties}>
         {addMenuOpen && createMenu}
         <button type="button" className="econ-mobile-add-fab" aria-label="Добавить финансовую запись"
           aria-expanded={addMenuOpen} title="Добавить" onClick={() => setAddMenuOpen(v=>!v)}>
@@ -791,26 +980,38 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
       </div>, document.body)}
     {dialog && createPortal(<div
       className={'econ-root econ-dialog-layer ' + (effectiveAppearance === 'light' ? 'econ-light ' : '') + (mobile ? 'econ-mobile-dialog-layer ' : '') + (embeddedInMiniApp ? 'econ-miniapp-dialog-layer' : '')}
-      style={embeddedInMiniApp ? { '--econ-mobile-safe-top': mobileSafeTop + 'px', '--econ-mobile-safe-bottom': mobileSafeBottom + 'px' } as CSSProperties : undefined}>
-      <div className="econ-modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget && !saving) setDialog(null); }}><section className="econ-modal" role="dialog" aria-modal="true" aria-label="Редактирование Economic"><header><div><span className="econ-eyebrow">{dialog.id ? 'РЕДАКТИРОВАНИЕ' : 'НОВАЯ ЗАПИСЬ'}</span><h2>{dialog.kind === 'operation' ? 'Операция' : dialog.kind === 'account' ? 'Счёт' : dialog.kind === 'debt' ? 'Долг' : dialog.kind === 'loan' ? 'Кредит' : 'Категория'}</h2></div><button type="button" onClick={() => setDialog(null)} aria-label="Закрыть"><X size={19}/></button></header>
+      style={embeddedInMiniApp ? { '--econ-mobile-safe-top': mobileSafeTop + 'px', '--econ-mobile-safe-bottom': mobileSafeBottom + 'px', ...(miniappNavHeight !== null ? { '--econ-miniapp-nav-height': miniappNavHeight + 'px' } : {}) } as CSSProperties : undefined}>
+      <div className="econ-modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget && !saving) setDialog(null); }}><section className={'econ-modal' + (dialog.kind === 'operation' ? ' econ-operation-modal' : dialog.kind === 'loan' ? ' econ-loan-modal econ-obligation-modal' : dialog.kind === 'debt' ? ' econ-obligation-modal' : '')} role="dialog" aria-modal="true" aria-label="Редактирование Economic"><header><div><span className="econ-eyebrow">{dialog.id ? 'РЕДАКТИРОВАНИЕ' : 'НОВАЯ ЗАПИСЬ'}</span><h2>{dialog.kind === 'operation' ? 'Операция' : dialog.kind === 'account' ? 'Счёт' : dialog.kind === 'debt' ? 'Долг' : dialog.kind === 'loan' ? 'Кредит' : 'Категория'}</h2></div><button type="button" onClick={() => setDialog(null)} aria-label="Закрыть"><X size={19}/></button></header>
       <form className="econ-form" onSubmit={submitDialog}>
+        <div className="econ-form-viewport">
+        <div ref={formScrollRef} className="econ-form-scroll overflow-y-auto">
         {dialog.kind === 'operation' && <>
-          <label>Тип операции<select value={form.kind} onChange={e => { formSet('kind', e.target.value); formSet('category', ''); setNewCategoryOpen(false); }}>
-            <option value="EXPENSE">Расход</option><option value="INCOME">Доход</option><option value="TRANSFER">Перевод между счетами</option>
-          </select></label>
+          <div className="econ-operation-choice"><span>Тип операции</span><div className="econ-operation-kind" role="group" aria-label="Тип операции">
+            {([['EXPENSE','Расход'],['INCOME','Доход'],['TRANSFER','Перевод']] as const).map(([kind,label]) => <button type="button" key={kind} aria-pressed={form.kind === kind} onClick={() => { formSet('kind', kind); formSet('category', ''); setNewCategoryOpen(false); }}><span className={'econ-operation-icon ' + kind} aria-hidden="true">{kind === 'INCOME' ? <ArrowDownLeft size={16}/> : kind === 'EXPENSE' ? <ArrowUpRight size={16}/> : <ArrowRightLeft size={16}/>}</span><span>{label}</span></button>)}
+          </div></div>
           <label>Название<input required maxLength={160} value={form.title} onChange={e => formSet('title', e.target.value)} placeholder="Что купили или получили"/></label>
-          <label>Сумма, ₽<input required inputMode="decimal" value={form.amount} onChange={e => formSet('amount', e.target.value)} placeholder="0,00"/></label>
-          <label>{form.kind === 'TRANSFER' ? 'Счёт списания' : 'Счёт'}
-            <select required value={form.sourceAccountId} onChange={e => formSet('sourceAccountId', e.target.value)}>
-              {snapshot.accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-            </select>
-          </label>
-          {form.kind === 'TRANSFER' && <label>Счёт зачисления
-            <select required value={form.targetAccountId} onChange={e => formSet('targetAccountId', e.target.value)}>
-              <option value="">Выберите счёт</option>
-              {snapshot.accounts.filter(a => a.id !== form.sourceAccountId).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-            </select>
-          </label>}
+          <label>Сумма, ₽<input required inputMode="text" value={form.amount} onChange={e => formSet('amount', e.target.value)} placeholder="0,00 или 1 000 + 200"/>
+            {moneyCalculationPreview(form.amount || '') && <span className="econ-form-hint" aria-live="polite">{moneyCalculationPreview(form.amount || '')}</span>}</label>
+          <div className="econ-positions">
+            <strong>Позиции</strong>
+            {positions.map((position,index)=><div key={index} className="econ-position-row">
+              <input aria-label={'Название позиции '+(index+1)} placeholder="Название" maxLength={160} value={position.name} onChange={e=>setPositions(prev=>prev.map((p,i)=>i===index?{...p,name:e.target.value}:p))}/>
+              <input aria-label={'Сумма позиции '+(index+1)} placeholder="Сумма, ₽" inputMode="decimal" value={position.amount} onChange={e=>setPositions(prev=>prev.map((p,i)=>i===index?{...p,amount:groupMoneyInput(e.target.value)}:p))}/>
+              <button type="button" aria-label="Удалить позицию" onClick={()=>setPositions(prev=>prev.filter((_,i)=>i!==index))}><X size={16}/></button>
+            </div>)}
+            <button type="button" className="econ-inline-category-button" disabled={positions.length>=100} onClick={()=>setPositions(prev=>[...prev,{name:'',amount:''}])}><Plus size={14}/> Добавить позицию</button>
+            {!!positions.length && <button type="button" className="econ-inline-category-button" onClick={()=>{try{const total=positions.reduce((sum,p)=>sum+BigInt(parseMoney(p.amount,true)),0n);if(total<=0n)throw new Error('Сумма позиций должна быть положительной');formSet('amount',inputMoney(total));setError('');}catch(cause){setError((cause as Error).message);}}}>Использовать сумму позиций</button>}
+          </div>
+          <div className="econ-operation-choice"><span>{form.kind === 'TRANSFER' ? 'Счёт списания' : 'Счёт'}</span>
+            <div className="econ-operation-accounts" role="group" aria-label="Счёт операции">
+              {snapshot.accounts.map(a => <button key={a.id} type="button" aria-pressed={a.id === form.sourceAccountId} onClick={() => { formSet('sourceAccountId', a.id); if (form.targetAccountId === a.id) formSet('targetAccountId', ''); }}><strong>{a.name}</strong><small>{money(a.balanceMinor)}</small></button>)}
+            </div>
+          </div>
+          {form.kind === 'TRANSFER' && <div className="econ-operation-choice"><span>Счёт зачисления</span>
+            <div className="econ-operation-accounts" role="group" aria-label="Счёт зачисления">
+              {snapshot.accounts.filter(a => a.id !== form.sourceAccountId).map(a => <button key={a.id} type="button" aria-pressed={a.id === form.targetAccountId} onClick={() => formSet('targetAccountId', a.id)}><strong>{a.name}</strong><small>{money(a.balanceMinor)}</small></button>)}
+            </div>
+          </div>}
           {form.kind !== 'TRANSFER' && <div className="econ-category-controls">
             <label>Категория<select value={form.category} onChange={e => formSet('category', e.target.value)}>
               <option value="">Без категории</option>
@@ -831,6 +1032,18 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
           </div>}
           <label>Дата<input required type="date" value={form.date} onChange={e => formSet('date', e.target.value)}/></label>
           <label>Примечание<input maxLength={500} value={form.note} onChange={e => formSet('note', e.target.value)} placeholder="Необязательно"/></label>
+          <label className="econ-repeat-check"><input type="checkbox" checked={repeatOperation} onChange={e => {
+            const checked = e.target.checked;
+            if (checked) {
+              if (!recurrence.recurrenceJson) setRecurrence({ recurrenceJson: defaultEconomicRecurrence(form.date, user.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Moscow') });
+              scrollToRepeatRef.current = true;
+            }
+            setRepeatOperation(checked);
+          }}/> Повторять</label>
+          {repeatOperation && <div className="econ-repeat-settings">
+            <TaskRecurrenceConfigurator manualOnly timeZone={user.timeZone} value={recurrence} onChange={patch => setRecurrence(previous => ({...previous, ...patch}))} onParseWithAi={() => {}} parsing={false}/>
+            <small>В назначенное время придёт чип. Операция будет записана только после подтверждения.</small>
+          </div>}
         </>}
         {dialog.kind === 'account' && <>
           <label>Название счёта<input required maxLength={60} value={form.name} onChange={e=>formSet('name',e.target.value)} placeholder="Наличные, карта, накопления"/></label>
@@ -864,19 +1077,15 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
               onChange={e => formSet('postedToAccount', e.target.checked ? 'yes' : 'no')}/>
             <span>Зачислить долг на счёт {form.direction === 'OWED_TO_ME' ? '(списать при выдаче)' : ''}</span>
           </label>
-          {form.postedToAccount === 'yes' && <label>Счёт для учёта долга
-            <select required value={form.accountId} onChange={e => formSet('accountId', e.target.value)}>
-              {snapshot.accounts.map(a => <option key={a.id} value={a.id}>{a.name}{a.isPrimary ? ' (основной)' : ''}</option>)}
-            </select>
-          </label>}
+          {form.postedToAccount === 'yes' && <div className="econ-operation-choice"><span>Счёт для учёта долга</span>
+            <div className="econ-operation-accounts" role="group" aria-label="Счёт для учёта долга">
+              {snapshot.accounts.map(a => <button type="button" key={a.id} aria-pressed={a.id===form.accountId} onClick={()=>formSet('accountId',a.id)}><strong>{a.name}</strong><small>{money(a.balanceMinor)}</small></button>)}
+            </div>
+          </div>}
           <label>Сколько уже возвращено, ₽<input required inputMode="decimal" value={form.paid} onChange={e => formSet('paid', e.target.value)}/></label>
           <label>Срок возврата (необязательно)<input type="date" value={form.date} onChange={e => formSet('date', e.target.value)}/></label>
           <label>Примечание<input maxLength={500} value={form.note} onChange={e => formSet('note', e.target.value)}/></label>
-          {dialog.id && <label>Состояние<select value={form.isClosed} onChange={e => setForm(prev => ({
-              ...prev, isClosed: e.target.value, paid: e.target.value === 'yes' ? prev.amount : prev.paid
-            }))}>
-              <option value="no">Активный долг</option><option value="yes">Долг погашен полностью</option>
-            </select></label>}
+          {dialog.id && form.isClosed === 'yes' && <p className="econ-form-hint">Долг погашен</p>}
           <p className="econ-form-hint">При активном учёте долг изменяет выбранный счёт:
             {form.direction === 'OWE' ? ' полученные деньги прибавятся к балансу.' : ' выданные деньги спишутся с баланса.'}
             {' '}Возвраты учитываются отдельно и не являются доходом или расходом.
@@ -917,16 +1126,16 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
           </div>
           {form.remindersEnabled === 'yes' && !form.paymentDate &&
             <p className="econ-form-hint">Укажите дату платежа, чтобы включить уведомления.</p>}
-          {dialog.id && <label>Статус<select value={form.isClosed} onChange={e => formSet('isClosed', e.target.value)}>
-            <option value="no">Активен</option><option value="yes">Закрыт</option>
-          </select></label>}
+          {dialog.id && form.isClosed === 'yes' && <p className="econ-form-hint">Кредит погашен</p>}
           <p className="econ-form-hint">В прогрессе учитывается плановая сумма выплат с процентами.
             Расчёт аннуитетный, ориентировочный, без комиссий, страховок и досрочного погашения.
           </p>
         </>}
         {dialog.kind === 'category' && <><label>Тип<select value={form.kind} onChange={e => formSet('kind',e.target.value)}><option value="EXPENSE">Расходы</option><option value="INCOME">Доходы</option></select></label><label>Название<input required maxLength={60} value={form.name} onChange={e => formSet('name',e.target.value)} placeholder="Например, питомцы"/></label></>}
         {error && <div className="econ-error" role="alert">{error}</div>}
-        <div className="econ-form-actions"><button type="button" disabled={saving} onClick={() => setDialog(null)}>Отмена</button><button type="submit" disabled={saving}>{saving ? <Loader2 className="econ-spin" size={17}/> : <Check size={17}/>} Сохранить</button></div>
+        </div>
+        </div>
+        <div className="econ-form-actions"><button type="button" disabled={saving} onClick={() => setDialog(null)}>Отмена</button>{dialog.id && (dialog.kind === 'debt' || dialog.kind === 'loan') && form.isClosed !== 'yes' && <button type="submit" data-complete="true" disabled={saving}>Завершить</button>}<button type="submit" disabled={saving}>{saving ? <Loader2 className="econ-spin" size={17}/> : <Check size={17}/>} Сохранить</button></div>
       </form></section></div></div>, document.body)}
-  </div>;
+  </div></MascotIdentityContext.Provider>;
 }

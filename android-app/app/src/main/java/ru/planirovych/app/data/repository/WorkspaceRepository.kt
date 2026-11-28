@@ -23,6 +23,8 @@ import ru.planirovych.app.data.model.*
 
 class WorkspaceRepository(private val api: PlanirovychApi,private val context:Context) {
     suspend fun establishSession() = api.me().user
+    suspend fun performNotificationAction(id:String,command:String,account:String,replyHash:String?,actionHash:String?):JsonObject =
+        api.androidNotificationAction(id,buildJsonObject{put("command",command);put("account",account);replyHash?.let{put("replyHash",it)};actionHash?.let{put("actionHash",it)}})
     suspend fun loadWorkspace() = coroutineScope {
         val spheres = async { api.spheres() }; val tasks = async { api.tasks() }; val habits = async { api.habits() }
         Workspace(spheres.await(), tasks.await(), habits.await())
@@ -170,7 +172,10 @@ class WorkspaceRepository(private val api: PlanirovychApi,private val context:Co
             generatedDocument=item["generatedDocument"] as? kotlinx.serialization.json.JsonObject,
             telegramSendDraft=item["telegramSendDraft"] as? kotlinx.serialization.json.JsonObject,
             telegramReadDraft=item["telegramReadDraft"] as? kotlinx.serialization.json.JsonObject,
-            mailSendDraft=item["mailSendDraft"] as? kotlinx.serialization.json.JsonObject
+            mailSendDraft=item["mailSendDraft"] as? kotlinx.serialization.json.JsonObject,
+            assistantSettingsProposalId=item.optString("assistantSettingsProposalId"),
+            telegramSuggestedReply=item["telegramSuggestedReply"] as? JsonObject,
+            mailSuggestedReply=item["mailSuggestedReply"] as? JsonObject
         )
     }
     suspend fun registerAndroidPushDevice(installationId:String,token:String)=
@@ -187,6 +192,17 @@ class WorkspaceRepository(private val api: PlanirovychApi,private val context:Co
         api.telegramQuickSend(payload)
     suspend fun telegramQuickSendStatus(requestId:String):JsonObject =
         api.telegramQuickSendStatus(requestId)
+    suspend fun loadMascotWardrobe()=api.mascotWardrobe()
+    suspend fun equipMascotSkin(id:String)=api.equipMascotSkin(kotlinx.serialization.json.buildJsonObject{
+        put("variant",kotlinx.serialization.json.JsonPrimitive("planner"))
+        put("skinId",kotlinx.serialization.json.JsonPrimitive(id))
+    })
+    suspend fun assistantSettingsProposal(id:String)=api.assistantSettingsProposal(id)
+    suspend fun applyAssistantSettingsProposal(id:String)=api.applyAssistantSettingsProposal(id)
+    suspend fun sendSuggestedReply(id:String,text:String,mail:Boolean):JsonObject {
+        val payload=buildJsonObject{put("text",text)}
+        return if(mail)api.sendMailSuggestedReply(id,payload) else api.sendTelegramSuggestedReply(id,payload)
+    }
     suspend fun mailAccounts():JsonObject=api.mailAccounts()
     suspend fun mailRecentRecipients():JsonObject=api.mailRecentRecipients()
     suspend fun mailDraftStatus(id:String):JsonObject=api.mailDraftStatus(id)

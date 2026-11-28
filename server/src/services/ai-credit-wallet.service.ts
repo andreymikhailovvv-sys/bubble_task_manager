@@ -1,4 +1,6 @@
 import crypto from 'node:crypto';
+import { getSubscriptionWindowLimits } from './subscription-window-limits.service.js';
+import { getSubscriptionPlanByKey } from '../config/subscription-plans.js';
 import { Prisma, type PrismaClient } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { isGuestAccount, type GuestIdentity } from '../lib/guest-account.js';
@@ -22,7 +24,7 @@ export type AiCreditReservation = {
   totalMilli: number;
 };
 
-type WalletRow = AiCreditBuckets & GuestIdentity & { id: string; aiCreditsPeriod: string; subscriptionPlan: string };
+type WalletRow = AiCreditBuckets & GuestIdentity & { id: string; aiCreditsPeriod: string; subscriptionPlan: string; subscriptionExpiresAt?: Date | null; subscriptionAllowanceMilli?: number };
 type WalletTransaction = Prisma.TransactionClient;
 type WalletDatabase = Pick<PrismaClient, '$transaction'>;
 
@@ -51,7 +53,7 @@ export function calculateDebitBreakdown(wallet: AiCreditBuckets, amountMilli: nu
 const selectWalletForUpdate = async (tx: WalletTransaction, userId: string): Promise<WalletRow | null> => {
   const rows = await tx.$queryRaw<WalletRow[]>(Prisma.sql`
     SELECT "id", "aiCreditsPeriod", "aiIncludedCreditsMilli", "aiBonusCreditsMilli", "aiPurchasedCreditsMilli",
-           "deviceId", "username", "passwordHash", "googleSub", "email", "telegramChatId", "subscriptionPlan"
+           "deviceId", "username", "passwordHash", "googleSub", "email", "telegramChatId", "subscriptionPlan", "subscriptionExpiresAt", "subscriptionAllowanceMilli"
     FROM "User"
     WHERE "id" = ${userId}
     FOR UPDATE
@@ -78,7 +80,17 @@ const refreshLockedWallet = async (tx: WalletTransaction, row: WalletRow, period
   // Do not erase legacy/purchased records: mask them until registration logic
   // explicitly determines how to handle conversion.
   if (isGuestAccount(row)) return row;
-  if (row.aiCreditsPeriod === period) return row;
+  if (row.subscriptionExpiresAt) {
+    if (row.subscriptionExpiresAt.getTime() > Date.now()) return row;
+    // An expired prepaid term must not refresh into another month's credits.
+    const expired = { ...row, subscriptionPlan: 'free', subscriptionExpiresAt: null,
+      aiIncludedCreditsMilli: 0, aiCreditsPeriod: period };
+    await updateWallet(tx, row.id, expired, period);
+    await tx.user.update({ where: { id: row.id },
+      data: { subscriptionPlan: 'free', subscriptionExpiresAt: null, subscriptionAllowanceMilli: 0 } });
+    return expired;
+  }
+  if (row.aiCreditsPeriod === period || (row.subscriptionPlan === 'free' && row.aiCreditsPeriod.startsWith(`free:${period}:`))) return row;
   // Free accounts get a one-time trial (bonus bucket), never a recurring
   // monthly free grant. Keep existing included balances until their own
   // period rolls over. Paid plan behavior remains unchanged.
@@ -106,14 +118,30 @@ export async function getAiCreditWallet(userId: string, db: WalletDatabase = pri
 
 export const refreshIncludedCreditsPeriod = getAiCreditWallet;
 
-export async function reserveAiCreditsMilli(userId: string, amountMilli: number, db: WalletDatabase = prisma): Promise<AiCreditReservation> {
+// The real wallet is never truncated: only the included amount eligible for
+// this reservation is limited. Bonus and purchased credits remain available.
+export type AiCreditWindowMode = 'standard' | 'basic' | 'premium';
+// Only explicit, server-selected inexpensive models can spend from the monthly
+// balance after a short window expires. Unknown models fail closed.
+export function modelCreditWindowMode(model: string): AiCreditWindowMode {
+  return /^(gpt-6-luna|gpt-5-nano)(?:-\d{4}-\d{2}-\d{2})?$/i.test(model.trim()) ? 'basic' : 'premium';
+}
+async function spendableWallet(tx: WalletTransaction, wallet: WalletRow, mode: AiCreditWindowMode): Promise<AiCreditBuckets> {
+  if (mode === 'basic') return wallet;
+  const limits = await getSubscriptionWindowLimits(tx, wallet);
+  if (!limits) return wallet;
+  if (mode === 'premium' && limits.daily.remainingMilli <= 0) return { aiIncludedCreditsMilli: 0, aiBonusCreditsMilli: 0, aiPurchasedCreditsMilli: 0 };
+  return { ...wallet, aiIncludedCreditsMilli: limits.daily.remainingMilli };
+}
+
+export async function reserveAiCreditsMilli(userId: string, amountMilli: number, db: WalletDatabase = prisma, mode: AiCreditWindowMode = 'standard'): Promise<AiCreditReservation> {
   return db.$transaction(async (tx) => {
     const row = await selectWalletForUpdate(tx, userId);
     if (!row) throw new Error('User not found');
     if (isGuestAccount(row)) throw new Error('Недостаточно AI кредитов');
-    const period = currentAiCreditsPeriod();
-    const wallet = await refreshLockedWallet(tx, row, period);
-    const debit = calculateDebitBreakdown(wallet, amountMilli);
+    const wallet = await refreshLockedWallet(tx, row, currentAiCreditsPeriod());
+    const period = wallet.aiCreditsPeriod;
+    const debit = calculateDebitBreakdown(await spendableWallet(tx, wallet, mode), amountMilli);
     if (!debit) throw new Error('Недостаточно AI кредитов');
     const next = {
       aiIncludedCreditsMilli: wallet.aiIncludedCreditsMilli - debit.includedMilli,
@@ -136,7 +164,7 @@ export async function reserveAiCreditsMilli(userId: string, amountMilli: number,
 export async function reserveAiCreditsMilliWithTransaction<T>(
   userId: string, amountMilli: number,
   work: (tx: Prisma.TransactionClient, reservation: AiCreditReservation) => Promise<T>,
-  db: WalletDatabase = prisma
+  db: WalletDatabase = prisma, mode: AiCreditWindowMode = 'standard'
 ): Promise<{ reservation: AiCreditReservation; result: T }> {
   if (!Number.isSafeInteger(amountMilli) || amountMilli <= 0) {
     throw new TypeError('amountMilli must be a positive safe integer');
@@ -145,9 +173,9 @@ export async function reserveAiCreditsMilliWithTransaction<T>(
     const row = await selectWalletForUpdate(tx, userId);
     if (!row) throw new Error('User not found');
     if (isGuestAccount(row)) throw new Error('Недостаточно AI кредитов');
-    const period = currentAiCreditsPeriod();
-    const wallet = await refreshLockedWallet(tx, row, period);
-    const debit = calculateDebitBreakdown(wallet, amountMilli);
+    const wallet = await refreshLockedWallet(tx, row, currentAiCreditsPeriod());
+    const period = wallet.aiCreditsPeriod;
+    const debit = calculateDebitBreakdown(await spendableWallet(tx, wallet, mode), amountMilli);
     if (!debit) throw new Error('Недостаточно AI кредитов');
     const id = crypto.randomUUID();
     const reservation: AiCreditReservation = { id, userId, period, ...debit };
@@ -162,7 +190,7 @@ export async function reserveAiCreditsMilliWithTransaction<T>(
   });
 }
 
-export async function reserveAiCreditsMilliUpTo(userId: string, minimumMilli: number, desiredMilli: number, db: WalletDatabase = prisma): Promise<AiCreditReservation> {
+export async function reserveAiCreditsMilliUpTo(userId: string, minimumMilli: number, desiredMilli: number, db: WalletDatabase = prisma, mode: AiCreditWindowMode = 'standard'): Promise<AiCreditReservation> {
   if (!Number.isSafeInteger(minimumMilli) || minimumMilli <= 0 || !Number.isSafeInteger(desiredMilli) || desiredMilli < minimumMilli) {
     throw new TypeError('Invalid AI credit reservation range');
   }
@@ -170,12 +198,13 @@ export async function reserveAiCreditsMilliUpTo(userId: string, minimumMilli: nu
     const row = await selectWalletForUpdate(tx, userId);
     if (!row) throw new Error('User not found');
     if (isGuestAccount(row)) throw new Error('Недостаточно AI кредитов');
-    const period = currentAiCreditsPeriod();
-    const wallet = await refreshLockedWallet(tx, row, period);
-    const balance = getTotalAiCreditsMilli(wallet);
+    const wallet = await refreshLockedWallet(tx, row, currentAiCreditsPeriod());
+    const period = wallet.aiCreditsPeriod;
+    const eligible = await spendableWallet(tx, wallet, mode);
+    const balance = getTotalAiCreditsMilli(eligible);
     if (balance < minimumMilli) throw new Error('Недостаточно AI кредитов');
     const amountMilli = Math.min(balance, desiredMilli);
-    const debit = calculateDebitBreakdown(wallet, amountMilli)!;
+    const debit = calculateDebitBreakdown(eligible, amountMilli)!;
     const next = {
       aiIncludedCreditsMilli: wallet.aiIncludedCreditsMilli - debit.includedMilli,
       aiBonusCreditsMilli: wallet.aiBonusCreditsMilli - debit.bonusMilli,
@@ -251,6 +280,31 @@ async function finalizeAiCreditReservation(
       where: { id: saved.id },
       data: { status, chargedMilli, refundedMilli, expiredIncludedMilli, settledAt: new Date() }
     });
+
+    // Count only finalized usage, excluding reservations still in flight.
+    // The user lock serializes threshold checks and the unique event key
+    // prevents replays from generating duplicate system notifications.
+    const plan = getSubscriptionPlanByKey(wallet.subscriptionPlan);
+    if (status === 'SETTLED' && spent.includedMilli > 0 &&
+        saved.period === wallet.aiCreditsPeriod && plan &&
+        wallet.subscriptionExpiresAt && wallet.subscriptionExpiresAt.getTime() > Date.now()) {
+      const pending = await tx.aiCreditReservationRecord.aggregate({
+        where: { userId: reservation.userId, period: wallet.aiCreditsPeriod, status: 'RESERVED' },
+        _sum: { includedMilli: true }
+      });
+      const allowance = wallet.subscriptionAllowanceMilli || plan.creditsAmount * AI_CREDIT_MILLI_PER_CREDIT;
+      const used = Math.max(0, allowance - next.aiIncludedCreditsMilli - (pending._sum.includedMilli ?? 0));
+      const percent = Math.min(100, Math.floor(used * 100 / allowance));
+      const notifications = Array.from({ length: Math.floor(percent / 10) }, (_, i) => (i + 1) * 10)
+        .map(threshold => ({
+          userId: reservation.userId,
+          eventKey: `subscription-limit:${reservation.userId}:${wallet.subscriptionExpiresAt!.toISOString()}:${threshold}`,
+          content: threshold === 100
+            ? 'Месячный лимит ИИ по подписке исчерпан. При наличии дополнительного баланса вы можете продолжить работу.'
+            : `Использовано ${threshold}% месячного лимита ИИ по подписке.`
+        }));
+      if (notifications.length) await tx.systemNotification.createMany({ data: notifications, skipDuplicates: true });
+    }
 
     console.info('[AI wallet] reservation finalized', {
       userId: reservation.userId, reservationId: saved.id, status,

@@ -1,3 +1,4 @@
+import { SubscriptionAccessError } from './subscription-access.service.js';
 import { prisma } from '../db/prisma.js';
 import { taskAccessWhere } from '../lib/task-access.js';
 import { getOfficeDocumentPreview } from './ooxml-document-editor.js';
@@ -41,6 +42,21 @@ export type FileToolResult = {
   document?: GeneratedDocumentMeta;
   creditsSpentMilli?: number;
 };
+
+/** Keep actual file-tool errors separate from generated assistant prose. */
+export function fileToolFailure(error: unknown, fallback: string, code: string) {
+  if (error instanceof SubscriptionAccessError) return { ok: false as const, code: error.code, message: error.message, requiredPlan: error.requiredPlan };
+  return { ok: false as const, code, message: error instanceof Error ? error.message : fallback };
+}
+
+export function terminalFileToolAnswer(name: string, result: unknown): string | null {
+  if (!['generate_image', 'edit_file', 'create_word_document', 'create_excel_workbook'].includes(name) ||
+      !result || typeof result !== 'object') return null;
+  const value = result as { ok?: unknown; code?: unknown; message?: unknown };
+  if (value.ok !== false || typeof value.message !== 'string' || !value.message.trim() ||
+      ['FILE_ALREADY_CREATED', 'IMAGE_ALREADY_CREATED', 'DOCUMENT_ALREADY_CREATED'].includes(String(value.code))) return null;
+  return value.message.trim().slice(0, 1000);
+}
 
 const maxReadCharacters = 42_000;
 const validIdentifier = (text: unknown) => typeof text === 'string' && /^[a-zA-Z0-9_-]{1,128}$/.test(text);

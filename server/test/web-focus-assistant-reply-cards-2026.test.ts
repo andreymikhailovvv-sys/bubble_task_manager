@@ -46,7 +46,12 @@ test('managed assistant chat can only prepare a reply card with bound recipient'
     src('../../client/src/MiniApp.tsx')
   ]);
   assert.match(tools, /name: 'prepare_assistant_reply'/);
-  assert.match(tools, /input\.assistantReplyContext \? \[PREPARE_ASSISTANT_REPLY_TOOL\] : \[\]/);
+  assert.match(tools, /input\.assistantReplyContext \? \[PREPARE_ASSISTANT_REPLY_TOOL, READ_ASSISTANT_SETTINGS_TOOL, PROPOSE_ASSISTANT_SETTINGS_TOOL\] : \[\]/);
+  const settingsHandler = tools.slice(tools.indexOf("if(name==='read_assistant_settings'"), tools.indexOf("if (name === 'prepare_assistant_reply')"));
+  assert.match(settingsHandler, /if\(!context\)return \{ok:false,code:'NOT_AN_ASSISTANT_CHAT'\}/);
+  assert.match(settingsHandler, /featureAccessError\(rank,context\.kind==='telegram'\?'telegram':'mail'\)/);
+  assert.match(settingsHandler, /prepareAssistantSettings\(input\.userId,context,value\)/);
+  assert.doesNotMatch(settingsHandler, /applyAssistantSettingsProposal|sendMessage\(|smtpReply\(/);
   assert.match(tools, /where: \{ id: context\.policyId, userId: input\.userId, isEnabled: true \}/);
   assert.match(tools, /recipientId: policy\.chatId/);
   assert.match(tools, /mailboxId: context\.mailboxId/);
@@ -64,4 +69,22 @@ test('managed assistant chat can only prepare a reply card with bound recipient'
   assert.match(web, /<MailAiReplySuggestionCard reply=\{item\.message\.mailSuggestedReply\}/);
   const occurrences = [...mini.matchAll(/<MailAiReplySuggestionCard reply=\{message\.mailSuggestedReply\}/g)];
   assert.ok(occurrences.length >= 2, 'both Mini App chat contexts render the mail card');
+});
+
+test('monitor replies quote the actual incoming message matched by ID, not AI-generated summary', async () => {
+  const [worker, inbox, auto, mailWorker, mailInbox] = await Promise.all([
+    src('../src/services/telegram-ai-monitor-worker.service.ts'),
+    src('../src/services/telegram-ai-inbox.service.ts'),
+    src('../src/services/telegram-ai-auto-reply.service.ts'),
+    src('../src/services/mail-assistant.service.ts'),
+    src('../src/services/mail-assistant-inbox.service.ts')
+  ]);
+  assert.equal([...worker.matchAll(/sourceText: selected\.find\(message => message\.id === reply\.messageId\)\?\.text/g)].length, 2);
+  for (const telegram of [inbox, auto]) {
+    assert.match(telegram, /В ответ на сообщение:/);
+    assert.match(telegram, /input\.sourceText\.trim\(\)\.slice\(0,4096\)/);
+  }
+  assert.match(mailWorker, /replySourceText: message\.text\.trim\(\)\.slice\(0,12000\)/);
+  assert.match(mailInbox, /typeof summary\?\.replySourceText === 'string'/);
+  assert.match(mailInbox, /В ответ на письмо:/);
 });

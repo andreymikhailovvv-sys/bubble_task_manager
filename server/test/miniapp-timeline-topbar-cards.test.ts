@@ -77,7 +77,11 @@ test('timeline toolbar tiles match list height and overflow menu is consistently
 
   assert.match(mini, /miniapp-utility-menu-label">Рейтинг<\/span>/);
   assert.match(mini, /miniapp-utility-menu-value">\{formattedEfficiencyScore\}\/100/);
+  assert.match(mini, /activeSubscription \? <SubscriptionDailyRing limit=\{currentUser\?\.subscriptionLimit\} compact\/> : <>/);
   assert.match(mini, /miniapp-utility-menu-value' : undefined\}>\{aiCredits\}/);
+  assert.match(mini, /subscriptionDailyRemaining\(currentUser\?\.subscriptionLimit\)/);
+  assert.match(css, /\.subscription-daily-ring__text\{white-space:nowrap\}/);
+  assert.match(css, /\.miniapp-credit-badge\[data-subscription-limit\]\{max-width:none;padding:0 5px\}/);
   assert.match(toolbarCss, /grid-template-columns: 1\.7rem minmax\(0, 1fr\) auto;/);
   assert.match(toolbarCss, /\.miniapp-utility-menu-value \{[\s\S]*?font-variant-numeric: tabular-nums;/);
   assert.match(toolbarCss, /\.miniapp-timeline-view-switch button:first-child \{\s*border-radius: \.95rem \.72rem \.72rem \.95rem;/);

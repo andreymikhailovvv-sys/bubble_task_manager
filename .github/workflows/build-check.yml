@@ -15,7 +15,6 @@ permissions:
 
 jobs:
   build:
-    # Chromium 1.56 and its dependency installer support Ubuntu 24.04.
     # Pin the runner instead of relying on a moving ubuntu-latest image.
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -30,39 +29,61 @@ jobs:
       - name: Install dependencies from lockfile
         run: npm ci --include=dev --no-audit --no-fund
       - name: Compile web client and API server
+        id: compile
         run: npm run build
-      - name: Browser smoke - real Chromium task open and typing
+      - name: Verify guided lessons in real Chromium
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: |
           npm install --no-save --package-lock=false --ignore-scripts playwright@1.56.1
           npx playwright install --with-deps chromium
-          node scripts/browser-planner-smoke.mjs
+          node scripts/browser-guided-training-smoke.mjs
+      - name: Verify paid subscription calendar and YooKassa confirmation idempotency
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
+        run: node --import tsx --test server/test/subscription-purchase.service.test.ts server/test/subscription-access.test.ts
+      - name: Verify mascot wardrobe entitlements and animation integration
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
+        run: node --import tsx --test server/test/mascot-wardrobe.test.ts
       - name: Verify experimental Test Page routing and shared planner components
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test client/test/test-page-ui.test.ts
       - name: Verify modular Test Main Page and responsive grid geometry
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test client/test/test-main-page-ui.test.ts client/src/lib/testMainGrid.test.ts
       - name: Verify Economic money precision and loan amortization
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test client/src/lib/economicMoney.test.ts
       - name: Verify Economic debt cashflow and balance signs
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/economic-debt-cashflow.test.ts
       - name: Verify Economic payment reminders and isolated entry
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/economic-loan-reminder.test.ts client/test/economic-entry-isolation.test.ts
       - name: Verify Economic navigation, shared mascot and request feedback
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test client/test/economic-visual-foundation.test.ts
       - name: Verify Economic mobile tabs, account edit sheets and Android WebView authentication
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/economych-mobile-navigation.test.ts
       - name: Verify Economic assistant token context and multimodal file safety
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/economic-assistant-context.test.ts client/test/economic-assistant-chat.test.ts
       - name: Verify Economic confirmation chips in general web, Mini App and Android AI chats
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/economic-inline-general-chat.test.ts
       - name: Verify unified Planner finance tools, current balances, light viewport and motion
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/economic-unified-planner.test.ts
       - name: Verify Economic finance AI proposal owner isolation, undo and UI
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/economic-ai-finance-proposals.test.ts client/test/economic-finance-proposal-ui.test.ts
       - name: Verify compact AI chips, long-press actions and Android voice flow
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/android-hold-voice-compact-proposals.test.ts
       - name: Verify editable task proposals and automatic receipt classification
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/ai-task-chip-edit.test.ts
       - name: Verify Economic finance proposals against real PostgreSQL
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         env:
           DATABASE_URL: postgresql://postgres:economic_test_password@localhost:15437/economic_ci?schema=public
         run: |
@@ -73,196 +94,291 @@ jobs:
             sleep 1
           done
           cd server && ../node_modules/.bin/prisma migrate deploy && cd ..
-          node --import tsx --test server/test/economic-ai-proposals.integration.test.ts server/test/ai-task-chip-edit.integration.test.ts
+          node --import tsx --test server/test/economic-ai-proposals.integration.test.ts server/test/ai-task-chip-edit.integration.test.ts server/test/admin-subscription.integration.test.ts
       - name: Verify personal Planner boot without Telegram SDK blocking
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test client/test/planner-startup-splash.test.ts
       - name: Verify Planner auth hook order against React render crashes
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/planner-auth-hook-order.test.ts
       - name: Verify optimized favicons are built and linked consistently
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/favicon-build.test.ts
       - name: Verify magnetic bubble layout and collision regression tests
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test client/src/lib/bubbleInteractions.test.ts
       - name: Verify compact bubble hover cards stay inside viewport without covering bubbles
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test client/src/lib/bubbleHoverPlacement.test.ts
       - name: Verify session workspace cache isolation and expiry
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test client/src/lib/workspaceSnapshot.test.ts
       - name: Verify bounded note HTML transforms and memoized previews
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test client/src/lib/boundedStringTransformCache.test.ts
       - name: Verify privacy-safe performance telemetry and bounded histograms
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/performance-diagnostics.test.ts
       - name: Verify deduplicated task and reminder notifications
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/task-notification-persistence.test.ts
       - name: Verify parallel free AI intro animation and main-model handoff
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/ai-quick-intro.test.ts
       - name: Verify immediate contextual AI introductions and model timeout
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/ai-quick-intro-context.test.ts
       - name: Verify streaming Markdown emphasis before final answer
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/ai-streaming-markdown.test.ts
       - name: Verify signed Android APK distribution and release catalog security
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/android-apk-release-distribution.test.ts
       - name: Verify Android Timeline parity, fixed month cells and lazy week
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/android-timeline-miniapp-parity-scroll.test.ts
       - name: Verify Android system theme, status-bar contrast, month drilldown and subtask parent navigation
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/android-theme-month-parent-navigation.test.ts
       - name: Verify native Android global search, rating, utility menu and bounded AI composer
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/android-search-rating-overflow-composer.test.ts
       - name: Verify Android 1x1 voice widget and confirmed Telegram/mail AI cards
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/android-widget-telegram-mail-cards.test.ts
       - name: Verify Android Planik shared live UI, boot handshake, visual parity and auth
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/android-planik-live-parity.test.ts server/test/android-planik-boot-theme-regression.test.ts server/test/android-planik-telegram-bootstrap.test.ts server/test/planik-persistent-session-ui.test.ts server/test/planik-android-account-task-links-progress.test.ts
       - name: Verify Android List and Timeline header parity
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/android-miniapp-workspace-header-parity.test.ts
       - name: Verify Mini App search toolbar is confined to List and Timeline
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/miniapp-search-bar-workspace-visibility.test.ts
       - name: Verify habit reminders respect scheduled days on all clients
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/habit-notification-schedule.test.ts
       - name: Verify AI-created habits, native day layout and voice transcription defaults
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/ai-create-habit.test.ts server/test/miniapp-android-day-habits-voice.test.ts
       - name: Verify shared Work subtask discussion, recipients and dispatcher UI
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/work-collaboration-ui.test.ts
       - name: Verify Work focus, subtasks and company AI context fixes
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/work-focus-subtasks.test.ts
       - name: Verify shared original chat and Focus components in Work
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/work-reuse-personal-ui.test.ts
       - name: Verify role-specific Work dashboard and shared task access
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/work-role-dashboard.test.ts
       - name: Verify Work AI company wallet, monitoring and admin grants
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/work-ai-credits-and-monitoring.test.ts
       - name: Verify tenant-owned Work projects and lightweight entry
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/work-projects-and-entry.test.ts
       - name: Verify Work company permissions, invitations and departments
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/work-company-management.test.ts
       - name: Verify Work organization isolation and additive migration
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/work-organization-foundation.test.ts
       - name: Verify public SEO pages and first-visit welcome
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/public-seo-pages.test.ts server/test/welcome-first-visit.test.ts
       - name: Verify task chat answer preservation and immediate-action prompt
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test --test-name-pattern="task assistant не подменяет творческий ответ|task assistant сохраняет инструкцию выполнять изменения" server/test/ai-assistant.service.test.ts
       - name: Verify MTProto HTTP CONNECT and Telegram SOCKS5 proxy transport
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/telegram-user-client-network.test.ts server/test/telegram-socks5.test.ts
       - name: Verify manual Telegram send restrictions and limits
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/telegram-user-client-manual-send.test.ts
       - name: Verify Telegram AI draft isolation and approval-only flow
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/telegram-user-client-ai-draft.test.ts
       - name: Verify owner-only Telegram chat read security and safe serialization
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/telegram-user-client-read.test.ts
       - name: Verify Telegram AI selected-dialog consent and snapshot isolation
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/telegram-user-client-dialog-assistant.test.ts
       - name: Verify personal Telegram access inside normal AI chat
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/telegram-user-client-chat-integration.test.ts
       - name: Verify Telegram message quick-share, sealed queue and AI rewrite restrictions
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/telegram-quick-share.test.ts
       - name: Verify AI-created Telegram inline send proposals and contact ambiguity
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/telegram-ai-inline-send.test.ts
       - name: Verify shared Telegram icon styling and legacy panel cleanup
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/telegram-message-action-theme.test.ts
       - name: Verify chat forwarding to standalone notes and AI text rewrite
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/chat-message-note-forward.test.ts
       - name: Verify Telegram integration guide, quick-share icon and release announcement
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/telegram-integration-release-ui.test.ts
       - name: Verify integrations popover and modal remain above workspace
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/telegram-integrations-overlay-ui.test.ts
       - name: Verify owner-only Telegram integration setup and encrypted application keys
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/telegram-integrations-self-service.test.ts
       - name: Verify Telegram group send targets, broadcast exclusion and private history isolation
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/telegram-send-group-targets.test.ts
       - name: Verify explicit AI Telegram reading consent, groups and one-time continuation
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/telegram-ai-read-consent.test.ts
       - name: Verify Telegram AI assistant opt-in policies and credit settings
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/telegram-ai-chat-policy.test.ts
       - name: Verify Telegram task receipts and cross-surface AI chat synchronization
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/ai-chat-cross-surface-sync.test.ts server/test/quick-ai-context-chronology.test.ts client/src/lib/ai-chat-storage.test.ts
       - name: Verify blue reminder timeline and notification behavior
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/timeline-reminders.test.ts server/test/ai-chat-navigation-reminders-ui.test.ts
       - name: Verify Telegram task change action buttons and quick-chat deep link
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/telegram-ai-action-buttons.test.ts
       - name: Verify AI weekday task due dates and failed proposal receipts
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/planner-due-date.test.ts
       - name: Verify Telegram bot auto-apply and task proposal undo
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/ai-task-proposal-undo.test.ts
       - name: Verify Telegram assistant project deduplication and media setting
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/telegram-ai-chat-proliferation.test.ts
       - name: Verify Telegram unified AI inbox and per-chat models
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/telegram-ai-inbox.test.ts
       - name: Verify Telegram monitor attachment handling
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/telegram-ai-monitor-media.test.ts
       - name: Verify Telegram autonomous monitoring and credits
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/telegram-ai-monitoring.test.ts
       - name: Verify Telegram identity binding
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/telegram-user-client-binding.test.ts
       - name: Verify Yandex and Mail.ru email integration cryptography and read-only access
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/mail-assistant-security.test.ts
       - name: Verify mailbox AI project security, UI parity and outbound reply safety
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/mail-assistant-parity.test.ts
       - name: Verify AI mail read, prepare-to-send, owner isolation and monitoring credits
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/mail-ai-tools.test.ts
       - name: Verify SMTP non-delivery diagnostics and safe manual retries
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/mail-smtp-diagnostics.test.ts
       - name: Verify verified-email login and recovery security invariants
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/account-email-auth.test.ts
       - name: Verify one-time Telegram email activation outreach and deduplication
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/telegram-email-outreach.test.ts
       - name: Verify Telegram Mini App email setting, OTP modal and link activation
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/telegram-miniapp-email-verification.test.ts
       - name: Verify login edit, bulk attachment delete and cross-client habit grouping
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/profile-habits-attachments-ui.test.ts
       - name: Verify Telegram user-client cryptography and access gating
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/telegram-user-client-security.test.ts
       - name: Verify image edit animation and attachment previews
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/ai-image-edit-attachment-ui.test.ts
       - name: Verify Mini App image cards survive sync and legacy file references
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/miniapp-generated-image-file-ref.test.ts
       - name: Verify mobile web and Telegram Mini App shared filters, notes and current HTML
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/mobile-workspace-parity.test.ts server/test/miniapp-timeline-topbar-cards.test.ts server/test/miniapp-focus-task-ai-header.test.ts server/test/overdue-actions-notifications.test.ts
       - name: Verify idempotent AI chat rating, time selection and global overdue toolbar
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/ai-request-rating.test.ts
       - name: Verify user-controlled trigger cancellation, Quick AI newline and checkup cards
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/followup-cancel-quickai-checkup-ui.test.ts
       - name: Verify opt-in task monitoring isolation and status UI
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/task-monitoring-beta.test.ts
       - name: Verify monitoring chat controls, follow-ups and deduplicated delivery
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/task-monitoring-chat-ui.test.ts server/test/task-ai-luna-defaults.test.ts
       - name: Verify opt-in monitoring scheduler and follow-up triggers
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/task-monitoring-scheduler.test.ts server/test/task-monitoring-fallback.test.ts server/test/task-monitoring-followups.test.ts
       - name: Verify autonomous monitoring action limits and badges
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/task-monitoring-actions.test.ts
       - name: Verify monitoring reply delivery across clients and Telegram
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/task-monitoring-delivery.test.ts server/test/task-monitoring-actionable-notifications.test.ts server/test/task-monitoring-introduction.test.ts
       - name: Verify note group pills, unassigned sector, bulk postpone exclusions and web boot splash
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/web-notes-postpone-bubbles-boot.test.ts
       - name: Verify curved hill sector walls, coefficient crest packing and drag/fullscreen parity
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/organic-hill-sectors.test.ts
       - name: Verify asynchronous bubble worker layout, geometry and mode cache
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/bubble-layout-worker.test.ts
       - name: Verify fullscreen panel slots, toolbar and mode switching
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/fullscreen-dual-workspace.test.ts server/test/fullscreen-one-row-open-layout.test.ts server/test/fullscreen-toolbar-polish.test.ts server/test/fullscreen-view-filters.test.ts server/test/fullscreen-future-panels.test.ts
       - name: Verify primary desktop right widgets, reorder, collapse and habit actions
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/web-primary-widgets.test.ts
       - name: Verify completed-parent reports and fullscreen pane UI regression guards
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/fullscreen-report-menu-corners-regression.test.ts
       - name: Verify first-visit training invitation and starter tasks and sectors
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/onboarding-training-defaults-ui.test.ts
       - name: Verify opaque overdue popover and neutral dark task-window outlines
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/desktop-focus-borders-overdue-bubble-theme.test.ts
       - name: Verify newest Focus subtasks, AI note editing, chat scrolling and themed calendar
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/focus-note-edit-chat-scroll.test.ts
       - name: Verify hidden-tab browser notifications and synced defaults
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/browser-system-notifications.test.ts
       - name: Verify image generation and document regressions
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/ai-image-multireference.test.ts server/test/ai-image-generation.test.ts server/test/ai-image-edit-followup.test.ts server/test/ai-user-uploaded-image.test.ts server/test/ai-image-edit-error-visibility.test.ts server/test/ai-office-vs-image-routing.test.ts server/test/ai-file-catalog.test.ts server/test/ai-explicit-file-tools.test.ts server/test/attachment-storage-management.test.ts server/test/recurrence-creation.test.ts server/test/manual-recurrence-editors.test.ts server/test/ai-user-office-edits.test.ts server/test/ai-office-truncated-plan.test.ts server/test/xlsx-delete-rows.test.ts server/test/ai-image-visual-preview.test.ts server/test/task-completion-report.test.ts server/test/ai-word-documents.test.ts server/test/settings-modal-parity.test.ts server/test/ai-chat-reply-title-focus-theme.test.ts server/test/docker-build-dependencies.test.ts server/test/standalone-notes.test.ts server/test/standalone-note-groups.test.ts server/test/web-notes-and-description-resize.test.ts server/test/web-task-subtask-metadata-icons.test.ts server/test/miniapp-standalone-note-creation.test.ts server/test/miniapp-focus-subtask-checkbox.test.ts server/test/miniapp-subtask-delete-metadata-events.test.ts server/test/completed-subtask-open-scroll.test.ts server/test/task-chat-web-search.test.ts server/test/ai-personal-notes-search.test.ts server/test/ai-personal-search-intent.test.ts server/test/ai-create-notes-and-board-search.test.ts server/test/universal-workspace-search.test.ts server/test/updates-news-theme.test.ts server/test/device-guest-security.test.ts server/test/security-rate-limiter.test.ts server/test/google-oauth-security.test.ts server/test/task-reference-authorization.test.ts server/test/collaboration-invite-revocation.test.ts server/test/collaboration-access-revocation.test.ts server/test/ai-legacy-access-revocation.test.ts server/test/task-ai-editor-sync.test.ts server/test/yookassa.service.test.ts server/test/yookassa-payment-recovery.test.ts server/test/yookassa-paid-credit-reconciliation.test.ts server/test/ai-credit-wallet.service.test.ts server/test/account-registration.service.test.ts server/test/one-time-ai-trial.test.ts server/test/ai-credit-wallet.service.test.ts server/test/guest-credit-security.test.ts server/test/ai-chat-request-idempotency.test.ts server/test/openai-responses-stream.test.ts server/test/dynamic-responses-billing.test.ts server/test/task-ai-request-idempotency.test.ts server/test/telegram-webhook-security.test.ts server/test/telegram-update-queue.test.ts server/test/telegram-relay.controller.test.ts server/test/miniapp-habit-tracker-ui.test.ts client/src/lib/habitTracker.test.ts
       - name: Verify AI checkup analysis, selective approvals and Telegram view-only navigation
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/daily-ai-checkup.test.ts server/test/daily-ai-checkup-proposal.test.ts server/test/daily-ai-checkup-telegram.test.ts
       - name: Verify repeatable manual AI checkup and app navigation
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/ai-checkup-manual.test.ts server/test/miniapp-habit-tracker-ui.test.ts
       - name: Verify workspace, AI and integrations training tutorials
-        run: node --import tsx --test server/test/training-tours-2026.test.ts
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
+        run: node --import tsx --test server/test/training-tours-2026.test.ts client/src/lib/basicTraining.test.ts client/src/lib/guidedTraining.test.ts
       - name: Verify native Android inline editing, keyboard and shimmer placeholders
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/android-inline-rich-editor-skeleton-status-2026.test.ts server/test/android-keyboard-chat-and-editor-visibility.test.ts
       - name: Verify inline rich descriptions and subtask notes action
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/web-inline-rich-description-2026.test.ts server/test/web-notes-and-description-resize.test.ts
       - name: Verify focus editor controls and managed assistant reply cards
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/web-focus-assistant-reply-cards-2026.test.ts
       - name: Verify voice transcription and narration credit accounting
+        if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/web-voice-credit-billing.test.ts
       - name: Build the deployment Docker image
         run: docker build --progress=plain -t bubble-task-manager:ci .

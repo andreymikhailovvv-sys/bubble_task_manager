@@ -1,3 +1,4 @@
+import { useScrollFade } from '../hooks/useScrollFade';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { TaskMonitoringBadge } from './TaskMonitoringBadge';
 import { CalendarDays, ChevronRight, Coins, Gauge, LoaderCircle, MessageCircle, Plus, Repeat, Sparkles, X } from 'lucide-react';
@@ -782,6 +783,8 @@ export function BubbleField({
   };
 
   const hoveredBubble = useMemo(() => visibleBubbles.find((bubble) => bubble.task.id === hoveredTaskId) ?? null, [hoveredTaskId, visibleBubbles]);
+  const compactHoverScrollRef = useRef<HTMLDivElement>(null);
+  useScrollFade(compactHoverScrollRef, !!(compact && hoveredBubble && compactHoverPoint));
   const hoveredSubtasks = hoveredBubble ? (subtaskMap[hoveredBubble.task.id] ?? []).filter((subtask) => subtask.status !== 'DONE') : [];
   const hoveredSphere = hoveredBubble?.task.sphereId ? spheres.find((sphere) => sphere.id === hoveredBubble.task.sphereId) : null;
   const hoveredTaskCoefficient = hoveredBubble ? getTaskCoefficient(getSourceTask(hoveredBubble.task), subtaskMap) : 0;
@@ -1026,9 +1029,9 @@ export function BubbleField({
           cy={0}
           r={bubble.radius}
           fill={getBubbleShade(bubble.color, bubble.distanceRatio)}
-          fillOpacity={isLightTheme ? 0.66 : 0.48}
+          fillOpacity={isLightTheme ? 0.70 : 0.50}
           stroke={isDragTarget ? (dragView?.target?.kind === 'nest' ? '#f59e0b' : '#a78bfa') : selectedId === bubble.task.id ? (isLightTheme ? '#0f172a' : '#f8fafc') : (isLightTheme ? 'rgba(14,116,144,0.56)' : '#bae6fd')}
-          strokeOpacity={selectedId === bubble.task.id ? 1 : isLightTheme ? 0.78 : 0.65}
+          strokeOpacity={selectedId === bubble.task.id ? 1 : isLightTheme ? 0.84 : 0.72}
           strokeWidth={isDragTarget || isDragged ? 5 : selectedId === bubble.task.id ? 3.5 : 2.4}
         />
         {ownDeadlineOverdue || subtaskDeadlineOverdue ? (
@@ -1538,13 +1541,14 @@ export function BubbleField({
                 <foreignObject x={-88} y={-18} width={176} height={40}>
                   <div className="bubble-sector-label flex w-full items-center justify-center gap-1 rounded-full border px-3 py-1.5 text-sm font-semibold"
                     style={item.sphere ? {
-                      borderColor: `color-mix(in srgb, ${item.sphere.color} 29%, ${isLightTheme ? '#ffffff' : '#475569'})`,
-                      background: `color-mix(in srgb, ${item.sphere.color} ${isLightTheme ? '9%' : '15%'}, ${isLightTheme ? '#ffffff' : '#0f172a'})`
+                      borderColor: `color-mix(in srgb, ${item.sphere.color} 45%, ${isLightTheme ? '#94a3b8' : '#64748b'})`,
+                      background: `color-mix(in srgb, ${item.sphere.color} ${isLightTheme ? '14%' : '21%'}, ${isLightTheme ? '#ffffff' : '#0f172a'})`,
+                      color: `color-mix(in srgb, ${item.sphere.color} ${isLightTheme ? '50%' : '62%'}, ${isLightTheme ? '#0f172a' : '#f8fafc'})`
                     } : undefined}>
                     {item.sphere ? (
-                      <button className="inline-flex min-w-0 items-center gap-2" onClick={() => onRenameSphere?.(item.sphere!)}>
-                        {Icon ? <Icon size={15} color={item.sphere.color} /> : null}
-                        <span className="truncate" style={{ color: item.sphere.color }}>{item.sphere.name}</span>
+                      <button data-planik-sector={item.sphere.id} className="inline-flex w-full min-w-0 items-center justify-center gap-2" onClick={() => onRenameSphere?.(item.sphere!)}>
+                        {Icon ? <Icon size={15} color="currentColor" /> : null}
+                        <span className="truncate">{item.sphere.name}</span>
                       </button>
                     ) : <span className="truncate text-muted">Без сектора</span>}
                   </div>
@@ -1768,16 +1772,14 @@ export function BubbleField({
         </motion.g>
       </svg>
       {compact && hoveredBubble && compactHoverPoint && !dragSessionRef.current ? createPortal(
-        <div className="timeline-hover-card pointer-events-auto fixed z-[2147483647] overflow-y-auto rounded-lg border p-2.5 text-[11px]"
+        <div className="timeline-hover-card bubble-compact-hover-shell pointer-events-auto fixed z-[2147483647] rounded-lg border text-[11px]"
           style={compactHoverPoint} onMouseEnter={cancelHoverExit} onMouseLeave={scheduleHoverExit}
           aria-label={`Информация о задаче: ${hoveredBubble.task.title}`}>
+          <div ref={compactHoverScrollRef} className="bubble-compact-hover-scroll overflow-y-auto p-2.5">
           <p className="font-semibold text-primary">{hoveredBubble.task.title}</p>
           <p className="mt-1 min-w-0 max-w-full whitespace-pre-wrap break-words text-muted [overflow-wrap:anywhere]">
             <LinkifiedText
-              text={(() => {
-                const description = noteHtmlToPlainText(hoveredBubble.task.description ?? '', { trimEnd: true });
-                return description.length > 240 ? `${description.slice(0, 240)}...` : description;
-              })()}
+              text={noteHtmlToPlainText(hoveredBubble.task.description ?? '', { trimEnd: true })}
               fallback="Без описания" stopPropagationOnLinkClick />
           </p>
           <p className="mt-1 text-muted">{hoveredBubble.task.aiMonitoringEnabled
@@ -1800,6 +1802,7 @@ export function BubbleField({
               </ul>
             ) : <p className="mt-1 text-subtle">Нет активных подзадач</p>}
             {hoveredSubtasks.length > 3 ? <p className="mt-1 text-subtle">+ ещё {hoveredSubtasks.length - 3} подзадач</p> : null}
+          </div>
           </div>
         </div>,
         document.body
@@ -1842,7 +1845,7 @@ export function BubbleField({
             </button>
             {fullscreen && onOpenInOtherPane && contextMenu.task && !contextMenu.task.parentTaskId &&
               (contextMenu.task.taskType ?? 'TASK') === 'TASK' ? (
-              <button type="button"
+              <button type="button" data-training-task-window-action
                 className="surface-muted mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm hover:brightness-110"
                 onMouseEnter={() => setContextPostponeSubmenuOpen(false)}
                 onClick={() => {
@@ -1854,6 +1857,7 @@ export function BubbleField({
             <button
               type="button"
               disabled={!contextMenu.task}
+              data-planik-complete-action
               className="success-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm disabled:cursor-not-allowed disabled:opacity-50"
               onMouseEnter={() => setContextPostponeSubmenuOpen(false)}
               onClick={() => {

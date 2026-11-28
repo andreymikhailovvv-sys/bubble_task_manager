@@ -1,3 +1,6 @@
+import { AssistantSettingsProposalCard } from './components/AssistantSettingsProposalCard';
+import { announceAppliedEconomicProposals } from './components/EconomicMoneyGesture';
+import { SubscriptionLimitPanel, SubscriptionDailyRing, subscriptionDailyRemaining, PLAN_FEATURES } from './components/SubscriptionLimitPanel';
 import { AiStreamingMessageBody } from './components/AiStreamingMessageBody';
 import EmailVerificationDialog from './components/EmailVerificationDialog';
 import { subscribeAccountEmailVerified } from './lib/account-email-status-events';
@@ -5,7 +8,7 @@ import { prepareAiChatImageFile } from './lib/ai-image-upload';
 import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowUpRight, Bot, CircleDollarSign, CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, Coins, Copy, Eye, EyeOff, FileText, Gauge, List, Loader2, Maximize2, Edit3, Menu, MessageCircle, Minus, MoreVertical, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sparkles, StickyNote, UserCircle, Ticket, Trash2, X } from 'lucide-react';
-import { INSUFFICIENT_AI_CREDITS_MESSAGE, formatAiRequestError, api, stripAiChatProjectDisplayPreviews, type CreditPack, type CreditUsageStatistics, type CurrentUser, type TaskAiProgressStatus, type AiChatProgressStatus, type StandaloneNote } from './lib/api';
+import { INSUFFICIENT_AI_CREDITS_MESSAGE, formatAiRequestError, api, stripAiChatProjectDisplayPreviews, type CreditPack, type SubscriptionPlan, type CreditUsageStatistics, type CurrentUser, type TaskAiProgressStatus, type AiChatProgressStatus, type StandaloneNote } from './lib/api';
 import { NotesEditor } from './components/NotesEditor';
 import { TaskCompletionReportDialog } from './components/TaskCompletionReportDialog';
 import { TaskAiEmptyState } from './components/TaskAiEmptyState';
@@ -43,6 +46,7 @@ import { CalendarExportDialog } from './components/CalendarExportDialog';
 import { AutoGrowingTextarea } from './components/AutoGrowingTextarea';
 import { MiniAiChatComposer, type MiniAiChatComposerHandle } from './components/MiniAiChatComposer';
 import { PlanikMascot } from './components/PlanikMascot';
+import { useMascotWardrobe, MascotWardrobeDialog } from './components/MascotWardrobe';
 import './components/PlanikMiniChatLauncher.css';
 import { MiniGeneralAiChatHeader, type MiniAiContextPicker } from './components/MiniGeneralAiChatHeader';
 import { MiniTaskAiChatHeader } from './components/MiniTaskAiChatHeader';
@@ -57,6 +61,7 @@ import { WebCitations } from './components/WebCitations';
 import { AiInlineMarkup } from './components/AiInlineMarkup';
 import { attachChatMessageId } from './lib/chatMessages';
 import { useCreditPurchase } from './lib/useCreditPurchase';
+import { useSubscriptionPurchase } from './lib/useSubscriptionPurchase';
 import { CollapsibleUserMessage } from './components/CollapsibleUserMessage';
 import { CreditUsageStats } from './components/CreditUsageStats';
 import { AiGeneratedDocumentButton } from './components/AiGeneratedDocumentButton';
@@ -223,6 +228,7 @@ function normalizeMiniAiChatProjects(rawProjects: Array<Partial<MiniAiChatProjec
           ...(message.economicProposals?.length ? { economicProposals: message.economicProposals } : {}),
           ...(message.telegramSendDraft ? { telegramSendDraft: message.telegramSendDraft } : {}),
           ...(message.mailSendDraft ? { mailSendDraft: message.mailSendDraft } : {}),
+          ...(message.assistantSettingsProposalId ? {assistantSettingsProposalId:message.assistantSettingsProposalId} : {}),
           ...(message.telegramSuggestedReply ? { telegramSuggestedReply: message.telegramSuggestedReply } : {}),
           ...(message.mailSuggestedReply ? { mailSuggestedReply: message.mailSuggestedReply } : {}),
           ...(message.telegramReadDraft ? { telegramReadDraft: message.telegramReadDraft } : {})
@@ -1028,6 +1034,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const [newStandaloneNote, setNewStandaloneNote] = useState<StandaloneNote | null>(null);
   const [aiCredits, setAiCredits] = useState(0);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const wardrobe = useMascotWardrobe(currentUser?.id,currentUser?.subscriptionPlan,currentUser?.subscriptionExpiresAt);
   const userTimeZone = currentUser?.timeZone?.trim() || localStorage.getItem('btm:user-timezone')?.trim() || 'Europe/Moscow';
   const effectiveMiniTheme = useMemo(
     () => resolveThemeMode(miniThemeMode, userTimeZone, new Date()),
@@ -1040,6 +1047,18 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const [creditUsageStatisticsError, setCreditUsageStatisticsError] = useState<string | null>(null);
   const [creditPacks, setCreditPacks] = useState<CreditPack[]>([]);
   const [creditPurchaseAvailable, setCreditPurchaseAvailable] = useState(false);
+  const [creditPurchaseTab, setCreditPurchaseTab] = useState<'packs' | 'plans'>('packs');
+  const [subscriptionPlans, setSubscriptionPlans] = useState<SubscriptionPlan[]>([]);
+  const [subscriptionPurchaseAvailable, setSubscriptionPurchaseAvailable] = useState(false);
+  const activeSubscription = Boolean(currentUser?.subscriptionExpiresAt &&
+    new Date(currentUser.subscriptionExpiresAt).getTime() > Date.now());
+  const balanceOwner = currentUser?.id;
+  useEffect(() => { if (!balanceOwner) return; let stopped = false, running = false; const refresh = async () => { if (running || document.visibilityState !== 'visible') return; running = true; try { const {user} = await api.getMe(); if (!stopped && user.id === balanceOwner) { setCurrentUser(prev => prev?.id === balanceOwner ? {...prev, subscriptionLimit:user.subscriptionLimit, subscriptionPlan:user.subscriptionPlan, subscriptionExpiresAt:user.subscriptionExpiresAt, aiCredits:user.aiCredits, aiCreditsMilli:user.aiCreditsMilli} : prev); setAiCredits(user.aiCredits ?? 0); } } catch { /* retry next minute */ } finally { running=false; } }; const timer=window.setInterval(refresh,60_000); window.addEventListener('focus',refresh); return () => { stopped=true;window.clearInterval(timer);window.removeEventListener('focus',refresh); }; }, [balanceOwner]);
+  const subscriptionPurchase = useSubscriptionPurchase({
+    surface: 'miniapp',
+    openConfirmation: (url) => { const webApp = (window as TelegramWindow).Telegram?.WebApp; if (webApp?.openLink) webApp.openLink(url); else window.open(url, '_blank', 'noopener,noreferrer'); },
+    onSucceeded: async () => { const { user } = await api.getMe(); setCurrentUser(user); setAiCredits(user.aiCredits ?? 0); }
+  });
   const creditPurchase = useCreditPurchase({
     surface: 'miniapp',
     openConfirmation: (url) => { const webApp = (window as TelegramWindow).Telegram?.WebApp; if (webApp?.openLink) webApp.openLink(url); else window.open(url, '_blank', 'noopener,noreferrer'); },
@@ -1275,7 +1294,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       generalAiChatNearBottomRef.current = true;
       setIsSettingsOpen(false);
       setIsAiChatOpen(true);
-      void api.getMe().then(({ user }) => setAiCredits(user.aiCredits ?? 0)).catch(() => undefined);
+      void api.getMe().then(({ user }) => { setCurrentUser(user); setAiCredits(user.aiCredits ?? 0); }).catch(() => undefined);
     } catch (error) {
       setManualCheckupError(formatAiRequestError(error));
     } finally {
@@ -3416,10 +3435,10 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
             if (inbox.chats.length) {
               remaining.push({ id: inbox.projectId, title: inbox.projectTitle, color: '#0891b2', icon: '@',
                 chats: inbox.chats.map(chat => ({
-                  id: chat.id, title: chat.title, messages: inbox.messages.filter(m => m.chatId === chat.id)
+                  id: chat.id, title: chat.title, messages: mergeTelegramManagedMessages(previous.find(p=>p.id===inbox.projectId)?.chats.find(c=>c.id===chat.id)?.messages??[], mergeTelegramManagedMessages(clean.find(p=>p.id===inbox.projectId)?.chats.find(c=>c.id===chat.id)?.messages??[],inbox.messages.filter(m => m.chatId === chat.id)
                     .map(m => ({ id: m.id, content: m.content, role: 'assistant' as const,
                       taskProposal: m.taskProposal ?? undefined,
-                      mailSuggestedReply: m.mailSuggestedReply ?? undefined }))
+                      mailSuggestedReply: m.mailSuggestedReply ?? undefined }))))
                 })) });
             }
             aiChatProjectsRemoteSnapshotRef.current = JSON.stringify(remaining);
@@ -3579,7 +3598,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
 
   const refreshAiCredits = () => {
     void api.getMe()
-      .then(({ user }) => setAiCredits(user.aiCredits ?? 0))
+      .then(({ user }) => { setCurrentUser(user); setAiCredits(user.aiCredits ?? 0); })
       .catch(() => undefined);
   };
 
@@ -3606,6 +3625,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         telegramSendDraft: result.telegramSendDraft ?? undefined, mailSendDraft: result.mailSendDraft ?? undefined,
         taskProposal: result.taskProposal ?? undefined, economicProposals: result.economicProposals ?? undefined, telegramReadDraft: result.telegramReadDraft ?? undefined
       };
+      announceAppliedEconomicProposals(result.economicProposals);
       setAiChatProjects(prev => prev.map(project => project.id !== projectId ? project : {
         ...project, chats: project.chats.map(chat => chat.id !== chatId ? chat : {
           ...chat, messages: [...chat.messages, answer]
@@ -3690,7 +3710,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       if (result.actionReports?.some((item) => item.startsWith('Изменена заметка'))) {
          window.dispatchEvent(new Event('standalone-notes-updated'));
        }
-       const assistantMessage: MiniAiChatMessage = { id: crypto.randomUUID(), role: 'assistant', createdAt: new Date().toISOString(), content: `${normalizeMiniAiMessageContent(result.answer)}${(result.actionReports?.length ?? 0) > 0 ? `\n\nИзменения:\n- ${result.actionReports!.join('\n- ')}` : ''}`, creditsSpentMilli: result.billing?.creditsSpentMilli, webSearchUsed: result.webSearchUsed, webSources: result.webSources, webCitations: result.webCitations, generatedDocument: result.generatedDocument ?? undefined, telegramSendDraft: result.telegramSendDraft ?? undefined, mailSendDraft: result.mailSendDraft ?? undefined, taskProposal: result.taskProposal ?? undefined, economicProposals: result.economicProposals ?? undefined, telegramReadDraft: result.telegramReadDraft ?? undefined };
+       const assistantMessage: MiniAiChatMessage = { id: crypto.randomUUID(), role: 'assistant', createdAt: new Date().toISOString(), content: `${normalizeMiniAiMessageContent(result.answer)}${(result.actionReports?.length ?? 0) > 0 ? `\n\nИзменения:\n- ${result.actionReports!.join('\n- ')}` : ''}`, creditsSpentMilli: result.billing?.creditsSpentMilli, webSearchUsed: result.webSearchUsed, webSources: result.webSources, webCitations: result.webCitations, generatedDocument: result.generatedDocument ?? undefined, assistantSettingsProposalId: result.assistantSettingsProposalId ?? undefined, telegramSendDraft: result.telegramSendDraft ?? undefined, mailSendDraft: result.mailSendDraft ?? undefined, taskProposal: result.taskProposal ?? undefined, economicProposals: result.economicProposals ?? undefined, telegramReadDraft: result.telegramReadDraft ?? undefined };
+      announceAppliedEconomicProposals(result.economicProposals);
       updateActiveAiChatMessages((messages) => [...messages, assistantMessage]);
       if (history.length === 0 && result.suggestedChatTitle && activeAiChatProject?.id && activeAiChat?.id) {
         const projectId = activeAiChatProject.id, chatId = activeAiChat.id;
@@ -4289,14 +4310,21 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
 
   useEffect(() => {
     void api.getCreditPacks().then((result) => { setCreditPacks(result.packs); setCreditPurchaseAvailable(result.purchaseAvailable); }).catch(() => undefined);
+    void api.getSubscriptionPlans().then((result) => {
+      setSubscriptionPlans(result.plans); setSubscriptionPurchaseAvailable(result.purchaseAvailable);
+    }).catch(() => setSubscriptionPurchaseAvailable(false));
   }, []);
 
   useEffect(() => {
-    const checkPending = () => { if (document.visibilityState === 'visible' && creditPurchase.pendingPurchaseId) void creditPurchase.check(creditPurchase.pendingPurchaseId).catch(() => undefined); };
+    const checkPending = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (creditPurchase.pendingPurchaseId) void creditPurchase.check(creditPurchase.pendingPurchaseId).catch(() => undefined);
+      if (subscriptionPurchase.pendingPurchaseId) void subscriptionPurchase.check(subscriptionPurchase.pendingPurchaseId).catch(() => undefined);
+    };
     window.addEventListener('focus', checkPending);
     document.addEventListener('visibilitychange', checkPending);
     return () => { window.removeEventListener('focus', checkPending); document.removeEventListener('visibilitychange', checkPending); };
-  }, [creditPurchase.check, creditPurchase.pendingPurchaseId]);
+  }, [creditPurchase.check, creditPurchase.pendingPurchaseId, subscriptionPurchase.check, subscriptionPurchase.pendingPurchaseId]);
 
   const telegramViewportStyle = isTelegramRuntime
     ? { '--miniapp-top-inset': `${telegramViewport.top}px`, '--miniapp-bottom-inset': `${telegramViewport.bottom}px` } as CSSProperties
@@ -4425,7 +4453,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   }, []);
 
   const taskMonitoringControl = openedTask ? (
-              <TaskMonitoringStatuses taskId={openedTask.id}
+              <TaskMonitoringStatuses subscriptionAllowed={Boolean(currentUser?.subscriptionPlan === 'max' && currentUser?.subscriptionExpiresAt && new Date(currentUser.subscriptionExpiresAt).getTime() > Date.now())} taskId={openedTask.id}
                 model={openedTask.aiMonitoringModel}
                  generation={openedTask.aiMonitoringGeneration}
                  enabled={openedTask.aiMonitoringEnabled === true}
@@ -4476,6 +4504,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       {showTelegramBrand ? <div className="miniapp-telegram-service-title" aria-label="Планировыч AI">✦ Планировыч AI</div> : null}
       {reportPromptTask ? (
         <TaskCompletionReportDialog
+          hideCreditCost={activeSubscription}
           onDownload={startAiGeneratedDocumentDownload}
           taskId={reportPromptTask.id}
           taskTitle={reportPromptTask.title}
@@ -4558,6 +4587,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   options={[...new Set([userTimeZone,'Europe/Moscow','Europe/Kaliningrad','Europe/Samara','Asia/Yekaterinburg','Asia/Omsk','Asia/Krasnoyarsk','Asia/Irkutsk','Asia/Yakutsk','Asia/Vladivostok','Asia/Magadan','Asia/Kamchatka','Europe/Minsk','Europe/Berlin','Europe/London','America/New_York','America/Chicago','America/Denver','America/Los_Angeles','Asia/Dubai','Asia/Almaty','Asia/Tokyo'])].map(value => ({ value, label: value }))}
                   ariaLabel="Часовой пояс пользователя" detachedPopup popupVariant="settings" />
               </div>
+              {currentUser && <button type="button" className="surface-muted w-full rounded-xl px-3 py-2.5 text-sm font-semibold text-primary" onClick={() => { setIsSettingsOpen(false); wardrobe.show(); }}>Аксессуары и скины Планика</button>}
               <AiCheckupScheduleSettings user={currentUser} onUserUpdated={setCurrentUser}>
                 <button type="button" onClick={() => { void generateManualCheckup(); }}
                   disabled={manualCheckupLoading}
@@ -4690,17 +4720,19 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               <div className="miniapp-workspace-utilities-panel relative inline-flex shrink-0 items-center gap-1"
                 role={undefined}
                 aria-label="Управление сервисом">
-              <button type="button" onClick={() => { if (currentUser?.isGuest && isWebRuntime) { setIsCreditPurchaseOpen(false); openAuthModal('register'); } else { setCreditPopoverView('purchase'); setIsCreditPurchaseOpen((open) => !open); } }} className="miniapp-credit-badge inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-xs font-semibold" title={currentUser?.isGuest ? 'Зарегистрируйтесь, чтобы получить 100 ИИ-кредитов' : 'Купить AI-кредиты'} aria-label={`AI-кредиты: ${aiCredits}`} aria-expanded={isCreditPurchaseOpen}>
-                <Coins size={15} />
-                {displayMode === 'timeline' ? <span className="miniapp-utility-menu-label">Кредиты</span> : null}
-                <span className={displayMode === 'timeline' ? 'miniapp-utility-menu-value' : undefined}>{aiCredits}</span>
+              <button type="button" onClick={() => { if (currentUser?.isGuest && isWebRuntime) { setIsCreditPurchaseOpen(false); openAuthModal('register'); } else { setCreditPopoverView('purchase'); setIsCreditPurchaseOpen((open) => !open); } }} data-subscription-limit={activeSubscription ? true : undefined} className="miniapp-credit-badge inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-xs font-semibold" title={currentUser?.isGuest ? 'Зарегистрируйтесь, чтобы получить 100 ИИ-кредитов' : 'Купить AI-кредиты'} aria-label={activeSubscription ? `Дневной лимит ИИ: ${subscriptionDailyRemaining(currentUser?.subscriptionLimit) ?? '…'}%` : `AI-кредиты: ${aiCredits}`} aria-expanded={isCreditPurchaseOpen}>
+                {activeSubscription ? <SubscriptionDailyRing limit={currentUser?.subscriptionLimit} compact/> : <>
+                  <Coins size={15} />
+                  {displayMode === 'timeline' ? <span className="miniapp-utility-menu-label">Кредиты</span> : null}
+                  <span className={displayMode === 'timeline' ? 'miniapp-utility-menu-value' : undefined}>{aiCredits}</span>
+                </>}
               </button>
               {isCreditPurchaseOpen ? <div onScroll={(event) => event.stopPropagation()} onTouchMove={(event) => event.stopPropagation()} className="miniapp-credit-popover absolute right-0 top-full z-[60] mt-2 max-h-[75vh] w-[min(21rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl border p-4 shadow-2xl">
                 <div className="miniapp-credit-popover-hero -m-4 mb-3 rounded-t-2xl p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex min-w-0 items-center gap-2.5">
                       <span className="miniapp-credit-popover-icon flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"><Coins size={17} /></span>
-                      <div><h2 className="font-semibold text-primary">AI-кредиты</h2><p className="mt-0.5 text-xs text-muted">Баланс: <strong className="text-primary">{aiCredits}</strong></p></div>
+                      <div><h2 className="font-semibold text-primary">{activeSubscription ? 'Лимит ИИ' : 'AI-кредиты'}</h2>{activeSubscription ? <SubscriptionLimitPanel limit={currentUser?.subscriptionLimit}/> : <p className="mt-0.5 text-xs text-muted">Баланс: <strong className="text-primary">{aiCredits}</strong></p>}</div>
                     </div>
                     <button type="button" className="miniapp-credit-popover-close rounded-full p-1.5 text-muted" onClick={() => setIsCreditPurchaseOpen(false)} aria-label="Закрыть"><X size={16} /></button>
                   </div>
@@ -4710,18 +4742,35 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   <button type="button" className={`credit-view-toggle-button flex-1 rounded-lg px-2 py-1.5 text-xs font-semibold ${creditPopoverView === 'statistics' ? 'is-active is-statistics' : ''}`} onClick={() => { setCreditPopoverView('statistics'); void loadCreditUsageStatistics(); }}>Статистика</button>
                 </div>
                 {creditPopoverView === 'statistics' ? (
-                  <div key="credits-statistics" className="credit-switch-content mt-3"><CreditUsageStats statistics={creditUsageStatistics} loading={creditUsageStatisticsLoading} error={creditUsageStatisticsError} compact /></div>
+                  <div key="credits-statistics" className="credit-switch-content mt-3">{<CreditUsageStats statistics={creditUsageStatistics} loading={creditUsageStatisticsLoading} error={creditUsageStatisticsError} compact  allowanceMilli={currentUser?.subscriptionLimit?.allowanceMilli} />}</div>
                 ) : (
                   <div key="credits-purchase" className="credit-switch-content">
-                    <div className="mt-3 space-y-2">{creditPacks.filter((pack) => pack.isActive).map((pack) => <div key={pack.key} className="miniapp-credit-pack-card flex items-center justify-between gap-2 rounded-xl border p-2.5">
-                      <div><div className="text-xs font-bold text-primary">{pack.creditsAmount.toLocaleString('ru-RU')} AI-кредитов</div><div className="mt-0.5 text-[11px] text-muted">{pack.price.toLocaleString('ru-RU')} ₽</div></div>
-                      <button type="button" disabled={!creditPurchaseAvailable || creditPurchase.creatingPackKey !== null} onClick={() => void creditPurchase.start(pack.key)} className="miniapp-credit-buy-button rounded-lg px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">{creditPurchase.creatingPackKey === pack.key ? 'Создаём…' : 'Купить'}</button>
-                    </div>)}</div>
-                    {creditPurchase.isReceiptEmailRequired ? <div className="mt-3 space-y-2">
-                      <input type="email" autoComplete="email" value={creditPurchase.receiptEmail} onChange={(event) => creditPurchase.setReceiptEmail(event.target.value)} placeholder="Email для чека" aria-label="Email для чека" className="miniapp-credit-email-input w-full rounded-lg border px-3 py-2 text-xs" />
-                      <button type="button" disabled={creditPurchase.creatingPackKey !== null || !creditPurchase.receiptEmail.trim()} onClick={() => void creditPurchase.retryWithReceiptEmail()} className="miniapp-credit-buy-button w-full rounded-lg px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">{creditPurchase.creatingPackKey ? 'Создаём платёж…' : 'Продолжить'}</button>
-                    </div> : null}
-                    {creditPurchase.message ? <p className="miniapp-credit-message mt-3 rounded-xl border p-2.5 text-xs" role="status">{creditPurchase.message}</p> : null}
+                    <div className="credit-view-toggle mt-3 flex gap-1 rounded-xl border p-1">
+                      <button type="button" className={`credit-view-toggle-button flex-1 rounded-lg px-2 py-1.5 text-xs font-semibold ${creditPurchaseTab === 'packs' ? 'is-active is-purchase' : ''}`} onClick={() => setCreditPurchaseTab('packs')}>Пакеты</button>
+                      <button type="button" className={`credit-view-toggle-button flex-1 rounded-lg px-2 py-1.5 text-xs font-semibold ${creditPurchaseTab === 'plans' ? 'is-active is-purchase' : ''}`} onClick={() => setCreditPurchaseTab('plans')}>Подписки</button>
+                    </div>
+                    {creditPurchaseTab === 'packs' ? <>
+                      <div className="mt-3 space-y-2">{creditPacks.filter((pack) => pack.isActive).map((pack) => <div key={pack.key} className="miniapp-credit-pack-card flex items-center justify-between gap-2 rounded-xl border p-2.5">
+                        <div><div className="text-xs font-bold text-primary">{pack.creditsAmount.toLocaleString('ru-RU')} AI-кредитов</div><div className="mt-0.5 text-[11px] text-muted">{pack.price.toLocaleString('ru-RU')} ₽</div></div>
+                        <button type="button" disabled={!creditPurchaseAvailable || creditPurchase.creatingPackKey !== null} onClick={() => void creditPurchase.start(pack.key)} className="miniapp-credit-buy-button rounded-lg px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">{creditPurchase.creatingPackKey === pack.key ? 'Создаём…' : 'Купить'}</button>
+                      </div>)}</div>
+                      {creditPurchase.isReceiptEmailRequired ? <div className="mt-3 space-y-2">
+                        <input type="email" autoComplete="email" value={creditPurchase.receiptEmail} onChange={(event) => creditPurchase.setReceiptEmail(event.target.value)} placeholder="Email для чека" aria-label="Email для чека" className="miniapp-credit-email-input w-full rounded-lg border px-3 py-2 text-xs" />
+                        <button type="button" disabled={creditPurchase.creatingPackKey !== null || !creditPurchase.receiptEmail.trim()} onClick={() => void creditPurchase.retryWithReceiptEmail()} className="miniapp-credit-buy-button w-full rounded-lg px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">{creditPurchase.creatingPackKey ? 'Создаём платёж…' : 'Продолжить'}</button>
+                      </div> : null}
+                      {creditPurchase.message ? <p className="miniapp-credit-message mt-3 rounded-xl border p-2.5 text-xs" role="status">{creditPurchase.message}</p> : null}
+                    </> : <>
+                      <div className="mt-3 space-y-2">{subscriptionPlans.map(plan => <div key={plan.key} className="miniapp-credit-pack-card flex items-center justify-between gap-2 rounded-xl border p-2.5">
+                        <div><div className="text-xs font-bold text-primary">{plan.name}: {plan.key === 'start' ? 'базовый лимит' : plan.key === 'pro' ? 'лимит ×2' : 'лимит ×4,33'}</div><div className="mt-0.5 text-[11px] text-muted">{plan.price.toLocaleString('ru-RU')} ₽ за месяц</div><ul className="mt-2 space-y-1 text-[11px] text-secondary">{PLAN_FEATURES[plan.key].map(feature => <li key={feature}>✓ {feature}</li>)}</ul></div>
+                        <button type="button" disabled={!subscriptionPurchaseAvailable || (activeSubscription && currentUser?.subscriptionPlan === plan.key) || subscriptionPurchase.creatingPlanKey !== null} onClick={() => void subscriptionPurchase.start(plan.key)} className="miniapp-credit-buy-button rounded-lg px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">{subscriptionPurchase.creatingPlanKey === plan.key ? 'Создаём…' : activeSubscription ? (currentUser?.subscriptionPlan === plan.key ? 'Подписка активна' : 'Сменить тариф') : 'Купить'}</button>
+                      </div>)}</div>
+                      <p className="mt-2 text-[11px] text-muted">Подписка на один календарный месяц, без автопродления.</p>
+                      {subscriptionPurchase.isReceiptEmailRequired ? <div className="mt-3 space-y-2">
+                        <input type="email" autoComplete="email" value={subscriptionPurchase.receiptEmail} onChange={event => subscriptionPurchase.setReceiptEmail(event.target.value)} placeholder="Email для чека" aria-label="Email для чека подписки" className="miniapp-credit-email-input w-full rounded-lg border px-3 py-2 text-xs" />
+                        <button type="button" disabled={subscriptionPurchase.creatingPlanKey !== null || !subscriptionPurchase.receiptEmail.trim()} onClick={() => void subscriptionPurchase.retryWithReceiptEmail()} className="miniapp-credit-buy-button w-full rounded-lg px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Продолжить</button>
+                      </div> : null}
+                      {subscriptionPurchase.message ? <p className="miniapp-credit-message mt-3 rounded-xl border p-2.5 text-xs" role="status">{subscriptionPurchase.message}</p> : null}
+                    </>}
                   </div>
                 )}
               </div> : null}
@@ -5742,10 +5791,10 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   {message.role === 'assistant' && message.taskProposal ? <AiTaskProposalCard proposal={message.taskProposal} /> : null}
                   {message.role === 'assistant' && message.telegramSuggestedReply ? <TelegramAiReplySuggestionCard reply={message.telegramSuggestedReply} /> : null}
                   {message.role === 'assistant' && message.mailSuggestedReply ? <MailAiReplySuggestionCard reply={message.mailSuggestedReply} /> : null}
-                  {message.role === 'assistant' && message.telegramSendDraft ? <TelegramInlineSendCard draft={message.telegramSendDraft} /> : null}{message.role === 'assistant' && message.mailSendDraft ? <MailInlineSendCard draft={message.mailSendDraft} /> : null}{message.role === 'assistant' && message.telegramReadDraft ? <TelegramReadConsentCard draft={message.telegramReadDraft} onContinue={continueTelegramReadTask} /> : null}
-                  {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[10px] text-slate-400 opacity-80">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}{message.role === 'assistant' ? <AiSpeechCostLine messageKey={String(message.id)} /> : null}
+                  {message.role === 'assistant' && message.telegramSendDraft ? <TelegramInlineSendCard draft={message.telegramSendDraft} /> : null}{message.role === 'assistant' && message.mailSendDraft ? <MailInlineSendCard draft={message.mailSendDraft} hideCreditCost={activeSubscription} /> : null}{message.role === 'assistant' && message.telegramReadDraft ? <TelegramReadConsentCard draft={message.telegramReadDraft} onContinue={continueTelegramReadTask} /> : null}
+                  {!activeSubscription && message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[10px] text-slate-400 opacity-80">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}{!activeSubscription && message.role === 'assistant' ? <AiSpeechCostLine messageKey={String(message.id)} /> : null}
                   </div>
-                  <div className="ai-message-forward-actions">{message.role === 'assistant' ? <AiReadAloudAction text={message.content} messageKey={String(message.id)} /> : null}<AiReplyAction message={message} onReply={(target) => { setReplyToTask(target); if (openedTask) setAiRecipientByTaskId(prev => ({ ...prev, [openedTask.id]: 'ai' })); }} /><TelegramMessageQuickShare text={message.content} compact initialNoteSphereId={openedTask?.sphereId ?? null} /></div>
+                  <div className="ai-message-forward-actions">{message.role === 'assistant' ? <AiReadAloudAction text={message.content} messageKey={String(message.id)} /> : null}<AiReplyAction message={message} onReply={(target) => { setReplyToTask(target); if (openedTask) setAiRecipientByTaskId(prev => ({ ...prev, [openedTask.id]: 'ai' })); }} /><TelegramMessageQuickShare text={message.content} compact initialNoteSphereId={openedTask?.sphereId ?? null} hideCreditCost={activeSubscription} /></div>
                 </div>
                 ))}
                 <TaskMonitoringTriggerChips taskId={openedTask.id} />
@@ -5760,7 +5809,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   aria-label="Поговорить с Плаником" title="Живое общение с Плаником"
                   disabled={aiLoadingTaskId === openedTask.id}
                   onClick={() => taskAiComposerRef.current?.startLive()}>
-                  <PlanikMascot size="composer" busy={aiLoadingTaskId === openedTask.id} responding={Boolean(taskAiStreamingText[openedTask.id])} progress={aiProgressByTask[openedTask.id]} />
+                  <PlanikMascot skinId={wardrobe.selected('planner')} size="composer" busy={aiLoadingTaskId === openedTask.id} responding={Boolean(taskAiStreamingText[openedTask.id])} progress={aiProgressByTask[openedTask.id]} />
                 </button>
               ) : null}
               <input
@@ -5833,6 +5882,9 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         <div className="miniapp-quick-create-actions flex flex-col items-end gap-2" aria-hidden={!isQuickCreateOpen}>
           <button type="button" tabIndex={isQuickCreateOpen ? 0 : -1} onClick={() => { setIsQuickCreateOpen(false); openCreateTaskModal(undefined, 'event'); }} className="miniapp-quick-create-action miniapp-quick-create-event inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold shadow-xl">
             <span>Добавить событие</span><span className="flex h-9 w-9 items-center justify-center rounded-full"><CalendarDays size={18} /></span>
+          </button>
+          <button type="button" tabIndex={isQuickCreateOpen ? 0 : -1} onClick={() => { setIsQuickCreateOpen(false); setRequestedStandaloneNote(null); setIsStandaloneNotesOpen(true); }} className="miniapp-quick-create-action miniapp-quick-create-note inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold shadow-xl">
+            <span>Открыть заметки</span><span className="flex h-9 w-9 items-center justify-center rounded-full"><StickyNote size={18}/></span>
           </button>
           <button type="button" tabIndex={isQuickCreateOpen ? 0 : -1} disabled={creatingStandaloneNote}
             onClick={() => {
@@ -5943,11 +5995,11 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                     : <AiResolvedGeneratedDocument content={message.content} onDownload={downloadAiGeneratedDocument} />) : null}
                   {message.role === 'assistant' && message.taskProposal ? <AiTaskProposalCard proposal={message.taskProposal} /> : null}
                   {message.role === 'assistant' && message.economicProposals?.length ? <AiEconomicProposalCards proposals={message.economicProposals} /> : null}
-                  {message.role === 'assistant' && message.telegramSuggestedReply ? <TelegramAiReplySuggestionCard reply={message.telegramSuggestedReply} /> : null}{message.role === 'assistant' && message.mailSuggestedReply ? <MailAiReplySuggestionCard reply={message.mailSuggestedReply} /> : null}
-                  {message.role === 'assistant' && message.telegramSendDraft ? <TelegramInlineSendCard draft={message.telegramSendDraft} /> : null}{message.role === 'assistant' && message.mailSendDraft ? <MailInlineSendCard draft={message.mailSendDraft} /> : null}{message.role === 'assistant' && message.telegramReadDraft ? <TelegramReadConsentCard draft={message.telegramReadDraft} onContinue={continueTelegramReadAiChat} /> : null}
-                  {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[10px] text-slate-400 opacity-80">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}{message.role === 'assistant' ? <AiSpeechCostLine messageKey={String(message.id)} /> : null}
+                  {message.role === 'assistant' && message.telegramSuggestedReply ? <TelegramAiReplySuggestionCard reply={message.telegramSuggestedReply} /> : null}{message.role === 'assistant' && message.mailSuggestedReply ? <MailAiReplySuggestionCard reply={message.mailSuggestedReply} /> : null}{message.role === 'assistant' && message.assistantSettingsProposalId ? <AssistantSettingsProposalCard id={message.assistantSettingsProposalId} /> : null}
+                  {message.role === 'assistant' && message.telegramSendDraft ? <TelegramInlineSendCard draft={message.telegramSendDraft} /> : null}{message.role === 'assistant' && message.mailSendDraft ? <MailInlineSendCard draft={message.mailSendDraft} hideCreditCost={activeSubscription} /> : null}{message.role === 'assistant' && message.telegramReadDraft ? <TelegramReadConsentCard draft={message.telegramReadDraft} onContinue={continueTelegramReadAiChat} /> : null}
+                  {!activeSubscription && message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[10px] text-slate-400 opacity-80">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}{!activeSubscription && message.role === 'assistant' ? <AiSpeechCostLine messageKey={String(message.id)} /> : null}
                   </div>
-                  <div className="ai-message-forward-actions">{message.role === 'assistant' ? <AiReadAloudAction text={message.content} messageKey={String(message.id)} /> : null}<AiReplyAction message={message} onReply={setReplyToGeneral} /><TelegramMessageQuickShare text={message.content} compact /></div>
+                  <div className="ai-message-forward-actions">{message.role === 'assistant' ? <AiReadAloudAction text={message.content} messageKey={String(message.id)} /> : null}<AiReplyAction message={message} onReply={setReplyToGeneral} /><TelegramMessageQuickShare text={message.content} compact hideCreditCost={activeSubscription} /></div>
                 </div>
               ))}
               {aiChatLoading && aiChatStreamingText ? <div className="ai-message-forward-group w-fit max-w-[88%] mr-auto"><div className="miniapp-ai-chat-message miniapp-ai-chat-message-general miniapp-ai-chat-message-assistant w-full rounded-3xl rounded-bl-lg px-4 py-3"><div className="mb-1 text-[10px] font-semibold uppercase">ИИ</div><div className="text-sm leading-relaxed"><AiStreamingMessageBody content={aiChatStreamingText} /></div></div></div> : null}
@@ -5964,7 +6016,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   aria-label="Поговорить с Плаником" title="Живое общение с Плаником"
                   disabled={aiChatLoading}
                   onClick={() => aiChatComposerRef.current?.startLive()}>
-                  <PlanikMascot size="composer" busy={aiChatLoading} responding={Boolean(aiChatStreamingText)} progress={aiChatProgress} />
+                  <PlanikMascot skinId={wardrobe.selected('planner')} economicSkinId={wardrobe.selected('economic')} size="composer" busy={aiChatLoading} responding={Boolean(aiChatStreamingText)} progress={aiChatProgress} />
                 </button>
               ) : null}
               {replyToGeneral ? <AiReplyPreview target={replyToGeneral} onDismiss={() => setReplyToGeneral(null)} /> : null}
@@ -6439,6 +6491,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         </section>
       ) : null}
 
+      {wardrobe.open && <MascotWardrobeDialog wardrobe={wardrobe} variant="planner" theme={effectiveMiniTheme}/>}
       {isStandaloneNotesOpen && currentUser ? (
         <StandaloneNotesWorkspace key={currentUser.id} userId={currentUser.id}
           requestedNote={requestedStandaloneNote}

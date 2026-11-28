@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
+import './android-planik-foreground-wake.test.js';
+import './android-planik-background-overlay.test.js';
 
 const read = (path: string) =>
   readFile(new URL(path, import.meta.url), 'utf8');
@@ -38,6 +40,7 @@ test('Android launcher uses real static SVG artwork, animated natively instead o
     read('../../android-app/app/src/main/AndroidManifest.xml'),
     read('../../android-app/app/build.gradle.kts')
   ]);
+  // All web skins retain the classic body scale and original Android geometry.
   assert.match(source, /viewBox="35 32 345 275"/);
   assert.match(asset, /viewBox="35 32 345 275"/);
   assert.match(asset, /planik-body-native/);
@@ -46,16 +49,16 @@ test('Android launcher uses real static SVG artwork, animated natively instead o
   assert.match(styles, /@keyframes planik-float/);
   assert.match(blink, /ry="1\.4"/);
   assert.doesNotMatch(asset, /planik-notif-static|planik-celebrating|planik-typing/);
-  assert.match(launcher, /SVG\.getFromString\(artwork\)/);
+  assert.ok(launcher.includes('SVG.getFromString(expanded).renderToPicture(420,375)'));
   assert.match(launcher, /android\.graphics\.Canvas as AndroidCanvas/);
-  assert.match(launcher, /renderToPicture\(420, 375\)/);
+  assert.match(launcher, /renderToPicture\(420,\s*375\)/);
   assert.match(launcher, /rememberInfiniteTransition/);
   assert.doesNotMatch(launcher, /import android\.webkit\.WebView|AndroidView\(/);
   assert.match(manifest, /\.planik\.PlanikLiveActivity/);
   assert.match(manifest, /android:exported="false"/);
   assert.match(build, /com\.caverock:androidsvg:1\.4/);
-  assert.match(build, /versionCode = 24/);
-  assert.match(build, /versionName = "1\.0\.22"/);
+  assert.match(build, /versionCode = 28/);
+  assert.match(build, /versionName = "1\.0\.26"/);
 });
 
 test('Realtime WebView has visible loading, diagnostics, first-party cookies and retry instead of blank', async () => {

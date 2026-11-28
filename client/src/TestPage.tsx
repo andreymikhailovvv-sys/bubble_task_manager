@@ -1,3 +1,4 @@
+import { SubscriptionLimitPanel, PLAN_FEATURES } from './components/SubscriptionLimitPanel';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
   ArrowRight, BookOpenText, CalendarClock, Check, CheckCircle2, ChevronRight, CircleHelp,
@@ -13,6 +14,7 @@ import { SectorEditor } from './components/SectorEditor';
 import { FocusedTaskWindowFrame } from './components/FocusedTaskWindowFrame';
 import { StandaloneNotesWorkspace } from './components/StandaloneNotesWorkspace';
 import { PlanikMascot } from './components/PlanikMascot';
+import { useMascotWardrobe, MascotWardrobeDialog, MascotWardrobeTrigger } from './components/MascotWardrobe';
 import { CustomSelect } from './components/CustomSelect';
 import { TaskDescriptionInput } from './components/TaskDescriptionInput';
 import { ResizableDescriptionSurface } from './components/ResizableDescriptionSurface';
@@ -23,6 +25,7 @@ import { TestPageRating } from './TestPageRating';
 import { TestPageIntegrationsDialog } from './TestPageIntegrationsDialog';
 import { NotesEditor } from './components/NotesEditor';
 import { useCreditPurchase } from './lib/useCreditPurchase';
+import { useSubscriptionPurchase } from './lib/useSubscriptionPurchase';
 import { WorkspaceGlobalSearch } from './components/WorkspaceGlobalSearch';
 import { matchesWorkspaceText } from './lib/workspaceSearch';
 import { TestPageChat } from './TestPageChat';
@@ -70,6 +73,7 @@ const formatCredits = (credits: number) => credits.toLocaleString('ru-RU', { max
 export default function TestPage() {
   const [section, setSection] = useState<Section>('overview');
   const [user, setUser] = useState<CurrentUser | null>(null);
+  const wardrobe=useMascotWardrobe(user?.id,user?.subscriptionPlan,user?.subscriptionExpiresAt);
   const [spheres, setSpheres] = useState<Sphere[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
@@ -108,6 +112,12 @@ export default function TestPage() {
   const [creditTab, setCreditTab] = useState<'packs' | 'plans' | 'stats'>('packs');
   const [creditPacks,setCreditPacks]=useState<CreditPack[]>([]);
   const [creditPurchaseAvailable,setCreditPurchaseAvailable]=useState(false);
+  const [subscriptionPurchaseAvailable,setSubscriptionPurchaseAvailable]=useState(false);
+  const activeSubscription=Boolean(user?.subscriptionExpiresAt&&new Date(user.subscriptionExpiresAt).getTime()>Date.now());
+  const subscriptionPurchase=useSubscriptionPurchase({
+    surface:'web', openConfirmation:url=>window.location.assign(url),
+    onSucceeded:async()=>{const me=await api.getMe();setUser(me.user);}
+  });
   const creditPurchase=useCreditPurchase({
     surface:'web',
     openConfirmation:url=>window.location.assign(url),
@@ -394,6 +404,16 @@ export default function TestPage() {
     } catch (cause) { setError(errorText(cause)); }
     finally { setAuthBusy(false); }
   };
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const purchaseId = params.get('payment') === 'subscription' ? params.get('subscriptionPurchaseId') : null;
+    if (!purchaseId) return;
+    setCreditsOpen(true); setCreditTab('plans');
+    subscriptionPurchase.setPendingPurchaseId(purchaseId);
+    void subscriptionPurchase.check(purchaseId).catch(() => undefined);
+    params.delete('payment'); params.delete('subscriptionPurchaseId');
+    window.history.replaceState({}, '', window.location.pathname + (params.size ? '?' + params.toString() : '') + window.location.hash);
+  }, []);
   const openCredits = async () => {
     setCreditsOpen(true);
     setCreditTab('packs');
@@ -401,11 +421,13 @@ export default function TestPage() {
     setCreditError('');
     setCreditPacksError('');
     try {
-      const [stats,links,packs]=await Promise.allSettled([
-        api.getCreditUsageStatistics(),api.getSubscriptionLinks(),api.getCreditPacks()
+      const [stats,links,packs,plans,profile]=await Promise.allSettled([
+        api.getCreditUsageStatistics(),api.getSubscriptionLinks(),api.getCreditPacks(),api.getSubscriptionPlans(),api.getMe()
       ]);
+      if(profile.status==='fulfilled')setUser(profile.value.user);
       if(stats.status==='fulfilled')setCreditStats(stats.value.statistics);
       if(links.status==='fulfilled')setSubscriptionLinks(links.value.links);
+      setSubscriptionPurchaseAvailable(plans.status==='fulfilled'&&plans.value.purchaseAvailable);
       if(packs.status==='fulfilled'){
         setCreditPacks(packs.value.packs);
         setCreditPurchaseAvailable(packs.value.purchaseAvailable);
@@ -507,7 +529,7 @@ export default function TestPage() {
             <div className="tp-progress-grid">
               {progressCard('План на сегодня', todayDone, todayTasks.length, todayTasks.length ? 'Задачи и подзадачи, назначенные на сегодня' : 'На сегодня задач и подзадач пока нет', 'tp-featured')}
               {progressCard('Общий прогресс', totalDone, rootTasks.length, 'Выполнено из всех ваших задач')}
-              <button type="button" className="tp-card tp-credit-card" onClick={() => void openCredits()}><span className="tp-card-eyebrow"><Coins size={17}/> ИИ-кредиты</span><strong>{formatCredits((user.aiCreditsMilli ?? (user.aiCredits ?? 0) * 1000) / 1000)}</strong><span>Доступный баланс</span><span className="tp-card-link">Подписки и статистика <ChevronRight size={16}/></span></button>
+              <button type="button" className="tp-card tp-credit-card" onClick={() => void openCredits()}><span className="tp-card-eyebrow"><Coins size={17}/> {activeSubscription ? 'Лимит ИИ' : 'ИИ-кредиты'}</span><strong>{activeSubscription ? (user?.subscriptionLimit ? `${100 - user.subscriptionLimit.usedPercent}%` : '…') : formatCredits((user.aiCreditsMilli ?? (user.aiCredits ?? 0) * 1000) / 1000)}</strong><span>Доступный баланс</span><span className="tp-card-link">Подписки и статистика <ChevronRight size={16}/></span></button>
             </div>
             <TestPageRating user={user} onRefresh={()=>void refresh()}/>
             <div className="tp-board">
@@ -570,10 +592,11 @@ export default function TestPage() {
         </>}
       </main>
     </div>
-    {user && <button className="tp-mascot" type="button" title="Чат с Плаником" aria-label="Открыть чат с Плаником" onClick={() => setAssistantOpen(previous => !previous)}>
+    {user && <div className="mascot-wardrobe-anchor tp-mascot-dressing"><button className="tp-mascot" type="button" title="Чат с Плаником" aria-label="Открыть чат с Плаником" onClick={() => setAssistantOpen(previous => !previous)}>
       <PlanikMascot notificationCount={unreadCount} celebrationKey={celebrationKey}
-        busy={assistantActivity.busy} progress={assistantActivity.progress}/>
-    </button>}
+        busy={assistantActivity.busy} progress={assistantActivity.progress} skinId={wardrobe.selected('planner')}/>
+    </button><MascotWardrobeTrigger onClick={wardrobe.show}/></div>}
+    {wardrobe.open&&<MascotWardrobeDialog wardrobe={wardrobe} variant="planner" theme={theme}/>}
     {noticeToast&&<button type="button" className="tp-system-notice-toast" onClick={()=>openNotice(noticeToast)}
       aria-label="Открыть системное уведомление">
       <span>⚙️ Системное уведомление</span>
@@ -671,11 +694,11 @@ export default function TestPage() {
     {creditsOpen && <div className="tp-overlay tp-credits-overlay" onMouseDown={event=>{
       if(event.target===event.currentTarget)setCreditsOpen(false);
     }}><section className="tp-dialog tp-credits-dialog" role="dialog" aria-modal="true" aria-label="Баланс и подписки">
-      <header><div><span className="tp-eyebrow">БАЛАНС И ПОДПИСКИ</span><h2>ИИ-кредиты</h2></div>
+      <header><div><span className="tp-eyebrow">БАЛАНС И ПОДПИСКИ</span><h2>{activeSubscription ? 'Лимит ИИ' : 'ИИ-кредиты'}</h2></div>
         <button type="button" onClick={()=>setCreditsOpen(false)} aria-label="Закрыть"><X size={19}/></button></header>
       <div className="tp-dialog-content tp-credits-body">
         <div className="tp-credit-balance"><Coins size={24}/><div><span>Доступно</span>
-          <strong>{formatCredits((user?.aiCreditsMilli??(user?.aiCredits??0)*1000)/1000)} кредитов</strong>
+          {activeSubscription ? <SubscriptionLimitPanel limit={user?.subscriptionLimit}/> : <strong>{formatCredits((user?.aiCreditsMilli??(user?.aiCredits??0)*1000)/1000)} кредитов</strong>}
         </div></div>
         <div className="tp-tabs tp-credit-tabs" role="tablist" aria-label="Разделы баланса">
           <button type="button" role="tab" aria-selected={creditTab==='packs'} className={creditTab==='packs'?'active':''}
@@ -686,7 +709,7 @@ export default function TestPage() {
             onClick={()=>setCreditTab('stats')}>Статистика</button>
         </div>
         {creditsBusy?<p className="tp-empty"><Loader2 className="tp-spin" size={17}/> Загрузка…</p>:
-          creditTab==='stats'?<CreditUsageStats statistics={creditStats} error={creditError}/>:
+          creditTab==='stats'?(<CreditUsageStats statistics={creditStats} error={creditError} allowanceMilli={user?.subscriptionLimit?.allowanceMilli} />):
           creditTab==='packs'?<>
             <p className="tp-credit-note">Разовое пополнение баланса без изменения подписки.</p>
             {creditPacksError&&<p className="tp-alert" role="alert">{creditPacksError}</p>}
@@ -716,12 +739,24 @@ export default function TestPage() {
           </>:
           creditError?<p className="tp-alert">{creditError}</p>:
           <div className="tp-plans">{([
-            ['start','Старт','Для ежедневных задач'],['pro','Про','Для активной работы'],['max','Максимум','Расширенные возможности']
+            ['start','Старт','Базовый лимит · 299 ₽/мес'],['pro','Про','Лимит ×2 · 599 ₽/мес'],['max','Максимум','Лимит ×4,33 · 1290 ₽/мес']
           ] as const).map(([key,name,desc])=><div key={key} className="tp-plan">
             <div><strong>{name}</strong><small>{desc}</small></div>
-            {subscriptionLinks?.[key]?<a href={subscriptionLinks[key]} target="_blank" rel="noopener noreferrer">
-              Выбрать <ArrowRight size={14}/></a>:<span>Недоступно</span>}
-          </div>)}</div>}
+            <ul className="mt-2 space-y-1 text-xs text-secondary">{PLAN_FEATURES[key as keyof typeof PLAN_FEATURES].map(feature => <li key={feature}>✓ {feature}</li>)}{key!=='start'&&<li><button type="button" className="surface-muted rounded-xl px-3 py-2 text-xs font-semibold" onClick={()=>{setCreditsOpen(false);wardrobe.show();}}>Посмотреть образы</button></li>}</ul><button type="button" disabled={!subscriptionPurchaseAvailable||(activeSubscription&&user?.subscriptionPlan===key)||subscriptionPurchase.creatingPlanKey!==null}
+              onClick={()=>void subscriptionPurchase.start(key)}>
+              {subscriptionPurchase.creatingPlanKey===key?'Создаём платёж…':activeSubscription?(user?.subscriptionPlan===key?'Подписка активна':'Сменить тариф'):subscriptionPurchaseAvailable?'Купить':'Оплата недоступна'}
+            </button>
+          </div>)}
+          <p className="tp-credit-note">Тариф действует один календарный месяц, без автопродления.</p>
+          {subscriptionPurchase.isReceiptEmailRequired&&<div className="tp-credit-receipt">
+            <input type="email" value={subscriptionPurchase.receiptEmail}
+              onChange={event=>subscriptionPurchase.setReceiptEmail(event.target.value)}
+              placeholder="Email для чека" aria-label="Email для чека подписки"/>
+            <button type="button" className="tp-primary" disabled={!subscriptionPurchase.receiptEmail.trim()||!!subscriptionPurchase.creatingPlanKey}
+              onClick={()=>void subscriptionPurchase.retryWithReceiptEmail()}>Продолжить</button>
+          </div>}
+          {subscriptionPurchase.message&&<p className="tp-credit-notice" role="status">{subscriptionPurchase.message}</p>}
+          </div>}
       </div>
     </section></div>}
     {integrationOpen&&<TestPageIntegrationsDialog onClose={()=>setIntegrationOpen(false)}/>}

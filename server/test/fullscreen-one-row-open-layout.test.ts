@@ -12,49 +12,35 @@ test('fullscreen toolbar remains one row, ordered, taller and inset from viewpor
   const order = ['Планировыч AI', '<WorkspaceGlobalSearch', '<FullscreenModePicker',
     'className="fullscreen-create-control', '{renderOverdueControl()}',
     '{renderCreditsControl()}', '<TelegramIntegrationsMenu', 'href="/about"',
-    'className="auth-actions"', 'data-tour="fullscreen-workspace-settings"', 'data-tour="bubbles-fullscreen-exit"'];
+    'className="auth-actions"', 'data-tour="fullscreen-workspace-settings"'];
   let pos = -1;
   for (const part of order) {
     const next = header.indexOf(part);
     assert.ok(next > pos, part);
     pos = next;
   }
-  assert.doesNotMatch(header, /<FullscreenAddWindowMenu/);
+  assert.match(header, /<FullscreenBlockMenu/);
+  assert.doesNotMatch(header, /bubbles-fullscreen-exit/);
   assert.match(css, /\.app-shell\.bubble-fullscreen-shell > \.fullscreen-workspace-toolbar--one-row \{[^}]*min-height: 72px/);
   assert.match(css, /margin-top: 18px/);
   assert.match(css, /--fullscreen-workspace-width: calc\(100vw - clamp\(32px, 4vw, 80px\)\)/);
 });
 
-test('three checkboxes remain separate from new side-rail menu', async () => {
+test('single mode selector remains separate from side-rail menu', async () => {
   const controls = await load('../../client/src/components/FullscreenWorkspaceLayout.tsx');
   const picker = controls.slice(controls.indexOf('export function FullscreenModePicker'), controls.indexOf('export type FullscreenTaskChoice'));
   assert.match(picker, /VIEW_OPTIONS\.map/);
-  assert.match(picker, /<input type="checkbox"/);
-  assert.match(picker, /checked=\{selected\}/);
+  assert.doesNotMatch(picker, /<input type="checkbox"/);
+  assert.match(picker, /aria-pressed=\{selected\}/);
   assert.doesNotMatch(picker, /createPortal|aria-haspopup/);
   assert.match(controls, /fullscreen-workspace-single-rail/);
   assert.match(controls, /export function FullscreenWorkspaceSplit/);
 });
 
-test('multi-pane view is the default; classic view remains reachable from both sides', async () => {
+test('multi-pane view is the only reachable web workspace, including lessons', async () => {
   const app = await load('../../client/src/App.tsx');
   assert.ok(app.includes('const [isBubbleFullscreen, setIsBubbleFullscreen] = useState(true);'));
-  const toolbar = app.slice(app.indexOf('data-tour="bubbles-fullscreen-toolbar"'),
-    app.indexOf('</header>', app.indexOf('data-tour="bubbles-fullscreen-toolbar"')));
-  assert.ok(toolbar.includes('title="Классический вид"'));
-  assert.ok(toolbar.includes('aria-label="Перейти в классический вид"'));
-  assert.ok(toolbar.includes('setIsBubbleFullscreen(false)'));
-  assert.ok(app.includes('data-tour="workspace-fullscreen-enter"'));
-  assert.equal(app.split('data-tour="workspace-fullscreen-enter"').length, 2);
-  assert.ok(app.includes('title="Перейти в основной вид"'));
-  assert.ok(!app.includes('<span>Основной вид</span>'));
-  assert.ok(app.includes('className="topbar-action-button workspace-fullscreen-entry inline-flex h-10 w-10'));
-  assert.ok(app.includes('title="Перейти в основной вид"'));
-  assert.ok(!app.includes('data-tour="bubbles-fullscreen-enter"'));
-  const regularControls = app.slice(app.indexOf('data-tour="display-modes"'),
-    app.indexOf('</section> : null}', app.indexOf('data-tour="display-modes"')));
-  assert.ok(regularControls.lastIndexOf('data-tour="workspace-fullscreen-enter"') >
-    regularControls.lastIndexOf('aria-label="Настройки"'));
+  assert.doesNotMatch(app, /setIsBubbleFullscreen\(false\)|data-tour="bubbles-fullscreen-exit"|data-tour="workspace-fullscreen-enter"/);
 });
 
 test('left updates button reuses training and news, without increasing toolbar dimensions', async () => {
@@ -83,7 +69,7 @@ test('opened modals mask workspace pluses and filters, but not inline task panes
   assert.ok(app.includes("'fullscreen-overlay-active'"));
   assert.ok(css.includes('.bubble-fullscreen-shell.fullscreen-overlay-active .fullscreen-workspace-divider > .fullscreen-add-window'));
   assert.ok(css.includes('.bubble-fullscreen-shell.fullscreen-overlay-active .fullscreen-pane-filters-anchor'));
-  assert.ok(app.includes('embeddedTaskFocus={embeddedFocusActive}'));
+  assert.ok(app.includes("embeddedTaskFocus={embeddedFocusActive && fullscreenPanels[1]?.kind === 'task-ai' && !hasGeneralAiPane}"));
   assert.ok(launcher.includes("embeddedTaskFocus?'ai-chat-launcher-task-embedded':''"));
   assert.ok(css.includes('.ai-chat-launcher.bubble-ai-fullscreen.ai-chat-launcher-task-embedded'));
 });

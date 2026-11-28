@@ -1,3 +1,4 @@
+import { normalizeEconomicPositions } from '../lib/economic-operation-details.js';
 /** Strict allowlist for every AI-proposed financial mutation.
  * The LLM is untrusted: numbers, links and identities are verified again at
  * apply time inside the user's DB transaction.
@@ -15,7 +16,7 @@ export class EconomicActionError extends Error {
 }
 const FIELDS: Record<EconomicEntity, readonly string[]> = {
   account: ['name','openingBalanceMinor','balanceMinor','accountType','creditLimitMinor'],
-  operation: ['kind','amountMinor','sourceAccountId','targetAccountId','category','title','note','occurredAt'],
+  operation: ['kind','amountMinor','sourceAccountId','targetAccountId','category','title','note','occurredAt','positionsJson','calculation'],
   debt: ['direction','counterparty','amountMinor','paidMinor','note','dueAt','postedToAccount','accountId'],
   loan: ['name','lender','principalMinor','paidMinor','annualRateBps','termMonths','startDate',
     'monthlyPaymentOverrideMinor','paymentDate','remindersEnabled','isClosed'],
@@ -29,10 +30,10 @@ const REQUIRED: Record<EconomicEntity, readonly string[]> = {
   category: ['kind','name']
 };
 const STRING_LIMITS: Record<string, number> = {
-  name:100, title:160, counterparty:100, lender:100, category:80, note:500,
+  name:100, title:160, counterparty:100, lender:100, category:80, note:500, calculation:240,
   sourceAccountId:128,targetAccountId:128,accountId:128
 };
-const OPTIONAL_NULL = new Set(['note','category','targetAccountId','accountId','dueAt','lender','monthlyPaymentOverrideMinor','paymentDate','creditLimitMinor']);
+const OPTIONAL_NULL = new Set(['calculation','note','category','targetAccountId','accountId','dueAt','lender','monthlyPaymentOverrideMinor','paymentDate','creditLimitMinor']);
 const enumAllowed: Record<string,readonly string[]> = {
   kind:['INCOME','EXPENSE','TRANSFER'], direction:['OWE','OWED_TO_ME'], accountType:['STANDARD','CREDIT_CARD']
 };
@@ -67,6 +68,10 @@ export function canonicalEconomicAction(value:unknown):EconomicAction {
     throw new EconomicActionError('Тип категории нельзя менять, только название.');
   const result: Record<string,string|number|boolean|null>={};
   for(const [key,raw] of Object.entries(payload)){
+    if(key==='positionsJson'){
+      try { result[key]=normalizeEconomicPositions(raw); } catch(cause) { throw new EconomicActionError((cause as Error).message); }
+      continue;
+    }
     if(raw===null && OPTIONAL_NULL.has(key)){result[key]=null;continue;}
     if(key.endsWith('Minor')){
       if(typeof raw!=='string' || !/^-?\d{1,15}$/.test(raw))throw new EconomicActionError('Укажите сумму в копейках строкой.');

@@ -388,6 +388,7 @@ model User {
   googleSub    String?  @unique
   avatarUrl    String?
   timeZone     String?
+  primarySidebarOrder String[] @default([])
   aiTaskAutoApply Boolean @default(false)
   aiTaskProposals AiTaskProposal[]
   browserNotificationsEnabled Boolean @default(true)
@@ -400,6 +401,12 @@ model User {
   telegramChatId String?  @unique
   telegramLinkedAt DateTime?
   subscriptionPlan String @default("free")
+  subscriptionExpiresAt DateTime?
+  subscriptionAllowanceMilli Int @default(0)
+  plannerMascotSkin String @default("classic")
+  economicMascotSkin String @default("classic")
+  subscriptionPurchases SubscriptionPurchase[]
+  adminSubscriptionChanges AdminSubscriptionChange[]
   aiCredits    Int      @default(0)
   aiCreditsPeriod String @default("")
   aiIncludedCreditsMilli Int @default(0)
@@ -433,6 +440,7 @@ model User {
   telegramAiTaskApprovals TelegramAiTaskApproval[]
   telegramAiMonitorCalls TelegramAiMonitorCall[]
   emailMailboxes EmailMailbox[]
+  assistantSettingsProposals AssistantSettingsProposal[]
   emailAnalyses EmailAnalysis[]
   emailDigests EmailDigest[]
   mailComposeDrafts MailComposeDraft[]
@@ -592,6 +600,7 @@ model AiCreditReservationRecord {
   settledAt            DateTime?
 
   @@index([userId, status])
+  @@index([userId, period, createdAt])
 }
 
 model UserConsent {
@@ -968,10 +977,17 @@ model SystemNotification {
   pushClaimedAt DateTime?
   pushAttempts Int @default(0)
   pushNextAttemptAt DateTime @default(now())
+  subscriptionTelegramSentAt DateTime?
+  subscriptionEmailSentAt DateTime?
+  subscriptionDeliveryClaimedAt DateTime?
+  subscriptionDeliveryNextAt DateTime?
+  androidActionRef String?
+  androidActionTaken String?
 
   @@index([userId, createdAt])
   @@index([userId, readAt])
   @@index([pushDispatchedAt, pushNextAttemptAt])
+  @@index([subscriptionDeliveryNextAt])
 }
 model AndroidPushDevice {
   id             String @id @default(cuid())
@@ -1177,6 +1193,7 @@ model TelegramAiChatPolicy {
   historyImportedCount    Int      @default(0)
   // NULL means no per-chat DAILY cap. Global wallet balance always applies.
   dailyCreditLimitMilli   Int?     @default(50000)
+  dailyCreditLimitPercent Int?
   isEnabled               Boolean  @default(false)
   lastSeenMessageId       Int?
   lastInteractionMessageId Int?
@@ -1344,6 +1361,31 @@ model CreditPurchase {
   @@index([status])
 }
 
+model SubscriptionPurchase {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clientRequestId   String
+  planKey           String
+  creditsMilli      Int
+  amountKopecks     Int
+  currency          String   @default("RUB")
+  yookassaPaymentId String?  @unique
+  idempotenceKey    String   @unique
+  status            String   @default("created")
+  confirmationUrl   String?
+  providerStatus    String?
+  providerCheckedAt DateTime?
+  activatedAt       DateTime?
+  canceledAt        DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([userId, clientRequestId])
+  @@index([userId, createdAt])
+  @@index([status])
+}
+
 // Personal notes independent of tasks and sectors; prepared for future AI search.
 model StandaloneNote {
   id        String   @id @default(cuid())
@@ -1396,6 +1438,7 @@ model EmailMailbox {
   summaryInstructions String @default("")
   monitorModel String @default("gpt-6-luna")
   dailyCreditLimitMilli Int?
+  dailyCreditLimitPercent Int?
   creditDayKey String?
   dailySpentMilli Int @default(0)
   dailyReservedMilli Int @default(0)
@@ -1571,6 +1614,8 @@ model EconomicOperation {
   user              User @relation(fields: [userId], references: [id], onDelete: Cascade)
   kind              String
   amountMinor       BigInt
+  positionsJson     String @default("[]")
+  calculation       String?
   sourceAccountId   String
   sourceAccount     EconomicAccount @relation("EconomicSourceAccount", fields: [sourceAccountId], references: [id], onDelete: Restrict)
   targetAccountId   String?
@@ -1583,9 +1628,12 @@ model EconomicOperation {
   title             String
   note              String?
   occurredAt        DateTime @default(now())
+  recurrenceJson    Json?
+  nextRepeatAt      DateTime?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
+  @@index([nextRepeatAt])
   @@index([userId, occurredAt, id])
   @@index([userId, kind, occurredAt])
   @@index([userId, isAdjustment, occurredAt])
@@ -1686,4 +1734,39 @@ model EconomicAiProposal {
 
   @@index([userId, createdAt])
   @@index([messageId])
+}
+
+
+// Administrative grants are not payments. Keep a separate, immutable audit record.
+model AdminSubscriptionChange {
+  id                  String   @id
+  userId              String
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action              String
+  previousPlan        String
+  nextPlan            String
+  previousExpiresAt   DateTime?
+  nextExpiresAt       DateTime?
+  previousIncludedMilli Int
+  nextIncludedMilli   Int
+  previousPeriod      String
+  nextPeriod          String
+  reason              String
+  createdAt           DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model AssistantSettingsProposal {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind String
+  targetId String
+  targetLabel String
+  revision Int
+  changes Json
+  status String @default("PENDING")
+  createdAt DateTime @default(now())
+  @@index([userId, kind, targetId, createdAt])
 }

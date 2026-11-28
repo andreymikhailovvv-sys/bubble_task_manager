@@ -41,6 +41,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import kotlin.math.sin
+import ru.planirovych.app.planik.PlanikWakeMicGate
 
 private enum class VoiceRecordingStage { IDLE, RECORDING, TRANSCRIBING }
 
@@ -79,6 +80,7 @@ internal fun rememberAiChatSpeechInput(
     var processingJob by remember { mutableStateOf<Job?>(null) }
     var processingGeneration by remember { mutableIntStateOf(0) }
     val maxSize=6*1024*1024
+    val wakeMicOwner=remember { Any() }
 
     fun releaseRecorder(discard:Boolean) {
         val active=recorder.value
@@ -88,6 +90,7 @@ internal fun rememberAiChatSpeechInput(
             runCatching{active.reset()}
             runCatching{active.release()}
         }
+        PlanikWakeMicGate.release(wakeMicOwner)
         if(discard){
             recording.value?.delete()
             recording.value=null
@@ -98,6 +101,8 @@ internal fun rememberAiChatSpeechInput(
     @Suppress("DEPRECATION")
     fun startRecording() {
         if(stage!=VoiceRecordingStage.IDLE)return
+        // Release the wake recognizer synchronously before opening MediaRecorder.
+        PlanikWakeMicGate.acquire(wakeMicOwner)
         try{
             val file=File.createTempFile("ai-dictation-", ".m4a",context.cacheDir)
             recording.value=file
@@ -115,6 +120,9 @@ internal fun rememberAiChatSpeechInput(
             elapsedSeconds=0
             amplitude=0f
             stage=VoiceRecordingStage.RECORDING
+            // One cue only after the actual recording starts. Respect the
+            // system stream/ringer; no volume changes or background beeps.
+            playVoiceInputStarted(context)
         }catch(error:Exception){
             releaseRecorder(true)
             errorCallback("Не удалось включить запись. Проверьте доступ к микрофону.")
@@ -135,6 +143,7 @@ internal fun rememberAiChatSpeechInput(
         recorder.value=null
         val stopped=runCatching {active?.stop()}.isSuccess
         runCatching{active?.release()}
+        PlanikWakeMicGate.release(wakeMicOwner)
         recording.value=null
         if(!stopped || file==null || length<.25){
             file?.delete()
@@ -210,6 +219,7 @@ internal fun rememberAiChatSpeechInput(
                 runCatching{native.release()}
             }
             recorder.value=null
+            PlanikWakeMicGate.release(wakeMicOwner)
             recording.value?.delete()
             recording.value=null
         }
@@ -559,3 +569,19 @@ internal fun MiniAppAiSendIcon(tint:Color){
 internal fun appendAiDictation(draft:String,recognized:String):String =
     listOf(draft.trimEnd(),recognized.trim())
         .filter{it.isNotBlank()}.joinToString(" ")
+
+internal fun playVoiceInputStarted(context:android.content.Context) {
+    runCatching {
+        val audio=context.getSystemService(android.media.AudioManager::class.java)
+        if(audio.ringerMode!=android.media.AudioManager.RINGER_MODE_NORMAL ||
+            audio.getStreamVolume(android.media.AudioManager.STREAM_SYSTEM)==0)return
+        val tone=android.media.ToneGenerator(android.media.AudioManager.STREAM_SYSTEM,65)
+        try {
+            tone.startTone(android.media.ToneGenerator.TONE_PROP_BEEP,110)
+        } finally {
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                runCatching { tone.release() }
+            },250L)
+        }
+    }
+}

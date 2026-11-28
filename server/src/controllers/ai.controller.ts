@@ -1,3 +1,4 @@
+import { SubscriptionAccessError } from '../services/subscription-access.service.js';
 import { normalizeSelectableAiChatModel } from '../lib/ai-chat-model.js';
 import { startAiIntroOverlay } from '../services/ai-quick-intro.service.js';
 import { consumeTelegramAiReadRequest } from '../services/telegram-ai-read-consent.service.js';
@@ -32,6 +33,7 @@ export const isDynamicTaskChatBillingEnabled = (userId: string) => {
 const INSUFFICIENT_AI_CREDITS_ERROR = 'Недостаточно AI кредитов';
 const INSUFFICIENT_AI_CREDITS_SYSTEM_MESSAGE = 'Системное сообщение: у пользователя недостаточно кредитов для использования ИИ-функции.';
 const sendAiError = (res: Response, error: unknown, fallback = 'Unknown AI error') => {
+  if (error instanceof SubscriptionAccessError) { res.status(403).json({error:error.message,code:error.code,requiredPlan:error.requiredPlan}); return; }
   const message = error instanceof Error ? error.message : fallback;
   if (message === INSUFFICIENT_AI_CREDITS_ERROR) {
     res.status(402).json({ error: INSUFFICIENT_AI_CREDITS_SYSTEM_MESSAGE });

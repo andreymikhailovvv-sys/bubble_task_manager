@@ -1,3 +1,4 @@
+import { requireSubscriptionFeature } from './subscription-access.service.js';
 import crypto from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
@@ -35,6 +36,7 @@ function resolvePlanikVoice(value: unknown): PlanikRealtimeVoice {
 }
 
 export async function createLiveVoiceTicket(userId: string, scope?: unknown, voice?: unknown) {
+  await requireSubscriptionFeature(userId, 'live');
   for (const [key, item] of tickets) if (item.expires < Date.now()) tickets.delete(key);
   if (sessions.has(userId)) throw new Error('У вас уже открыт живой голосовой диалог.');
   if ([...tickets.values()].filter(x => x.userId === userId).length >= 3) throw new Error('Слишком много запросов на голосовой диалог.');
@@ -282,7 +284,7 @@ async function startLiveSession(userId: string, peer: ClientPeer, context: LiveV
   };
   peer.onClose(() => stop());
   try {
-    reservation = await reserveAiCreditsMilli(userId, RESERVED_MILLI);
+    reservation = await reserveAiCreditsMilli(userId, RESERVED_MILLI, undefined, 'premium');
     if (closed) { await refundAiCreditReservation(reservation); reservation = null; return; }
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) throw new Error('Голосовой ИИ не настроен.');

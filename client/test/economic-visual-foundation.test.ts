@@ -20,8 +20,11 @@ test('module switcher has independent persistent edge icons and hover-only label
   assert.match(railCss, /top: clamp\(105px, 17vh, 182px\)/);
   assert.match(railCss, /\.module-rail-link:hover \.module-rail-label/);
   assert.match(railCss, /\.module-rail-link:focus-visible \.module-rail-label/);
-  assert.match(railCss, /\.app-shell\[data-theme="light"\] \.module-rail/);
-  assert.match(railCss, /\.econ-light \.module-rail/);
+  // The body carries the actual theme in the fullscreen planner, while
+  // both module wrappers remain supported. All three share the same palette.
+  assert.match(railCss, /:is\(body\[data-theme="light"\], \.app-shell\[data-theme="light"\], \.econ-light\) \.module-rail \{/);
+  assert.match(railCss, /--module-rail-ink: #315374/);
+  assert.match(railCss, /\.module-rail-link\.module-rail-economic svg \{ color: #87510f; \}/);
   assert.match(railCss, /\.module-rail-link\.module-rail-economic\.is-active/);
 });
 
@@ -39,7 +42,18 @@ test('Economic mascot reuses the real Planik SVG and animations with its own pal
   assert.match(economic, /<PlanikMascot variant="economic" size="launcher" busy=\{busy\} progress=\{progress\}/);
   assert.doesNotMatch(economic, /econ-robot-metal/);
   assert.match(mascot, /variant\?: 'planner' \| 'economic'/);
-  assert.match(mascot, /variant = 'planner'/);
+  // Explicit props take priority over the managed mascot identity; only
+  // an unconfigured mascot falls back to the planner palette.
+  assert.match(mascot, /variant: variantOverride/);
+  assert.match(mascot, /const identity = useMascotIdentity\(\)/);
+  assert.match(mascot, /const baseVariant = variantOverride \?\? identity\?\.variant \?\? 'planner'/);
+  // Finance chat temporarily overrides the planner mascot, never the
+  // explicit Economic variant; returning to planner restores its own skin.
+  assert.match(mascot, /const variant = baseVariant === 'planner' && swap==='economic' \? 'economic' : baseVariant/);
+  assert.match(mascot, /const baseSkinId = skinOverride \?\? identity\?\.skinId \?\? 'classic'/);
+  assert.match(mascot, /const skinId = baseVariant === 'planner' && swap==='economic' \? economicSkinId \?\? 'classic' : baseSkinId/);
+  assert.match(mascot, /setSwap\('economic'\)/);
+  assert.match(mascot, /setSwap\('planner'\)/);
   assert.match(mascotCss, /\.planik-mascot--economic \.planik-body-stop-start/);
   assert.match(mascotCss, /\.planik-eye \{/);
   assert.match(mascotCss, /animation: planik-blink/);
@@ -55,4 +69,24 @@ test('visible Economic statuses reflect real async request stages and animate', 
   assert.match(economicCss, /@keyframes econ-status-beat/);
   assert.match(economicCss, /@media\(prefers-reduced-motion:reduce\)/);
   assert.doesNotMatch(economic, /Брюс Хуй/);
+});
+
+test('Economych hover chat closes after leaving both hover surfaces and cancels on re-entry', () => {
+  const app = readFileSync(new URL('../src/EconomicApp.tsx', import.meta.url), 'utf8');
+  assert.match(app, /onHover=\{openAssistant\} onLeave=\{scheduleAssistantClose\}/);
+  assert.match(app, /assistantCloseTimer\.current = window\.setTimeout\(\(\) => \{[\s\S]*?setAssistantOpen\(false\);[\s\S]*?\}, 220\)/);
+  assert.match(app, /role="dialog" aria-label="Экономыч AI, финансовый помощник" onPointerEnter=\{event => \{ if \(event.pointerType === 'mouse'\) cancelAssistantClose\(\); \}\} onPointerLeave=\{event => \{ if \(event.pointerType === 'mouse'\) scheduleAssistantClose\(\); \}\}/);
+});
+
+
+test('Economic overview welcome banner can be collapsed and restored with the existing account preference', () => {
+  const app = read('../src/EconomicApp.tsx');
+  const styles = read('../src/EconomicApp.css');
+  assert.match(app, /localStorage\.getItem\('btm:' \+ user\.id \+ ':economic-banner-hidden'\) === '1'/);
+  assert.match(app, /localStorage\.setItem\('btm:' \+ user\.id \+ ':economic-banner-hidden', hidden \? '1' : '0'\)/);
+  assert.match(app, /!bannerHidden \? <div className="econ-intro"/);
+  assert.match(app, /className="econ-intro-hide" onClick=\{\(\) => setBannerVisibility\(true\)\} aria-expanded="true"/);
+  assert.match(app, /: <button type="button" className="econ-intro-restore" onClick=\{\(\) => setBannerVisibility\(false\)\} aria-expanded="false"><ChevronDown size=\{16\}\/> Развернуть приветственный блок/);
+  assert.match(styles, /\.econ-root \.econ-intro-restore\{[\s\S]*?min-height:37px/);
+  assert.match(styles, /\.econ-root\.econ-light \.econ-intro \.econ-intro-hide/);
 });

@@ -5,6 +5,8 @@ import type { GeneratedDocument } from '../lib/types';
 
 export function TaskCompletionReportDialog(props: {
   taskId: string;
+  demo?: boolean;
+  hideCreditCost?: boolean;
   taskTitle: string;
   onClose: () => void;
   onNeverShow?: () => Promise<void>;
@@ -25,7 +27,7 @@ export function TaskCompletionReportDialog(props: {
     props.onClose();
   };
   const generate = async () => {
-    if (loading) return;
+    if (loading || props.demo) return;
     setLoading(true);
     setError(null);
     try {
@@ -66,7 +68,7 @@ export function TaskCompletionReportDialog(props: {
   return (
     <div className="fixed inset-0 z-[310] flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-sm"
       onMouseDown={(event) => { if (event.target === event.currentTarget && !loading) void finish(); }}>
-      <section role="dialog" aria-modal="true" aria-labelledby="task-report-dialog-title"
+      <section data-planik-report-dialog role="dialog" aria-modal="true" aria-labelledby="task-report-dialog-title"
         className="surface-popover relative w-full max-w-md rounded-3xl border p-5 shadow-2xl sm:p-6">
         <div className="mb-3 flex items-center gap-3 pr-10">
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-violet-500/15 text-violet-500" aria-hidden="true">
@@ -92,7 +94,7 @@ export function TaskCompletionReportDialog(props: {
             <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row">
               <button type="button" onClick={() => void finish()} disabled={loading}
                 className="surface-muted flex-1 rounded-xl px-4 py-2.5 text-sm font-semibold text-primary">Нет, спасибо</button>
-              <button type="button" onClick={() => void generate()} disabled={loading}
+              <button type="button" onClick={() => void generate()} disabled={loading || props.demo}
                 className="primary-button inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold disabled:opacity-50">
                 {loading ? <Loader2 size={16} className="animate-spin" /> : <FileText size={16} />}
                 {loading ? 'Готовлю…' : 'Подготовить Word'}
@@ -107,7 +109,7 @@ export function TaskCompletionReportDialog(props: {
               {downloading ? <Loader2 size={16} className="animate-spin" /> : <FileText size={16} />}
               <span className="min-w-0 truncate">{downloading ? 'Скачиваем…' : `Скачать ${document.file.fileName}`}</span>
             </button>
-            <p className="text-center text-xs text-muted">Списано {Math.round(document.credits) / 1000} ИИ-кредитов. Word также добавлен в чат задачи.</p>
+            <p className="text-center text-xs text-muted">{!props.hideCreditCost ? `Списано ${Math.round(document.credits) / 1000} ИИ-кредитов. ` : ''}Word также добавлен в чат задачи.</p>
             <button type="button" onClick={() => props.onClose()} className="surface-muted w-full rounded-xl px-4 py-2 text-sm text-primary">Закрыть</button>
           </div>
         )}

@@ -27,15 +27,26 @@ struct NativeCreditsSheet: View {
                         Image(systemName: "circle.hexagongrid.fill")
                             .font(.system(size: 31))
                             .foregroundStyle(accent)
-                        Text("Баланс ИИ-кредитов")
+                        Text(session.account?.subscriptionLimit?.planName ?? "Баланс ИИ-кредитов")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
-                        Text(currentCredits.formatted(number))
+                        Text(session.account?.subscriptionLimit.map { "\($0.remainingPercent)%" } ?? currentCredits.formatted(number))
                             .font(.system(size: 41, weight: .bold, design: .rounded))
                             .monospacedDigit()
-                        Text("Доступно кредитов")
+                        Text(session.account?.subscriptionLimit == nil ? "Доступно кредитов" : "Осталось месячного лимита")
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                        if let limit = session.account?.subscriptionLimit {
+                            GeometryReader { geometry in
+                                ZStack(alignment: .leading) {
+                                    Capsule().fill(accent.opacity(0.13))
+                                    Capsule().fill(accent).frame(width: geometry.size.width * CGFloat(limit.remainingPercent) / 100)
+                                }
+                            }.frame(height: 7).padding(.horizontal, 24)
+                                .accessibilityLabel("Осталось \(limit.remainingPercent)% лимита")
+                            Text("Использовано \(limit.usedPercent)% · до \(String(limit.expiresAt.prefix(10)))")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 23)
@@ -73,7 +84,7 @@ struct NativeCreditsSheet: View {
                 .padding(18)
             }
             .background(Color(uiColor: .systemGroupedBackground))
-            .navigationTitle("ИИ-кредиты")
+            .navigationTitle(session.account?.subscriptionLimit == nil ? "ИИ-кредиты" : "Лимит ИИ")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -89,10 +100,17 @@ struct NativeCreditsSheet: View {
         .task { await load() }
     }
 
+    private func usageLabel(_ value: Int) -> String {
+        if let total = session.account?.subscriptionLimit?.allowanceMilli, total > 0 {
+            return (Double(value) * 100 / Double(total)).formatted(number) + "%"
+        }
+        return (Double(value) / 1000).formatted(number)
+    }
+
     private func metric(_ title: String, _ value: Int) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title).font(.caption).foregroundStyle(.secondary)
-            Text((Double(value) / 1000).formatted(number))
+            Text(usageLabel(value))
                 .font(.title2.bold())
                 .monospacedDigit()
         }
@@ -112,7 +130,7 @@ struct NativeCreditsSheet: View {
                     HStack {
                         Text(item.label).font(.subheadline).lineLimit(2)
                         Spacer(minLength: 8)
-                        Text((Double(item.creditsMilli) / 1000).formatted(number))
+                        Text(usageLabel(item.creditsMilli))
                             .font(.subheadline.monospacedDigit())
                             .foregroundStyle(.secondary)
                     }
@@ -131,6 +149,7 @@ struct NativeCreditsSheet: View {
         defer { isLoading = false }
         do {
             let api = NativeAPI()
+            await session.refreshAiBalance()
             async let wallet = api.creditBalance()
             async let usage = api.creditStatistics()
             balance = try await wallet

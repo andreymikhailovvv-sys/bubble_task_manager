@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent, type ReactNode } from 'react';
-import { CalendarDays, ChevronDown, GripVertical, LayoutGrid, List, Plus, Search, X } from 'lucide-react';
-import { createPortal } from 'react-dom';
-import { FULLSCREEN_AUXILIARY_OPTIONS, fullscreenPanelTitle, type FullscreenAuxiliaryKind, type FullscreenWorkspacePanel } from '../lib/fullscreenWorkspacePanels';
+import { useEffect, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent, type ReactNode } from 'react';
+import { CalendarDays, ChevronRight, GripVertical, LayoutGrid, List, Plus, Search, X } from 'lucide-react';
+import { useScrollFade } from '../hooks/useScrollFade';
+import { FULLSCREEN_AUXILIARY_OPTIONS, fullscreenPanelTitle, requiresCompanionPanel, type FullscreenWorkspacePanel } from '../lib/fullscreenWorkspacePanels';
 
 export type FullscreenWorkspaceMode = 'bubbles' | 'list' | 'timeline';
 
@@ -13,37 +13,38 @@ const VIEW_OPTIONS = [
 
 const clampSplit = (value: number) => Math.max(25, Math.min(75, Math.round(value)));
 
-export function FullscreenModePicker({ modes, onChange }: {
+export function FullscreenModePicker({ modes, onChange, onHold, onDragStart, onDragEnd }: {
   modes: FullscreenWorkspaceMode[];
   onChange: (next: FullscreenWorkspaceMode[]) => void;
+  onHold?: (mode: FullscreenWorkspaceMode) => void;
+  onDragStart?: (mode: FullscreenWorkspaceMode) => void;
+  onDragEnd?: () => void;
 }) {
-  const toggle = (value: FullscreenWorkspaceMode) => {
-    if (modes.includes(value)) {
-      // Keep at least one active view.
-      if (modes.length > 1) onChange(modes.filter(mode => mode !== value));
-    } else if (modes.length === 2) {
-      // The first mode stays anchored when the third one replaces the second.
-      onChange([modes[0], value]);
-    } else {
-      onChange([...modes, value]);
-    }
-  };
+  const holdTimer = useRef<number | null>(null);
+  const suppressClick = useRef(false);
+  const clearHold = () => { if (holdTimer.current !== null) window.clearTimeout(holdTimer.current); holdTimer.current = null; };
+  useEffect(() => () => { if (holdTimer.current !== null) window.clearTimeout(holdTimer.current); }, []);
+  const selectMode = (value: FullscreenWorkspaceMode) => onChange([value]);
 
   return (
     <div className="fullscreen-mode-picker display-mode-toggle-group inline-flex shrink-0 items-center rounded-xl border p-1"
-      role="group" aria-label="Режимы рабочего пространства, выберите один или два">
+      role="group" aria-label="Режим рабочего пространства">
       {VIEW_OPTIONS.map(option => {
-        const selected = modes.includes(option.value);
+        const selected = modes[0] === option.value;
         const Icon = option.icon;
         return (
-          <label key={option.value}
+          <button type="button" key={option.value} data-view-mode={option.value} aria-pressed={selected} draggable={Boolean(onDragStart)}
+            onPointerDown={event => { if (event.button !== 0) return; clearHold(); suppressClick.current = false; if (onHold) holdTimer.current = window.setTimeout(() => { suppressClick.current = true; onHold(option.value); }, 420); }}
+            onPointerUp={clearHold} onPointerLeave={clearHold} onPointerCancel={clearHold}
+            onDragStart={event => { clearHold(); suppressClick.current = true; event.dataTransfer.effectAllowed = 'copy'; event.dataTransfer.setData('application/x-planirovych-block', 'workspace-block'); onDragStart?.(option.value); }}
+            onDragEnd={() => { clearHold(); onDragEnd?.(); }}
+            onClick={event => { if (event.detail !== 0 && suppressClick.current) { suppressClick.current = false; return; } selectMode(option.value); }}
             className={`fullscreen-mode-picker-option display-mode-toggle-button inline-flex cursor-pointer items-center rounded-lg text-sm font-semibold transition ${selected ? 'display-mode-toggle-button-active is-selected' : ''}`}
-            title={selected && modes.length === 1 ? 'Необходимо оставить хотя бы один режим' : option.label}>
-            <Icon size={16} aria-hidden="true" />
+            title={option.label}>
+            <Icon className="fullscreen-mode-color-icon" size={16} aria-hidden="true" />
+            {onHold && <GripVertical className="fullscreen-mode-grip" size={11} aria-hidden="true" />}
             <span className="fullscreen-mode-picker-label">{option.label}</span>
-            <input type="checkbox" className="fullscreen-mode-picker-checkbox" checked={selected}
-              onChange={() => toggle(option.value)} aria-label={`Показать режим «${option.label}»`} />
-          </label>
+          </button>
         );
       })}
     </div>
@@ -52,153 +53,92 @@ export function FullscreenModePicker({ modes, onChange }: {
 
 export type FullscreenTaskChoice = { id: string; title: string };
 
-/** One menu for the solo right rail and either side of the split divider.
- * All popups live in a body portal, so narrow panes never clip the selector. */
-export function FullscreenAddWindowMenu({ onChoose, tasks, side, compact = true }: {
-  onChoose: (panel: FullscreenWorkspacePanel) => void;
+type BlockMenuProps = {
+  forceOpen?: boolean;
   tasks: readonly FullscreenTaskChoice[];
-  side: 'left' | 'right';
-  compact?: boolean;
-}) {
+  onSelect: (panel: FullscreenWorkspacePanel) => void;
+  onDragStart: (panel: FullscreenWorkspacePanel) => void;
+  onDragEnd: () => void;
+};
+
+export function FullscreenBlockMenu({ tasks, onSelect, onDragStart, onDragEnd, forceOpen = false }: BlockMenuProps) {
   const [open, setOpen] = useState(false);
   const [chooseTask, setChooseTask] = useState(false);
   const [query, setQuery] = useState('');
-  const rootRef = useRef<HTMLDivElement>(null);
-  const popupRef = useRef<HTMLDivElement>(null);
-  const [position, setPosition] = useState<CSSProperties>({});
-
-  useEffect(() => {
-    if (!open) return;
-    const reposition = () => {
-      const rect = rootRef.current?.getBoundingClientRect();
-      if (!rect) return;
-      const width = Math.min(320, window.innerWidth - 24);
-      const left = Math.max(12, Math.min(
-        side === 'left' ? rect.right - width : rect.left, window.innerWidth - width - 12
-      ));
-      const above = window.innerHeight - rect.bottom < 320 && rect.top > 320;
-      setPosition({
-        position: 'fixed',
-        width,
-        left,
-        top: above ? undefined : rect.bottom + 10,
-        bottom: above ? window.innerHeight - rect.top + 10 : undefined,
-        maxHeight: Math.min(470, Math.max(150, above ? rect.top - 24 : window.innerHeight - rect.bottom - 24))
-      });
-    };
-    reposition();
-    const outside = (event: globalThis.PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node) && !popupRef.current?.contains(event.target as Node)) setOpen(false);
-    };
-    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') setOpen(false); };
-    window.addEventListener('resize', reposition);
-    window.addEventListener('scroll', reposition, true);
-    document.addEventListener('pointerdown', outside);
-    document.addEventListener('keydown', escape);
-    return () => {
-      window.removeEventListener('resize', reposition);
-      window.removeEventListener('scroll', reposition, true);
-      document.removeEventListener('pointerdown', outside);
-      document.removeEventListener('keydown', escape);
-    };
-  }, [open, side]);
-
-  const choose = (panel: FullscreenWorkspacePanel) => {
-    onChoose(panel);
-    setOpen(false);
-    setChooseTask(false);
-    setQuery('');
-  };
-  const matchingTasks = tasks
-    .filter(task => task.title.toLocaleLowerCase('ru-RU').includes(query.trim().toLocaleLowerCase('ru-RU')))
-    .slice(0, 60);
-
-  return (
-    <div ref={rootRef} className={`fullscreen-add-window relative shrink-0 ${compact ? 'fullscreen-add-window--compact' : ''}`}
-      onPointerDown={event => event.stopPropagation()}
-      onDoubleClick={event => event.stopPropagation()}>
-      <button type="button" className="fullscreen-add-window-trigger topbar-action-button inline-flex items-center justify-center gap-1.5 rounded-xl border p-1.5 text-sm font-semibold"
-        aria-label={`Добавить или заменить ${side === 'left' ? 'левое' : 'правое'} окно`}
-        title={`Добавить или заменить ${side === 'left' ? 'левое' : 'правое'} окно`}
-        aria-haspopup="menu" aria-expanded={open}
-        onPointerDown={event => event.stopPropagation()}
-        onClick={event => { event.stopPropagation(); setOpen(value => !value); setChooseTask(false); setQuery(''); }}>
-        <Plus size={15} aria-hidden="true" />
-        {!compact ? <span>Добавить окно</span> : null}
-      </button>
-      {open ? createPortal(
-        <div ref={popupRef} style={position}
-          className="fullscreen-add-window-menu topbar-dropdown fixed z-[2147483640] flex flex-col overflow-hidden rounded-2xl border p-2 shadow-2xl"
-          role="menu" aria-label="Выбрать окно рабочего пространства">
-          {chooseTask ? (
-            <>
-              <div className="flex items-center justify-between gap-2 px-2 py-1">
-                <button type="button" className="text-xs font-semibold text-muted" onClick={() => setChooseTask(false)}>← Назад</button>
-                <span className="text-xs font-semibold text-primary">Выберите задачу</span>
-              </div>
-              <label className="fullscreen-add-window-search mb-2 flex items-center gap-2 rounded-xl border px-3 py-2">
-                <Search size={14} className="shrink-0" />
-                <input type="search" autoFocus className="w-full min-w-0 bg-transparent text-sm outline-none"
-                  value={query} onChange={event => setQuery(event.target.value)} placeholder="Поиск по задачам" aria-label="Поиск задачи для окна Focus" />
-              </label>
-              <div className="min-h-0 flex-1 space-y-1 overflow-y-auto">
-                {matchingTasks.map(task => (
-                  <button key={task.id} type="button" role="menuitem"
-                    className="fullscreen-add-window-option block w-full truncate rounded-lg px-3 py-2 text-left text-sm"
-                    title={task.title} onClick={() => choose({ kind: 'task-ai', taskId: task.id })}>{task.title}</button>
-                ))}
-                {matchingTasks.length === 0 ? <p className="p-3 text-xs text-muted">Задачи не найдены</p> : null}
-              </div>
-            </>
-          ) : (
-            <div className="min-h-0 space-y-1 overflow-y-auto">
-              <div className="px-2 pb-1 pt-1 text-[11px] font-semibold text-muted">Отображение</div>
-              {VIEW_OPTIONS.map(option => (
-                <button type="button" role="menuitem" key={option.value}
-                  className="fullscreen-add-window-option flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm"
-                  onClick={() => choose({ kind: 'mode', mode: option.value })}>
-                  <option.icon size={15} /> {option.label}
-                </button>
-              ))}
-              <div className="my-2 border-t" style={{ borderColor: 'var(--panel-border)' }} />
-              <div className="px-2 pb-1 text-[11px] font-semibold text-muted">Рабочие окна</div>
-              {FULLSCREEN_AUXILIARY_OPTIONS.map(option => (
-                <button type="button" key={option.kind} role="menuitem"
-                  className="fullscreen-add-window-option flex w-full flex-col rounded-lg px-3 py-2 text-left transition"
-                  onClick={() => option.kind === 'task-ai'
-                    ? setChooseTask(true)
-                    : choose({ kind: option.kind } as FullscreenWorkspacePanel)}>
-                  <span className="text-sm font-semibold">{option.title}</span>
-                  <span className="text-[11px] text-muted">{option.description}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>, document.body
-      ) : null}
-    </div>
+  const dragging = useRef(false);
+  const option = (panel: FullscreenWorkspacePanel, label: string, detail?: string) => (
+    <button type="button" role="menuitem" key={panel.kind === 'mode' ? panel.mode : panel.kind === 'task-ai' ? panel.taskId : panel.kind}
+      className="workspace-block-option fullscreen-add-window-option" draggable
+      onClick={() => { setOpen(false); onSelect(panel); }}
+      onDragStart={event => {
+        dragging.current = true;
+        event.dataTransfer.effectAllowed = 'copy';
+        event.dataTransfer.setData('application/x-planirovych-block', 'workspace-block');
+        onDragStart(panel);
+      }}
+      onDragEnd={() => { dragging.current = false; setOpen(false); onDragEnd(); }}>
+      <span><strong>{label}</strong>{detail && <small>{detail}</small>}</span>
+      <GripVertical size={16} aria-label="Можно перетащить" />
+    </button>
   );
+  return <div className="workspace-block-menu relative"
+    onMouseEnter={() => setOpen(true)}
+    onMouseLeave={() => { if (!dragging.current) setOpen(false); }}
+    onKeyDown={event => { if (event.key === 'Escape') setOpen(false); }}>
+    <button type="button" role="menuitem" aria-haspopup="menu" aria-expanded={open || forceOpen}
+      className="add-menu-option mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold"
+      onClick={() => setOpen(true)}><LayoutGrid size={14}/> Добавить блок <ChevronRight size={14} className="ml-auto"/></button>
+    {(open || forceOpen) && <div className="workspace-block-submenu topbar-dropdown rounded-2xl border p-2 shadow-2xl" role="menu" aria-label="Доступные блоки">
+      {chooseTask ? <>
+        <button type="button" className="workspace-block-option" onClick={() => { setChooseTask(false); setQuery(''); }}>← Все блоки</button>
+        <label className="fullscreen-add-window-search mb-2 flex items-center gap-2 rounded-xl border px-3 py-2">
+          <Search size={14}/><input type="search" autoFocus className="w-full min-w-0 bg-transparent text-sm outline-none" value={query}
+            onChange={event => setQuery(event.target.value)} placeholder="Поиск по задачам" aria-label="Поиск задачи для блока"/>
+        </label>
+        {tasks.filter(task => task.title.toLocaleLowerCase('ru-RU').includes(query.trim().toLocaleLowerCase('ru-RU'))).slice(0, 60)
+          .map(task => option({ kind: 'task-ai', taskId: task.id }, task.title))}
+      </> : <>
+        {VIEW_OPTIONS.map(view => option({ kind: 'mode', mode: view.value }, view.label))}
+        {FULLSCREEN_AUXILIARY_OPTIONS.map(item => item.kind === 'task-ai' ?
+          <button key={item.kind} type="button" role="menuitem" className="workspace-block-option fullscreen-add-window-option" onClick={() => setChooseTask(true)}>
+            <span><strong>{item.title}</strong><small>{item.description} · только в паре</small></span><ChevronRight size={16}/>
+          </button> : option({ kind: item.kind }, item.title, item.description + (item.kind === 'general-ai' ? ' · только в паре' : '')))}
+      </>}
+    </div>}
+  </div>;
 }
 
-/** In solo mode the user may add a new window on EITHER side of the current one.
- * The left plus inserts before the active pane; the right plus appends after it. */
-export function FullscreenWorkspaceSingle({ panel, renderPanel, onChoose, tasks }: {
+function BlockDropTarget({ add = false, onPlace }: { add?: boolean; onPlace: () => void }) {
+  const [over, setOver] = useState(false);
+  const isBlock = (event: DragEvent) => event.dataTransfer.types.includes('application/x-planirovych-block');
+  return <button type="button" className={`workspace-block-target ${over ? 'is-over' : ''}`}
+    onClick={onPlace}
+    onDragOver={event => { if (isBlock(event)) { event.preventDefault(); event.stopPropagation(); event.dataTransfer.dropEffect = 'copy'; setOver(true); } }}
+    onDragLeave={() => setOver(false)}
+    onDrop={event => { if (!isBlock(event)) return; event.preventDefault(); event.stopPropagation(); setOver(false); onPlace(); }}>
+    <span className="workspace-block-target-plus"><Plus size={25}/></span>
+    <span>{add ? 'Добавить блок' : 'Нажмите, чтобы заменить блок'}</span>
+  </button>;
+}
+
+export function FullscreenWorkspaceSingle({ panel, renderPanel, onChoose, onReplace, placement, allowReplace = true }: {
   panel: FullscreenWorkspacePanel;
   renderPanel: (panel: FullscreenWorkspacePanel) => ReactNode;
   onChoose: (side: 'left' | 'right', panel: FullscreenWorkspacePanel) => void;
-  tasks: readonly FullscreenTaskChoice[];
+  onReplace: (panel: FullscreenWorkspacePanel) => void;
+  placement: FullscreenWorkspacePanel | null;
+  allowReplace?: boolean;
 }) {
+  const rootRef = useRef<HTMLDivElement>(null);
+  useScrollFade(rootRef);
   return (
-    <div className={`fullscreen-workspace-single ${panel.kind === 'mode' && panel.mode !== 'bubbles' ? 'fullscreen-workspace-single--open' : ''}`}>
-      <aside className="fullscreen-workspace-single-rail fullscreen-workspace-single-rail--left" aria-label="Добавить окно слева">
-        <FullscreenAddWindowMenu side="left" tasks={tasks} onChoose={next => onChoose('left', next)} />
-      </aside>
+    <div ref={rootRef} className={`fullscreen-workspace-single ${panel.kind === 'mode' && panel.mode !== 'bubbles' ? 'fullscreen-workspace-single--open' : ''}`}>
+      {placement && <aside className="fullscreen-workspace-single-rail fullscreen-workspace-single-rail--left workspace-placement-rail"><BlockDropTarget add onPlace={() => onChoose('left', placement)}/></aside>}
       <section className="fullscreen-workspace-single-content min-h-0 min-w-0 flex-1">
         {renderPanel(panel)}
+        {placement && allowReplace && !requiresCompanionPanel(placement) && <BlockDropTarget onPlace={() => onReplace(placement)}/>}
       </section>
-      <aside className="fullscreen-workspace-single-rail fullscreen-workspace-single-rail--right" aria-label="Добавить окно справа">
-        <FullscreenAddWindowMenu side="right" tasks={tasks} onChoose={next => onChoose('right', next)} />
-      </aside>
+      {placement && <aside className="fullscreen-workspace-single-rail fullscreen-workspace-single-rail--right workspace-placement-rail"><BlockDropTarget add onPlace={() => onChoose('right', placement)}/></aside>}
     </div>
   );
 }
@@ -228,15 +168,17 @@ export function FullscreenFuturePanel({ panel, onClose }: {
   );
 }
 
-export function FullscreenWorkspaceSplit({ panels, renderPanel, ratio, onRatioChange, onChoose, tasks }: {
+export function FullscreenWorkspaceSplit({ panels, renderPanel, ratio, onRatioChange, onChoose, placement, onSwap }: {
   panels: [FullscreenWorkspacePanel, FullscreenWorkspacePanel];
   renderPanel: (panel: FullscreenWorkspacePanel) => ReactNode;
   onChoose: (side: 0 | 1, panel: FullscreenWorkspacePanel) => void;
-  tasks: readonly FullscreenTaskChoice[];
+  placement: FullscreenWorkspacePanel | null;
   ratio: number;
   onRatioChange: (ratio: number) => void;
+  onSwap: () => void;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
+  useScrollFade(rootRef);
   const pointerIdRef = useRef<number | null>(null);
   const pendingRatioRef = useRef(ratio);
 
@@ -253,7 +195,7 @@ export function FullscreenWorkspaceSplit({ panels, renderPanel, ratio, onRatioCh
   };
 
   const onDividerDown = (event: PointerEvent<HTMLDivElement>) => {
-    if (event.button !== 0 || (event.target as HTMLElement).closest('.fullscreen-add-window')) return;
+    if (event.button !== 0) return;
     pointerIdRef.current = event.pointerId;
     pendingRatioRef.current = ratio;
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -278,6 +220,7 @@ export function FullscreenWorkspaceSplit({ panels, renderPanel, ratio, onRatioCh
     else if (event.key === forward) next += event.shiftKey ? 10 : 5;
     else if (event.key === 'Home') next = 25;
     else if (event.key === 'End') next = 75;
+    else if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onSwap(); return; }
     else return;
     event.preventDefault();
     onRatioChange(clampSplit(next));
@@ -287,21 +230,21 @@ export function FullscreenWorkspaceSplit({ panels, renderPanel, ratio, onRatioCh
     <div ref={rootRef} className="fullscreen-workspace-split"
       style={{ '--fullscreen-split-ratio': `${ratio}%` } as CSSProperties}
       aria-label="Рабочее пространство с двумя режимами">
-      <section className="fullscreen-workspace-pane" data-fullscreen-pane-index="0" aria-label={`Окно: ${fullscreenPanelTitle(panels[0])}`}>
+      <section key={JSON.stringify(panels[0])} className="fullscreen-workspace-pane" data-fullscreen-pane-index="0" aria-label={`Окно: ${fullscreenPanelTitle(panels[0])}`}>
         {renderPanel(panels[0])}
+        {placement && <BlockDropTarget onPlace={() => onChoose(0, placement)}/>}
       </section>
-      <div className="fullscreen-workspace-divider" role="separator" tabIndex={0}
+      <div className="fullscreen-workspace-divider" role="separator" tabIndex={0} key="workspace-divider"
         aria-label="Изменить размер областей рабочего пространства" aria-valuemin={25} aria-valuemax={75}
-        aria-valuenow={ratio} title="Перетащите для изменения размера. Стрелки на клавиатуре тоже работают."
+        aria-valuenow={ratio} title="Перетащите для изменения размера. Двойной клик или Enter меняет окна местами."
         onPointerDown={onDividerDown} onPointerMove={onDividerMove}
         onPointerUp={finishDrag} onPointerCancel={finishDrag} onKeyDown={onDividerKeyDown}
-        onDoubleClick={() => onRatioChange(50)}>
-        <FullscreenAddWindowMenu side="left" tasks={tasks} onChoose={next => onChoose(0, next)} />
+        onDoubleClick={onSwap}>
         <span className="fullscreen-workspace-divider-grip"><GripVertical size={16} /></span>
-        <FullscreenAddWindowMenu side="right" tasks={tasks} onChoose={next => onChoose(1, next)} />
       </div>
-      <section className="fullscreen-workspace-pane" data-fullscreen-pane-index="1" aria-label={`Окно: ${fullscreenPanelTitle(panels[1])}`}>
+      <section key={JSON.stringify(panels[1])} className="fullscreen-workspace-pane" data-fullscreen-pane-index="1" aria-label={`Окно: ${fullscreenPanelTitle(panels[1])}`}>
         {renderPanel(panels[1])}
+        {placement && <BlockDropTarget onPlace={() => onChoose(1, placement)}/>}
       </section>
     </div>
   );

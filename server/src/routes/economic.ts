@@ -1,3 +1,5 @@
+import { operationRecurrenceData } from '../services/economic-operation-recurrence.service.js';
+import { normalizeEconomicPositions, normalizeEconomicCalculation } from '../lib/economic-operation-details.js';
 import { Router, type Request, type Response } from 'express';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
@@ -8,7 +10,7 @@ import { applyEconomicProposal, rejectEconomicProposal, undoEconomicProposal, ed
 import { EconomicActionError } from '../services/economic-ai-action-validation.service.js';
 import { economicAccountMovementMinor, recordEconomicBalanceAdjustment } from '../services/economic-account-balance.service.js';
 import { telegramChatRequestIsSameOrigin } from '../lib/telegram-chat-origin.js';
-import { debtOperationKind, debtOperationTitle, economicSourceDelta, ECONOMIC_DEBT_OPERATION_KINDS, type EconomicDebtDirection } from '../lib/economic-debt.js';
+import { debtOperationKind, debtOperationTitle, economicSourceDelta, economicOperationTotals, ECONOMIC_DEBT_OPERATION_KINDS, type EconomicDebtDirection } from '../lib/economic-debt.js';
 
 export const economicRouter = Router();
 economicRouter.use(requireAuth);
@@ -32,6 +34,11 @@ const money = (value: unknown, allowZero = false, allowNegative = false): bigint
   const n = BigInt(value);
   return (!allowNegative && n < 0n) || (!allowZero && n === 0n) || n > 999999999999999n || n < -999999999999999n ? null : n;
 };
+function operationDetails(body: Record<string, unknown>, amountMinor: bigint) {
+  const positionsJson = normalizeEconomicPositions(body.positionsJson);
+  const calculation = normalizeEconomicCalculation(body.calculation, amountMinor);
+  return { positionsJson, calculation };
+}
 const toDate = (value: unknown): Date | null => {
   if (typeof value !== 'string' || value.length > 40) return null;
   const date = new Date(value);
@@ -237,7 +244,7 @@ economicRouter.patch('/accounts/:id', asyncHandler(async (req, res) => {
   const legacy = req.body?.openingBalanceMinor === undefined ? undefined : money(req.body.openingBalanceMinor, true, true);
   if (desired === null || legacy === null) { error(res, 'Некорректный баланс'); return; }
   try {
-    await prisma.$transaction(async tx => {
+    const adjustment = await prisma.$transaction(async tx => {
       const found = await tx.economicAccount.findFirst({ where: { id: req.params.id, userId: owner } });
       if (!found) throw new EconomicActionError('Счёт не найден',404);
       const name = req.body?.name === undefined ? found.name : text(req.body.name, 60);
@@ -268,10 +275,10 @@ economicRouter.patch('/accounts/:id', asyncHandler(async (req, res) => {
         await tx.economicAccount.updateMany({ where: { userId: owner }, data: { isPrimary: false } });
       await tx.economicAccount.update({ where: { id: found.id, userId: owner },
         data: { name, accountType, creditLimitMinor, ...(req.body?.isPrimary === true ? { isPrimary: true } : {}) } });
-      if (target !== undefined)
-        await recordEconomicBalanceAdjustment(tx, owner, found.id, found.openingBalanceMinor, target);
+      const delta = target === undefined ? 0n : await recordEconomicBalanceAdjustment(tx, owner, found.id, found.openingBalanceMinor, target);
+      return delta === 0n ? null : { amountMinor: delta.toString(), accountName: name };
     },{ isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
-    res.json({ ok: true });
+    res.json({ ok: true, adjustment });
   } catch (cause) {
     if (cause instanceof EconomicActionError) { error(res,cause.message,cause.status); return; }
     if (!conflict(cause, res)) throw cause;
@@ -299,12 +306,15 @@ economicRouter.get('/operations', asyncHandler(async (req, res) => {
   const cursor = typeof req.query.cursor === 'string' && req.query.cursor.length <= 120 ? req.query.cursor : undefined;
   const found = cursor ? await prisma.economicOperation.findFirst({ where: { id: cursor, userId: owner }, select: { id: true } }) : null;
   if (cursor && !found) { error(res, 'Неверный курсор', 400); return; }
-  const rows = await prisma.economicOperation.findMany({
-    where: { userId: owner, ...(kind ? { kind } : debtKinds ? { kind: debtKinds } : {}), ...(category ? { category } : {}),
-      ...(accountId ? { OR: [{ sourceAccountId: accountId }, { targetAccountId: accountId }] } : {}) },
-    orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take: 51, ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {})
-  });
-  res.json({ operations: rows.slice(0, 50).map(operationOut), nextCursor: rows.length > 50 ? rows[49].id : null });
+  const where: Prisma.EconomicOperationWhereInput = { userId: owner, ...(kind ? { kind } : debtKinds ? { kind: debtKinds } : {}), ...(category ? { category } : {}),
+    ...(accountId ? { OR: [{ sourceAccountId: accountId }, { targetAccountId: accountId }] } : {}) };
+  const {rows,groups} = await prisma.$transaction(async tx=>{
+    const rows=await tx.economicOperation.findMany({where, orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take: 51, ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {})});
+    const groups=await tx.economicOperation.groupBy({by:['kind'],where,_sum:{amountMinor:true}});
+    return {rows,groups};
+  },{isolationLevel:Prisma.TransactionIsolationLevel.RepeatableRead});
+  res.json({ operations: rows.slice(0, 50).map(operationOut), nextCursor: rows.length > 50 ? rows[49].id : null,
+    totals:economicOperationTotals(groups) });
 }));
 economicRouter.post('/operations', asyncHandler(async (req, res) => {
   const owner = userId(req), body = req.body ?? {};
@@ -324,8 +334,12 @@ economicRouter.post('/operations', asyncHandler(async (req, res) => {
   if (linked.length !== accountIds.length || linked.some(a => a.currency !== 'RUB')) { error(res, 'Один из счетов не принадлежит пользователю'); return; }
   const category = kind === 'TRANSFER' ? null : optionalText(body.category, 80);
   if (category === undefined) { error(res, 'Некорректная категория'); return; }
+  let details: ReturnType<typeof operationDetails>;
+  try { details = operationDetails(body, amountMinor); } catch (cause) { error(res, (cause as Error).message); return; }
+  let recurrence: ReturnType<typeof operationRecurrenceData>;
+  try { recurrence = operationRecurrenceData(body.recurrenceJson); } catch (cause) { error(res, (cause as Error).message); return; }
   const operation = await prisma.economicOperation.create({
-    data: { userId: owner, kind, amountMinor, sourceAccountId, targetAccountId, category, title, note, occurredAt }
+    data: { userId: owner, kind, amountMinor, sourceAccountId, targetAccountId, category, title, note, occurredAt, ...details, ...recurrence }
   });
   res.status(201).json({ operation: operationOut(operation) });
 }));
@@ -335,6 +349,7 @@ economicRouter.patch('/operations/:id', asyncHandler(async (req, res) => {
   if (!found) { error(res, 'Операция не найдена', 404); return; }
   if (found.debtId || found.isAdjustment) { error(res, 'Долговые и корректирующие операции нельзя редактировать напрямую', 409); return; }
   const body = { ...found, ...req.body };
+  if(req.body?.amountMinor !== undefined && String(req.body.amountMinor) !== found.amountMinor.toString() && req.body?.calculation === undefined) body.calculation = null;
   // Reuse POST-like validation without ever trusting client-supplied ownership.
   if (!['INCOME','EXPENSE','TRANSFER'].includes(body.kind)) { error(res,'Некорректный тип'); return; }
   const amountMinor = money(String(body.amountMinor));
@@ -349,21 +364,40 @@ economicRouter.patch('/operations/:id', asyncHandler(async (req, res) => {
   }
   const count = await prisma.economicAccount.count({ where: { userId: owner, id: { in: ids } } });
   if (count !== ids.length) { error(res, 'Один из счетов не найден'); return; }
+  let details: ReturnType<typeof operationDetails>;
+  try { details = operationDetails(body, amountMinor); } catch (cause) { error(res, (cause as Error).message); return; }
+  let recurrence: ReturnType<typeof operationRecurrenceData>;
+  try { recurrence = operationRecurrenceData(req.body?.recurrenceJson); } catch (cause) { error(res, (cause as Error).message); return; }
   await prisma.economicOperation.updateMany({ where: { id: found.id, userId: owner },
-    data: { kind: body.kind, amountMinor, title, note, category, occurredAt, sourceAccountId, targetAccountId } });
+    data: { kind: body.kind, amountMinor, title, note, category, occurredAt, sourceAccountId, targetAccountId, ...details, ...recurrence } });
   res.json({ ok: true });
 }));
 economicRouter.delete('/operations/:id', asyncHandler(async (req, res) => {
   const owner = userId(req);
-  // Linked debt entries can only be removed by deleting the debt itself;
-  // otherwise the register and the account balance would disagree.
-  const found = await prisma.economicOperation.findFirst({
-    where: { id: req.params.id, userId: owner }, select: { id: true, debtId: true, isAdjustment: true }
-  });
-  if (!found) { error(res, 'Операция не найдена', 404); return; }
-  if (found.debtId) { error(res, 'Долговая операция удаляется вместе с долгом', 409); return; }
-  if (found.isAdjustment) { error(res, 'Корректирующая операция сохраняется в истории. Для изменения остатка создайте новую корректировку', 409); return; }
-  await prisma.economicOperation.deleteMany({ where: { id: found.id, userId: owner, debtId: null } });
+  const result = await prisma.$transaction(async tx=>{
+    const found=await tx.economicOperation.findFirst({where:{id:req.params.id,userId:owner}});
+    if(!found)return 'missing';
+    if(found.debtId){
+      const debt=await tx.economicDebt.findFirst({where:{id:found.debtId,userId:owner}});
+      if(!debt)return 'missing';
+      if(found.debtPhase==='FUNDING'){
+        // A repayment is a separate historical cash movement. Do not erase it
+        // silently when cancelling the original loan.
+        if(debt.paidMinor>0n || await tx.economicOperation.count({where:{userId:owner,debtId:debt.id,debtPhase:'SETTLEMENT'}}))return 'settled';
+        await tx.economicDebt.deleteMany({where:{id:debt.id,userId:owner}});
+        return 'ok';
+      }
+      if(found.debtPhase!=='SETTLEMENT')return 'unsupported';
+      await tx.economicDebt.updateMany({where:{id:debt.id,userId:owner},data:{paidMinor:0n,isClosed:false}});
+    }
+    // Balance is derived from ledger rows; deletion reverses the signed movement,
+    // including adjustments, without mutating the opening balance.
+    await tx.economicOperation.deleteMany({where:{id:found.id,userId:owner}});
+    return 'ok';
+  },{isolationLevel:Prisma.TransactionIsolationLevel.Serializable});
+  if(result==='missing'){error(res,'Операция не найдена',404);return;}
+  if(result==='settled'){error(res,'Сначала удалите операцию погашения долга. Затем можно отменить получение или выдачу долга.',409);return;}
+  if(result==='unsupported'){error(res,'Неизвестный вид долговой операции',409);return;}
   res.json({ ok: true });
 }));
 

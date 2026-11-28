@@ -46,13 +46,15 @@ test('new-account starter tasks include requested importance, sectors and capita
   }
 });
 
-test('first-visit training invitation is persistent, anchored above the oval and dismissible only with X', async () => {
+test('standard guide is offered once; the legacy banner remains supported by BubbleField', async () => {
   const [desktop, bubble, menu] = await Promise.all([
     read('../../client/src/App.tsx'),
     read('../../client/src/components/BubbleField.tsx'),
     read('../../client/src/components/UpdatesMenu.tsx')
   ]);
-  assert.match(desktop, /showTrainingInvitation=\{isOnboardingOfferOpen\}/);
+  assert.match(desktop, /api\.claimBasicTrainingOffer\(\)/);
+  assert.match(desktop, /setIsOnboardingOfferOpen\(false\)/);
+  assert.match(desktop, /showTrainingInvitation=\{!basicStep && isOnboardingOfferOpen\}/);
   assert.match(desktop, /onOpenTraining=\{\(\) => \{/);
   assert.match(desktop, /setTrainingOpenSignal\(signal => signal \+ 1\)/);
   assert.match(desktop, /onDismissTraining=\{\(\) => \{/);
@@ -67,4 +69,13 @@ test('first-visit training invitation is persistent, anchored above the oval and
   assert.match(bubble, /onClick=\{\(event\) => \{ event\.stopPropagation\(\); onDismissTraining\?\.\(\); \}\}/);
   assert.match(bubble, /y=\{VIEWBOX_TOP \+ \(showTrainingInvitation \? 82 : 8\)\}/);
   assert.match(menu, /if \(trainingOpenSignal > 0\) setTab\('training'\)/);
+});
+
+test('basic offer and all active guides defer cookie and notification prompts', async () => {
+  const desktop = await readFile(new URL('../../client/src/App.tsx', import.meta.url), 'utf8');
+  const css = await readFile(new URL('../../client/src/styles.css', import.meta.url), 'utf8');
+  assert.match(desktop, /basicOfferResolvedFor !== currentUser\.id/);
+  assert.match(desktop, /\|\| Boolean\(basicStep \|\| advancedTraining\)/);
+  assert.match(desktop, /initialWorkspaceReady && !deferTrainingNotices \? createPortal/);
+  assert.match(css, /body\[data-defer-training-notices\] \.cookie-banner \{ display:none!important; \}/);
 });

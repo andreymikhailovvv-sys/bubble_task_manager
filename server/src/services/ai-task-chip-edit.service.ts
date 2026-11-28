@@ -18,7 +18,7 @@ const iso=(value:unknown)=>value instanceof Date?value.toISOString():value;
 const same=(a:unknown,b:unknown)=>JSON.stringify(a)===JSON.stringify(b);
 export const isTaskChipAction=(action:Record<string,unknown>):boolean=>{
   const kind=String(action.operation??action.type??'');
-  return !['create_note','update_note','create_habit','delete','rebalance_today',
+  return !['create_note','update_note','create_habit','complete_habit','update_habit','delete','rebalance_today',
     'telegram_suggestion'].includes(kind) && !kind.startsWith('delete') && (
       Boolean(action.operation) || Boolean(action.type) &&
       /task|subtask|event|reminder|rename|reschedule|priority|due_date|description|complete|reopen|sphere|notification/.test(kind)
@@ -74,7 +74,7 @@ export function validateTaskChipValues(raw:unknown,base:TaskChipValues):TaskChip
       if(typeof v!=='string'||!v.trim()||v.length>180)throw new Error('Название задачи должно быть от 1 до 180 символов.');
       result.title=v.trim();
     }else if(key==='description'){
-      if(typeof v!=='string'||v.length>4000)throw new Error('Слишком длинное описание задачи.');
+      if(typeof v!=='string')throw new Error('Некорректное описание задачи.');
       result.description=v;
     }else if(key==='location'){
       if(typeof v!=='string'||v.length>500)throw new Error('Слишком длинное место встречи.');
