@@ -80,6 +80,14 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
     // Do not mount a bottom sheet while the search IME is animating out.
     var pendingFocusTaskId by remember{mutableStateOf<String?>(null)}
     var settings by remember { mutableStateOf(false) }
+    // Installation-local, one announcement for this feature release. No
+    // microphone permission or assistant role is changed by the welcome.
+    val releasePrefs=remember(context) { context.getSharedPreferences("android_release_announcements",android.content.Context.MODE_PRIVATE) }
+    var planikIntroPending by remember { mutableStateOf(!releasePrefs.getBoolean("planik_voice_1_0_26_seen",false)) }
+    fun dismissPlanikIntro() {
+        releasePrefs.edit().putBoolean("planik_voice_1_0_26_seen",true).apply()
+        planikIntroPending=false
+    }
     var wardrobeOpen by remember(state.user?.id) { mutableStateOf(false) }
     LaunchedEffect(state.user?.id){vm.refreshMascotWardrobe(state.user?.id)}
     var accountOpen by remember { mutableStateOf(false) }
@@ -475,6 +483,17 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
     if(wardrobeOpen) NativeMascotWardrobeDialog(vm,dark,state.user?.id){wardrobeOpen=false}
     authMode?.let { mode ->
         AuthDialog(mode, state.authBusy, state.authError, { authMode = null; vm.clearAuthError() }, vm::login, vm::register)
+    }
+
+    if(planikIntroPending && !state.loading && state.error==null && state.user?.id!=null &&
+        quickAiMode==null && !openGeneralAi && notificationTaskId==null &&
+        notificationHabitId==null && notificationLoanId==null && notificationChatId==null &&
+        !settings && !wardrobeOpen && !accountOpen && authMode==null &&
+        openedTaskId==null && taskAiChatId==null && !voiceAwaiting && voiceError==null) {
+        PlanikVoiceReleaseIntro(
+            onDismiss={dismissPlanikIntro()},
+            onSettings={dismissPlanikIntro();settings=true}
+        )
     }
 
     val openedTask = state.tasks.firstOrNull { it.id == openedTaskId }
@@ -896,6 +915,55 @@ private fun taskSortTime(value: String?): Long {
 }
 
 @Composable private fun EmptyCard(text:String){Surface(Modifier.fillMaxWidth(),shape=RoundedCornerShape(20.dp),color=MaterialTheme.colorScheme.surfaceVariant){Column(Modifier.padding(28.dp).fillMaxWidth(),horizontalAlignment=Alignment.CenterHorizontally){Icon(Icons.Default.CheckCircle,null,tint=MaterialTheme.colorScheme.primary);Spacer(Modifier.height(8.dp));Text(text)}}}
+
+@Composable
+private fun PlanikVoiceReleaseIntro(onDismiss:()->Unit,onSettings:()->Unit) {
+    val accent=MaterialTheme.colorScheme.primary
+    AlertDialog(
+        onDismissRequest=onDismiss,
+        shape=RoundedCornerShape(26.dp),
+        icon={
+            Box(Modifier.size(64.dp).clip(RoundedCornerShape(22.dp))
+                .background(accent.copy(alpha=.13f)),contentAlignment=Alignment.Center){
+                Icon(Icons.Default.SmartToy,null,tint=accent,modifier=Modifier.size(37.dp))
+            }
+        },
+        title={Text("Планик всегда под рукой",fontWeight=FontWeight.Bold,
+            style=MaterialTheme.typography.headlineSmall)},
+        text={
+            Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
+                Text("Два новых способа обратиться к ИИ, не отвлекаясь от своих дел.",
+                    style=MaterialTheme.typography.bodyMedium)
+                Surface(shape=RoundedCornerShape(16.dp),color=MaterialTheme.colorScheme.surfaceVariant) {
+                    Row(Modifier.fillMaxWidth().padding(12.dp),horizontalArrangement=Arrangement.spacedBy(12.dp),
+                        verticalAlignment=Alignment.CenterVertically) {
+                        Icon(Icons.Default.Mic,null,tint=accent,modifier=Modifier.size(26.dp))
+                        Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(4.dp)){
+                            Text("«Эй, Планик»",fontWeight=FontWeight.SemiBold)
+                            Text("Вызовите ассистента голосом в приложении или в фоне.",
+                                style=MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+                Surface(shape=RoundedCornerShape(16.dp),color=MaterialTheme.colorScheme.surfaceVariant) {
+                    Row(Modifier.fillMaxWidth().padding(12.dp),horizontalArrangement=Arrangement.spacedBy(12.dp),
+                        verticalAlignment=Alignment.CenterVertically) {
+                        Icon(Icons.Default.SmartToy,null,tint=accent,modifier=Modifier.size(26.dp))
+                        Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(4.dp)){
+                            Text("Системный ассистент",fontWeight=FontWeight.SemiBold)
+                            Text("Назначьте Планика помощником Android и вызывайте его привычной кнопкой или жестом поверх других приложений.",
+                                style=MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+                Text("Включайте любой способ или оба сразу в настройках. Выбор всегда за вами.",
+                    style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        },
+        confirmButton={Button(onClick=onSettings){Text("Настроить")}},
+        dismissButton={TextButton(onClick=onDismiss){Text("Позже")}}
+    )
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

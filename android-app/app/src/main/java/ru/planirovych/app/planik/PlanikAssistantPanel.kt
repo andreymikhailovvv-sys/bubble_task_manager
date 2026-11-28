@@ -9,6 +9,8 @@ import android.graphics.drawable.RippleDrawable
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.ViewConfiguration
+import android.view.ViewGroup
+import android.widget.EditText
 import android.view.animation.PathInterpolator
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -100,6 +102,11 @@ internal class PlanikAssistantPanel(
     private var status:TextView?=null
     private var waveform:VoiceWave?=null
     private var expanded=false
+    private var fittedHeight:Int?=null
+    private var manualSize=false
+    private var draggingSheet=false
+    private var responseContent:LinearLayout?=null
+    private var responseFooter:View?=null
     private var entering=false
     private var closing=false
     private var bottomInset=dp(24)
@@ -113,7 +120,103 @@ internal class PlanikAssistantPanel(
         orientation=LinearLayout.VERTICAL
         gravity=Gravity.CENTER_HORIZONTAL
     }
-    private val panel=LinearLayout(context).apply {
+    // Intercept a vertical sheet drag only after touch slop. The original
+    // child receives CANCEL, so buttons/links cannot fire on a swipe.
+    private val panel:LinearLayout=object:LinearLayout(context) {
+        private val slop=ViewConfiguration.get(context).scaledTouchSlop
+        private var startX=0f
+        private var startY=0f
+        private var startHeight=0
+        private var eligible=false
+        private var scrollTarget:View?=null
+
+        private fun touchedScrollable(view:View,x:Float,y:Float):View? {
+            if(!view.isShown)return null
+            val at=IntArray(2)
+            view.getLocationOnScreen(at)
+            if(x<at[0] || y<at[1] || x>=at[0]+view.width || y>=at[1]+view.height)return null
+            if(view is EditText)return view
+            if(view is ViewGroup)for(index in view.childCount-1 downTo 0) {
+                touchedScrollable(view.getChildAt(index),x,y)?.let{return it}
+            }
+            return if(view is ScrollView || view is WebView ||
+                view.canScrollVertically(-1) || view.canScrollVertically(1))view else null
+        }
+
+        override fun dispatchTouchEvent(event:MotionEvent):Boolean {
+            when(event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    draggingSheet=false
+                    eligible=active && !closing && !entering
+                    startX=event.rawX;startY=event.rawY
+                    startHeight=height
+                    scrollTarget=touchedScrollable(this,event.rawX,event.rawY)
+                    // Leave cursor positioning, selection and editing to the field.
+                    if(scrollTarget is EditText)eligible=false
+                }
+                MotionEvent.ACTION_POINTER_DOWN -> {
+                    eligible=false
+                    if(draggingSheet) {
+                        draggingSheet=false
+                        animateHeightTo(restingHeight())
+                        return true
+                    }
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    if(draggingSheet) {
+                        val delta=startY-event.rawY
+                        setPanelHeight((startHeight+delta).toInt().coerceIn(
+                            dp(90).coerceAtMost(targetHeight(false)),targetHeight(true)))
+                        return true
+                    }
+                    if(eligible) {
+                        val dy=event.rawY-startY
+                        val dx=event.rawX-startX
+                        if(kotlin.math.abs(dx)>slop && kotlin.math.abs(dx)>kotlin.math.abs(dy))eligible=false
+                        else if(kotlin.math.abs(dy)>slop && kotlin.math.abs(dy)>kotlin.math.abs(dx)*1.15f) {
+                            val direction=if(dy>0)-1 else 1
+                            val canScroll=scrollTarget?.canScrollVertically(direction)==true
+                            // At the top, pulling down drags the whole sheet.
+                            // On upward swipes give expansion priority until max height.
+                            val childFirst=canScroll && (dy>0 || height>=targetHeight(true)-dp(4))
+                            if(childFirst) {
+                                startY=event.rawY;startX=event.rawX
+                            } else if(dy>0 || height<targetHeight(true)-dp(4)) {
+                                heightAnimation?.cancel()
+                                startHeight=height
+                                val cancel=MotionEvent.obtain(event)
+                                cancel.action=MotionEvent.ACTION_CANCEL
+                                super.dispatchTouchEvent(cancel)
+                                cancel.recycle()
+                                draggingSheet=true
+                                setPanelHeight((startHeight-dy).toInt().coerceIn(
+                                    dp(90).coerceAtMost(targetHeight(false)),targetHeight(true)))
+                                return true
+                            }
+                        }
+                    }
+                }
+                MotionEvent.ACTION_UP -> if(draggingSheet) {
+                    draggingSheet=false
+                    val delta=startY-event.rawY
+                    when {
+                        delta < -dp(100) -> dismissAnimated()
+                        delta < -dp(48) && startHeight<=targetHeight(false)+dp(20) -> dismissAnimated()
+                        delta < -dp(48) -> settle(false)
+                        delta > dp(30) -> settle(true)
+                        else -> animateHeightTo(restingHeight())
+                    }
+                    return true
+                }
+                MotionEvent.ACTION_CANCEL -> if(draggingSheet) {
+                    draggingSheet=false
+                    animateHeightTo(restingHeight())
+                    return true
+                }
+            }
+            return super.dispatchTouchEvent(event)
+        }
+    }.apply {
         orientation=LinearLayout.VERTICAL
         background=GradientDrawable(GradientDrawable.Orientation.TL_BR,
             intArrayOf(0xff25294a.toInt(),0xff14192e.toInt(),0xff111829.toInt())).apply {
@@ -150,9 +253,10 @@ internal class PlanikAssistantPanel(
     private fun screenHeight():Int = (root.height.takeIf{it>0}
         ?:context.resources.displayMetrics.heightPixels).coerceAtLeast(dp(160))
     private fun targetHeight(open:Boolean):Int {
-        val available=(screenHeight()-bottomInset-dp(16)).coerceAtLeast(dp(120))
-        val compact=dp(if(request?.action=="live")420 else 370).coerceAtMost((available*.85f).toInt())
-        return if(open)maxOf(compact,(available*.69f).toInt()).coerceAtMost(available) else compact
+        val available=(screenHeight()-bottomInset-dp(16)).coerceAtLeast(dp(80))
+        val maximum=minOf(available,(screenHeight()*2/3).coerceAtLeast(dp(80)))
+        val compact=dp(if(request?.action=="live")420 else 370).coerceAtMost(maximum)
+        return if(open)maximum else compact
     }
     private fun setPanelHeight(value:Int) {
         val params=panel.layoutParams as FrameLayout.LayoutParams
@@ -162,18 +266,57 @@ internal class PlanikAssistantPanel(
             panel.layoutParams=params
         }
     }
+    private fun restingHeight():Int =
+        if(expanded)targetHeight(true)
+        else (fittedHeight?:targetHeight(false)).coerceIn(targetHeight(false),targetHeight(true))
+
     private fun applyGeometry() {
-        if(!closing && heightAnimation?.isRunning!=true)setPanelHeight(targetHeight(expanded))
+        if(!closing && !draggingSheet && heightAnimation?.isRunning!=true)setPanelHeight(restingHeight())
     }
-    private fun settle(open:Boolean) {
-        expanded=open
+
+    private fun animateHeightTo(target:Int) {
+        if(!active || closing)return
         heightAnimation?.cancel()
-        val from=panel.height.takeIf{it>0} ?:targetHeight(!open)
-        heightAnimation=ValueAnimator.ofInt(from,targetHeight(open)).apply {
-            duration=300
+        val from=(panel.layoutParams as FrameLayout.LayoutParams).height
+        if(from==target){setPanelHeight(target);return}
+        heightAnimation=ValueAnimator.ofInt(from,target).apply {
+            duration=320
             interpolator=PathInterpolator(.2f,.8f,.2f,1f)
-            addUpdateListener { setPanelHeight(it.animatedValue as Int) }
+            addUpdateListener { setPanelHeight((it.animatedValue as Int).coerceAtMost(targetHeight(true))) }
             start()
+        }
+    }
+
+    private fun settle(open:Boolean) {
+        manualSize=true
+        fittedHeight=null
+        expanded=open
+        animateHeightTo(restingHeight())
+    }
+
+    // Measure the actual natural height of the markdown and cards, not the
+    // ScrollView viewport. Keep the footer outside the scrolling region.
+    private fun fitResponse(content:LinearLayout) {
+        if(!active || closing || manualSize || draggingSheet || responseContent!==content ||
+            content.width<=0 || content.measuredHeight<=0)return
+        var chrome=panel.paddingTop+panel.paddingBottom+body.paddingTop+body.paddingBottom
+        for(index in 0 until panel.childCount) {
+            val child=panel.getChildAt(index)
+            if(child!==body) {
+                val margins=child.layoutParams as? ViewGroup.MarginLayoutParams
+                chrome+=child.measuredHeight+(margins?.topMargin?:0)+(margins?.bottomMargin?:0)
+            }
+        }
+        responseFooter?.let { footer ->
+            val margins=footer.layoutParams as? ViewGroup.MarginLayoutParams
+            chrome+=footer.measuredHeight+(margins?.topMargin?:0)+(margins?.bottomMargin?:0)
+        }
+        // Do not shrink when a card briefly displays its refresh/loading state.
+        val desired=(chrome+content.measuredHeight+dp(4)).coerceIn(targetHeight(false),targetHeight(true))
+        val next=maxOf(fittedHeight?:targetHeight(false),desired).coerceAtMost(targetHeight(true))
+        if(fittedHeight!=next) {
+            fittedHeight=next
+            animateHeightTo(next)
         }
     }
 
@@ -230,6 +373,8 @@ internal class PlanikAssistantPanel(
     private fun header(title:String,account:String?) {
         stopMascot()
         progressView=null
+        responseContent=null
+        responseFooter=null
         panel.removeAllViews()
         body.removeAllViews()
         val grip=FrameLayout(context).apply {
@@ -242,38 +387,6 @@ internal class PlanikAssistantPanel(
             setOnClickListener {
                 performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
                 settle(!expanded)
-            }
-        }
-        var downY=0f
-        var downHeight=0
-        var dragged=false
-        val slop=ViewConfiguration.get(context).scaledTouchSlop
-        grip.setOnTouchListener { v,event ->
-            when(event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    heightAnimation?.cancel()
-                    downY=event.rawY;downHeight=panel.height;dragged=false
-                    true
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    val delta=downY-event.rawY
-                    if(kotlin.math.abs(delta)>slop)dragged=true
-                    if(dragged) {
-                        setPanelHeight((downHeight+delta).toInt().coerceIn(dp(90).coerceAtMost(targetHeight(false)),targetHeight(true)))
-                    }
-                    true
-                }
-                MotionEvent.ACTION_UP -> {
-                    val delta=downY-event.rawY
-                    if(!dragged)v.performClick()
-                    else if(delta < -dp(55) && !expanded)dismissAnimated()
-                    else if(delta < -dp(55) && expanded)settle(false)
-                    else if(delta > dp(35))settle(true)
-                    else settle(expanded)
-                    true
-                }
-                MotionEvent.ACTION_CANCEL -> {settle(expanded);true}
-                else -> true
             }
         }
         panel.addView(grip,LinearLayout.LayoutParams(-1,dp(28)))
@@ -404,6 +517,9 @@ internal class PlanikAssistantPanel(
         val token=++generation
         request=invocation
         expanded=false
+        fittedHeight=null
+        manualSize=false
+        draggingSheet=false
         closing=false
         scope=CoroutineScope(SupervisorJob()+Dispatchers.Main.immediate)
         header(if(invocation?.action=="live")"Планик · живое общение" else "Планик",invocation?.account)
@@ -579,16 +695,25 @@ internal class PlanikAssistantPanel(
                     requireNotNull(scope),isValid={valid(token)&&stillSelected(invocation)},
                     verifyAccount={check(repository.establishSession().id==invocation.account)},
                     makeButton={text,action->button(text,action)},onEdit={settle(true)})
-                val cardCount=cards.attach(content,response)
+                cards.attach(content,response)
+                responseContent=content
+                // Reset the recording/progress sizing on arrival of a result.
+                expanded=false
+                fittedHeight=null
+                manualSize=false
                 body.addView(ScrollView(context).apply {
-                    isFillViewport=true
+                    isFillViewport=false
                     addView(content,FrameLayout.LayoutParams(-1,-2))
                 },LinearLayout.LayoutParams(-1,0,1f))
-                if(cardCount>0)settle(true)
                 if(requiresChat(response) || answer.contains("[[task_ref")) {
-                    body.addView(button("Посмотреть в чате"){onOpenChat(invocation.account)},
-                        LinearLayout.LayoutParams(-1,dp(46)).apply{topMargin=dp(8)})
+                    val footer=button("Посмотреть в чате"){onOpenChat(invocation.account)}
+                    responseFooter=footer
+                    body.addView(footer,LinearLayout.LayoutParams(-1,dp(46)).apply{topMargin=dp(8)})
                 }
+                content.addOnLayoutChangeListener { _,l,t,r,b,ol,ot,orr,ob ->
+                    if(r-l!=orr-ol || b-t!=ob-ot)content.post { fitResponse(content) }
+                }
+                panel.doOnPreDraw { fitResponse(content) }
                 PlanikLiveUpdates.publish()
             } catch(cancel:CancellationException){throw cancel}
             catch(_:Exception){if(valid(token))fail("Не удалось обработать запрос. Проверьте интернет или откройте чат.")}
@@ -747,6 +872,7 @@ internal class PlanikAssistantPanel(
         panel.removeAllViews()
         body.removeAllViews()
         progressView=null
+        responseContent=null;responseFooter=null;fittedHeight=null;manualSize=false;draggingSheet=false
         entering=false;closing=false
         PlanikLiveUpdates.publish()
     }
