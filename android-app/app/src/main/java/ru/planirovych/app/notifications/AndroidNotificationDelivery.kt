@@ -164,6 +164,7 @@ object AndroidNotificationDelivery {
             putExtra(MainActivity.EXTRA_NOTIFICATION_HABIT_ID,spec.habitId)
             putExtra(MainActivity.EXTRA_NOTIFICATION_CHAT_ID,spec.chatId)
             putExtra(MainActivity.EXTRA_NOTIFICATION_TASK_CHAT,spec.taskChat)
+            putExtra(MainActivity.EXTRA_NOTIFICATION_LOAN_ID,spec.loanId)
             flags=Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             putExtra(MainActivity.EXTRA_NOTIFICATION_TASK_ID,taskId)
             putExtra(MainActivity.EXTRA_NOTIFICATION_ID,id)
@@ -177,7 +178,7 @@ object AndroidNotificationDelivery {
         val monitoring=eventKey?.startsWith("monitoring:")==true &&
             lines.size>=2 && lines[0].isNotBlank()
         val headline=if(monitoring)lines[0].trim() else "Планировыч"
-        val displayContent=content+listOfNotNull(spec.status,spec.preview?.let{"Предложенный ответ: "+it}).joinToString("\n",prefix=if(spec.status!=null||spec.preview!=null)"\n\n" else "")
+        val displayContent=content+listOfNotNull(spec.status,spec.preview).joinToString("\n",prefix=if(spec.status!=null||spec.preview!=null)"\n\n" else "")
         val contextLine=if(monitoring)lines[1].trim() else displayContent
         val notification=Notification.Builder(context,CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_planirovych)
@@ -194,7 +195,7 @@ object AndroidNotificationDelivery {
                     val intent=Intent(context,NotificationActionReceiver::class.java).apply{
                         data=android.net.Uri.parse("planirovych://notification-action/"+android.net.Uri.encode(id)+"/"+command)
                         putExtra("account",account);putExtra("id",id);putExtra("command",command)
-                        putExtra("taskId",taskId);putExtra("eventKey",eventKey);putExtra("replyHash",spec.replyHash)
+                        putExtra("taskId",taskId);putExtra("eventKey",eventKey);putExtra("replyHash",spec.replyHash);putExtra("actionHash",spec.actionHash)
                     }
                     val target=PendingIntent.getBroadcast(context,(account+":"+id+":"+command).hashCode(),intent,
                         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
@@ -202,7 +203,8 @@ object AndroidNotificationDelivery {
                     if(Build.VERSION.SDK_INT>=31)button.setAuthenticationRequired(true)
                     addAction(button.build())
                 }
-                if(spec.actions.isNotEmpty() || taskId!=null || spec.habitId!=null || spec.openAi)
+                if(spec.loanId!=null)addAction(Notification.Action.Builder(null,"Отметить оплату",pending).build())
+                if(spec.actions.isNotEmpty() || taskId!=null || spec.habitId!=null || spec.openAi || spec.loanId!=null)
                     addAction(Notification.Action.Builder(null,"Открыть",pending).build())
             }
             .setContentIntent(pending)

@@ -2205,7 +2205,7 @@ apiRouter.get('/system-notifications', requireAuth, asyncHandler(async (req, res
     prisma.systemNotification.count({ where: { userId: req.user!.id, readAt: null, createdAt: { lte: new Date() } } })
   ]);
   if (req.query.android === '1') {
-    const enriched = await Promise.all(notifications.map(async event => ({ ...event, androidActions: JSON.stringify(await describeAndroidNotification(event)) })));
+    const enriched = await Promise.all(notifications.map(async event => ({ ...event, androidActions: event.readAt ? undefined : JSON.stringify(await describeAndroidNotification(event)) })));
     res.json({ notifications: enriched.reverse(), unreadCount }); return;
   }
   res.json({ notifications: notifications.reverse(), unreadCount });
@@ -2224,6 +2224,7 @@ apiRouter.post('/system-notifications/:id/android-action', requireAuth, asyncHan
   const parts = key.split(':');
   const isHabit = parts[0] === 'habit-reminder' && parts.length >= 3;
   const isTask = Boolean(event.taskId && (key.startsWith('reminder:') || key.endsWith(':upcoming') || key.endsWith(':overdue')));
+  const isLoan = key.startsWith('economic-loan:');
   const command = req.body?.command;
   const finish = async (message: string) => {
     await prisma.systemNotification.updateMany({ where: { id: event.id, userId }, data: { readAt: new Date() } });
@@ -2253,11 +2254,12 @@ apiRouter.post('/system-notifications/:id/android-action', requireAuth, asyncHan
     await taskService.update(task.id, userId, { status: 'DONE', collaborationScope: 'me' }, { source: 'api:android-notification', requestId: event.id });
     await finish('Задача выполнена'); return;
   }
-  if (command === 'snooze' && (isHabit || isTask)) {
+  if (command === 'snooze' && (isHabit || isTask || isLoan)) {
     if (isHabit) {
       const habit = await prisma.habit.findFirst({ where: { id: parts[1], userId, isArchived: false, isAutoCompleted: false } });
       if (!habit) { res.status(409).json({ error: 'Привычка недоступна' }); return; }
     }
+    if (isLoan && !(await describeAndroidNotification(event)).commands.includes('snooze')) { res.status(409).json({ error: 'Кредит недоступен' }); return; }
     if (isTask && !await currentNotificationTask(event)) { res.status(409).json({ error: 'Задача изменилась или уже выполнена' }); return; }
     const at = new Date(Date.now() + 30 * 60_000);
     // Defer a new notification, never alter the task's real deadline.
@@ -2265,18 +2267,22 @@ apiRouter.post('/system-notifications/:id/android-action', requireAuth, asyncHan
       where: { eventKey: 'android-snooze:' + event.id + ':' + key },
       update: {},
       create: { userId, taskId: event.taskId, eventKey: 'android-snooze:' + event.id + ':' + key,
-        content: event.content, createdAt: at, pushNextAttemptAt: at }
+        androidActionRef: event.androidActionRef, content: event.content, createdAt: at, pushNextAttemptAt: at }
     });
     await finish('Напомним через 30 минут'); return;
   }
-  if ((command === 'proposal_approve' || command === 'proposal_reject') && (key.startsWith('telegram-ai-task:') || key.startsWith('mail-ai-task:'))) {
+  if ((command === 'proposal_approve' || command === 'proposal_reject') && (key.startsWith('telegram-ai-task:') || key.startsWith('mail-ai-task:') || key.startsWith('ai-checkup:') || key.startsWith('android-ai-proposal:'))) {
     const telegram = key.startsWith('telegram-ai-task:');
-    const proposal = await prisma.aiTaskProposal.findFirst({ where: { userId, requestId: key.substring(key.indexOf(':') + 1), source: telegram ? 'telegram_assistant' : 'email_assistant' } });
+    const assistant = telegram || key.startsWith('mail-ai-task:');
+    const report = key.startsWith('ai-checkup:') ? await prisma.generalAiMessage.findFirst({ where: { id: parts[1], userId }, select: { aiTaskProposalId: true } }) : null;
+    const ref = event.androidActionRef ?? report?.aiTaskProposalId;
+    const proposal = assistant ? await prisma.aiTaskProposal.findFirst({ where: { userId, requestId: key.substring(key.indexOf(':') + 1), source: telegram ? 'telegram_assistant' : 'email_assistant' } }) :
+      ref ? await prisma.aiTaskProposal.findFirst({ where: { id: ref, userId } }) : null;
     if (!proposal) { res.status(404).json({ error: 'Предложение недоступно' }); return; }
     if (proposal.status === 'APPLIED') { await finish('Изменения уже применены'); return; }
     if (proposal.status !== 'PENDING') { res.status(409).json({ error: 'Предложение уже обработано' }); return; }
     const spec = await describeAndroidNotification(event);
-    if (!spec.commands.includes(command)) { res.status(409).json({ error: 'Настройки автоприменения или статус изменились' }); return; }
+    if (!spec.commands.includes(command) || !spec.actionHash || req.body?.actionHash !== spec.actionHash) { res.status(409).json({ error: 'Предложение или настройки изменились. Откройте чат.' }); return; }
     const result = command === 'proposal_approve' ? await applyTaskProposal(userId, proposal.id) : await rejectTaskProposal(userId, proposal.id);
     if (result.status !== (command === 'proposal_approve' ? 'APPLIED' : 'REJECTED')) { res.status(409).json({ error: 'Не удалось обработать предложение' }); return; }
     await finish(command === 'proposal_approve' ? 'Изменения применены' : 'Предложение отклонено'); return;
@@ -2301,7 +2307,7 @@ apiRouter.post('/system-notifications/:id/android-action', requireAuth, asyncHan
   }
   if ((command === 'economic_approve' || command === 'economic_reject') && key.startsWith('economic-repeat:') && event.androidActionRef) {
     const spec = await describeAndroidNotification(event);
-    if (!spec.commands.includes(command)) { res.status(409).json({ error: 'Предложение уже обработано' }); return; }
+    if (!spec.commands.includes(command) || !spec.actionHash || req.body?.actionHash !== spec.actionHash) { res.status(409).json({ error: 'Предложение изменилось. Откройте чат.' }); return; }
     const result = command === 'economic_approve' ? await applyEconomicProposal(userId, event.androidActionRef) : await rejectEconomicProposal(userId, event.androidActionRef);
     if (result.status !== (command === 'economic_approve' ? 'APPLIED' : 'REJECTED')) { res.status(409).json({ error: 'Не удалось обработать операцию' }); return; }
     await finish(command === 'economic_approve' ? 'Операция записана' : 'Операция пропущена'); return;

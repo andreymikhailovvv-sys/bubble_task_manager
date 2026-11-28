@@ -6,7 +6,7 @@ import { taskSystemNotificationEventKey } from '../lib/task-notification-persist
 export type ActionEvent = { id: string; userId: string; taskId: string | null; eventKey: string; content: string; androidActionRef?: string | null; androidActionTaken?: string | null };
 export type AndroidActions = {
   commands: string[]; chatId?: string; habitId?: string; openAi?: boolean; taskChat?: boolean;
-  progress?: number; max?: number; status?: string; preview?: string; replyHash?: string; hide?: boolean;
+  progress?: number; max?: number; status?: string; preview?: string; replyHash?: string; hide?: boolean; loanId?: string; actionHash?: string;
 };
 
 export function originalAndroidEventKey(eventKey: string): string {
@@ -34,9 +34,12 @@ export async function currentNotificationTask(event: ActionEvent) {
     taskSystemNotificationEventKey(task.id, due, event.userId, shared, key.endsWith(':upcoming') ? 'upcoming' : 'overdue');
   return expected === key ? task : null;
 }
-function proposalCommands(status: string | undefined, autoApplied: boolean | undefined): AndroidActions {
+function proposalCommands(status: string | undefined, autoApplied: boolean | undefined, proposal?: { updatedAt: Date; display?: unknown; operations?: unknown; payload?: unknown } | null): AndroidActions {
+  const actionHash = proposal ? notificationReplyHash(JSON.stringify([proposal.updatedAt.toISOString(), proposal.operations, proposal.payload])) : undefined;
+  const labels = Array.isArray(proposal?.display) ? proposal.display.map((x: { title?: unknown }) => String(x?.title ?? '').slice(0, 65)).filter(Boolean) : [];
+  const preview = labels.length ? 'Изменения: ' + labels.slice(0, 3).join('; ') + (labels.length > 3 ? '…' : '') : undefined;
   if (status === 'APPLIED') return { commands: [], status: 'Изменения применены' };
-  if (status === 'PENDING' && !autoApplied) return { commands: ['proposal_approve', 'proposal_reject'] };
+  if (status === 'PENDING' && !autoApplied) return { commands: labels.length > 3 ? [] : ['proposal_approve', 'proposal_reject'], actionHash, preview };
   return { commands: [], ...(status ? { status: status === 'REJECTED' ? 'Предложение отклонено' : 'Откройте для проверки статуса' } : {}) };
 }
 function replyCommands(text: string | null | undefined, status: string | undefined): AndroidActions {
@@ -46,7 +49,7 @@ function replyCommands(text: string | null | undefined, status: string | undefin
   // Never send an unseen/truncated draft from the notification. Longer replies
   // are reviewed and edited in the exact assistant conversation.
   if (preview.length > 240) return { commands: [], status: 'Откройте для просмотра и отправки ответа' };
-  return { commands: ['reply_send'], preview, replyHash: notificationReplyHash(preview) };
+  return { commands: ['reply_send'], preview: 'Предложенный ответ: ' + preview, replyHash: notificationReplyHash(preview) };
 }
 
 export async function describeAndroidNotification(event: ActionEvent): Promise<AndroidActions> {
@@ -74,7 +77,7 @@ export async function describeAndroidNotification(event: ActionEvent): Promise<A
     const chatId = 'telegram-ai-assistant:' + row.policyId;
     if (task) {
       const proposal = await prisma.aiTaskProposal.findFirst({ where: { userId: event.userId, requestId: eventId, source: 'telegram_assistant' } });
-      return { ...proposalCommands(proposal?.status, proposal?.autoApplied || row.policy.taskMode === 'AUTO'), chatId, openAi: true };
+      return { ...proposalCommands(proposal?.status, proposal?.autoApplied || row.policy.taskMode === 'AUTO', proposal), chatId, openAi: true };
     }
     return { ...replyCommands(row.suggestedReplyText, row.policy.mode === 'SUGGEST' || row.suggestedReplyStatus === 'SENT' ? row.suggestedReplyStatus : undefined), chatId, openAi: true };
   }
@@ -84,7 +87,7 @@ export async function describeAndroidNotification(event: ActionEvent): Promise<A
     const chatId = 'mail-ai-assistant:' + row.mailboxId;
     if (key.startsWith('mail-ai-task:')) {
       const proposal = await prisma.aiTaskProposal.findFirst({ where: { userId: event.userId, requestId: row.id, source: 'email_assistant' } });
-      return { ...proposalCommands(proposal?.status, proposal?.autoApplied || row.mailbox.taskMode === 'AUTO'), chatId, openAi: true };
+      return { ...proposalCommands(proposal?.status, proposal?.autoApplied || row.mailbox.taskMode === 'AUTO', proposal), chatId, openAi: true };
     }
     if (key.startsWith('mail-ai-reply:'))
       return { ...replyCommands(row.suggestedReplyText, row.mailbox.replyMode === 'SUGGEST' || row.suggestedReplyStatus === 'SENT' ? row.suggestedReplyStatus : undefined), chatId, openAi: true };
@@ -92,9 +95,19 @@ export async function describeAndroidNotification(event: ActionEvent): Promise<A
   }
   if (key.startsWith('economic-repeat:')) {
     const proposal = event.androidActionRef ? await prisma.economicAiProposal.findFirst({ where: { id: event.androidActionRef, userId: event.userId } }) : null;
-    const spec = proposalCommands(proposal?.status, proposal?.autoApplied);
+    const spec = proposalCommands(proposal?.status, proposal?.autoApplied, proposal);
     return { ...spec, commands: spec.commands.length ? ['economic_approve', 'economic_reject'] : [], openAi: true };
   }
-  if (key.startsWith('ai-checkup:')) return { commands: [], openAi: true };
+  if (key.startsWith('economic-loan:')) {
+    const loan = await prisma.economicLoan.findFirst({ where: { id: parts[1], userId: event.userId, isClosed: false, remindersEnabled: true } });
+    return loan && loan.lastReminderPeriod === parts[2] ? { commands: ['snooze'], loanId: loan.id } : { commands: [], hide: true };
+  }
+  if (key.startsWith('ai-checkup:') || key.startsWith('android-ai-proposal:')) {
+    const message = key.startsWith('ai-checkup:') ? await prisma.generalAiMessage.findFirst({ where: { id: parts[1], userId: event.userId }, select: { aiTaskProposalId: true } }) : null;
+    const id = event.androidActionRef ?? message?.aiTaskProposalId;
+    const proposal = id ? await prisma.aiTaskProposal.findFirst({ where: { id, userId: event.userId } }) : null;
+    const user = proposal ? await prisma.user.findUnique({ where: { id: event.userId }, select: { aiTaskAutoApply: true } }) : null;
+    return { ...proposalCommands(proposal?.status, proposal?.autoApplied || user?.aiTaskAutoApply, proposal), openAi: !event.taskId, taskChat: Boolean(event.taskId) };
+  }
   return { commands: [] };
 }

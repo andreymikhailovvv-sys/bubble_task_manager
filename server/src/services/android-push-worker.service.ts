@@ -42,7 +42,7 @@ export async function dispatchPendingAndroidPush(): Promise<void> {
         if (!event.readAt) {
           const actions = await describeAndroidNotification(event);
           if (actions.hide) {
-            await prisma.systemNotification.updateMany({ where: { id: event.id, pushClaimedAt: claimedAt }, data: { readAt: new Date(), pushDispatchedAt: new Date(), pushClaimedAt: null } });
+            await prisma.systemNotification.updateMany({ where: { id: event.id, pushClaimedAt: claimedAt }, data: { pushDispatchedAt: new Date(), pushClaimedAt: null } });
             continue;
           }
           const devices = await prisma.androidPushDevice.findMany({

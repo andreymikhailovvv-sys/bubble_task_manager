@@ -15,7 +15,7 @@ internal data class NotificationActionSpec(
     val habitId:String?=null,val chatId:String?=null,val openAi:Boolean=false,
     val progress:Int=0,val max:Int=0,
     val actions:List<Pair<String,String>> = emptyList(),val status:String?=null,val preview:String?=null,
-    val replyHash:String?=null,val taskChat:Boolean=false,val hide:Boolean=false
+    val replyHash:String?=null,val taskChat:Boolean=false,val hide:Boolean=false,val loanId:String?=null,val actionHash:String?=null
 ){
     companion object{
         fun from(eventKey:String?,taskId:String?,content:String,metadata:String?=null):NotificationActionSpec{
@@ -31,7 +31,7 @@ internal data class NotificationActionSpec(
                 }.take(2)
                 NotificationActionSpec(habitId=str("habitId"),chatId=str("chatId"),openAi=json.optBoolean("openAi"),
                     progress=json.optInt("progress"),max=json.optInt("max"),actions=buttons,status=str("status"),
-                    preview=str("preview"),replyHash=str("replyHash"),taskChat=json.optBoolean("taskChat"),hide=json.optBoolean("hide"))
+                    preview=str("preview"),replyHash=str("replyHash"),taskChat=json.optBoolean("taskChat"),hide=json.optBoolean("hide"),loanId=str("loanId"),actionHash=str("actionHash"))
             }.getOrNull()?.let{return it}
             val raw=eventKey.orEmpty()
             val key=if(raw.startsWith("android-snooze:"))raw.substringAfter(':').substringAfter(':') else raw
@@ -63,7 +63,7 @@ class NotificationActionReceiver:BroadcastReceiver(){
         if(command !in setOf("task_done","habit_done","snooze","proposal_approve","proposal_reject","reply_send","economic_approve","economic_reject"))return
         if(context.getSharedPreferences("planirovych_native_notification_ids",Context.MODE_PRIVATE).getString("user",null)!=account)return
         val work=OneTimeWorkRequestBuilder<NotificationActionWorker>()
-            .setInputData(workDataOf("account" to account,"id" to id,"command" to command,"taskId" to intent.getStringExtra("taskId"),"replyHash" to intent.getStringExtra("replyHash")))
+            .setInputData(workDataOf("account" to account,"id" to id,"command" to command,"taskId" to intent.getStringExtra("taskId"),"replyHash" to intent.getStringExtra("replyHash"),"actionHash" to intent.getStringExtra("actionHash")))
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()).build()
         WorkManager.getInstance(context).enqueueUniqueWork("notification-action:"+account+":"+id,ExistingWorkPolicy.KEEP,work)
     }
@@ -88,7 +88,7 @@ class NotificationActionWorker(context:Context,params:WorkerParameters):Coroutin
         }
         try{
             if(repo.establishSession().id!=account)return Result.success()
-            val result=repo.performNotificationAction(id,command,account,inputData.getString("replyHash"))
+            val result=repo.performNotificationAction(id,command,account,inputData.getString("replyHash"),inputData.getString("actionHash"))
             val message=result["message"]?.jsonPrimitive?.contentOrNull?:"Готово"
             val progress=result["progress"]?.jsonPrimitive?.contentOrNull?.toIntOrNull()?:0
             val max=result["max"]?.jsonPrimitive?.contentOrNull?.toIntOrNull()?:0

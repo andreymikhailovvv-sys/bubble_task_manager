@@ -125,6 +125,7 @@ fun ModernWorkspace(
     onQuickVoice:()->Unit={},voiceAwaiting:Boolean=false,
     notesRequest:Int=0,updateAvailable:Boolean=false,
     modifier: Modifier = Modifier,
+    notificationLoanId:String?=null,notificationRequestId:Int=0,
 ) {
     LaunchedEffect(state.user?.id) {
         if(state.user?.id==null)return@LaunchedEffect
@@ -194,7 +195,7 @@ fun ModernWorkspace(
         val searchActiveHere = searchOpenedOnPage==page && pagerState.currentPage==page
         when(page) {
             3 -> NativeEconomicPage(userId=state.user?.id,dark=dark,active=pagerState.currentPage==3,
-                onQuickVoice=onQuickVoice,voiceAwaiting=voiceAwaiting)
+                onQuickVoice=onQuickVoice,voiceAwaiting=voiceAwaiting,notificationLoanId=notificationLoanId,notificationRequestId=notificationRequestId)
             2 -> {
                 val pagerScope=rememberCoroutineScope()
                 Column(Modifier.fillMaxSize().background(

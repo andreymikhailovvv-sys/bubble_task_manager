@@ -55,7 +55,7 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
     onQuickAiHandled:(Int)->Unit={},
     updateAvailable:Boolean=false,onCheckUpdates:()->Unit={},
     notificationHabitId:String?=null,notificationChatId:String?=null,
-    notificationAccount:String?=null,notificationRequestId:Int=0,notificationTaskChat:Boolean=false) {
+    notificationAccount:String?=null,notificationRequestId:Int=0,notificationTaskChat:Boolean=false,notificationLoanId:String?=null) {
     val state by vm.state.collectAsStateWithLifecycle()
     val themeMode by vm.themeMode.collectAsStateWithLifecycle()
     val focusManager=LocalFocusManager.current
@@ -229,6 +229,9 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
         subtaskReturnToTaskId = null
         taskAiChatId = null
     }
+    LaunchedEffect(notificationLoanId,notificationRequestId,state.user?.id,state.loading){
+        if(!state.loading && notificationAccount==state.user?.id && !notificationLoanId.isNullOrBlank())pagerState.scrollToPage(3)
+    }
     var openedNotificationHabitId by remember(state.user?.id){mutableStateOf<String?>(null)}
     LaunchedEffect(notificationHabitId,notificationRequestId,state.user?.id,state.loading){
         if(!state.loading && notificationAccount==state.user?.id && !notificationHabitId.isNullOrBlank()){
@@ -353,6 +356,7 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
                 onQuickAiHandled=onQuickAiHandled,
                 onQuickVoice={voiceFromFinance=true;voiceInput()},voiceAwaiting=voiceAwaiting,
                 notesRequest=notesRequest,
+                notificationLoanId=notificationLoanId?.takeIf{notificationAccount==state.user?.id},notificationRequestId=notificationRequestId,
                 updateAvailable=updateAvailable,
                 modifier = Modifier.padding(padding),
             )
