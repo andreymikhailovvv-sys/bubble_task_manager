@@ -41,6 +41,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import kotlin.math.sin
+import ru.planirovych.app.planik.PlanikWakeMicGate
 
 private enum class VoiceRecordingStage { IDLE, RECORDING, TRANSCRIBING }
 
@@ -79,6 +80,7 @@ internal fun rememberAiChatSpeechInput(
     var processingJob by remember { mutableStateOf<Job?>(null) }
     var processingGeneration by remember { mutableIntStateOf(0) }
     val maxSize=6*1024*1024
+    val wakeMicOwner=remember { Any() }
 
     fun releaseRecorder(discard:Boolean) {
         val active=recorder.value
@@ -88,6 +90,7 @@ internal fun rememberAiChatSpeechInput(
             runCatching{active.reset()}
             runCatching{active.release()}
         }
+        PlanikWakeMicGate.release(wakeMicOwner)
         if(discard){
             recording.value?.delete()
             recording.value=null
@@ -98,6 +101,8 @@ internal fun rememberAiChatSpeechInput(
     @Suppress("DEPRECATION")
     fun startRecording() {
         if(stage!=VoiceRecordingStage.IDLE)return
+        // Release the wake recognizer synchronously before opening MediaRecorder.
+        PlanikWakeMicGate.acquire(wakeMicOwner)
         try{
             val file=File.createTempFile("ai-dictation-", ".m4a",context.cacheDir)
             recording.value=file
@@ -135,6 +140,7 @@ internal fun rememberAiChatSpeechInput(
         recorder.value=null
         val stopped=runCatching {active?.stop()}.isSuccess
         runCatching{active?.release()}
+        PlanikWakeMicGate.release(wakeMicOwner)
         recording.value=null
         if(!stopped || file==null || length<.25){
             file?.delete()
@@ -210,6 +216,7 @@ internal fun rememberAiChatSpeechInput(
                 runCatching{native.release()}
             }
             recorder.value=null
+            PlanikWakeMicGate.release(wakeMicOwner)
             recording.value?.delete()
             recording.value=null
         }

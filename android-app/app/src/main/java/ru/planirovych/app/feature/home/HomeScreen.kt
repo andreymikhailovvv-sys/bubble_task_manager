@@ -45,6 +45,8 @@ import java.util.Locale
 import java.util.UUID
 import ru.planirovych.app.data.model.*
 import ru.planirovych.app.ui.theme.ThemeMode
+import ru.planirovych.app.planik.PlanikWakeControls
+import ru.planirovych.app.planik.rememberPlanikWake
 
 private enum class AuthMode { LOGIN, REGISTER }
 
@@ -58,6 +60,7 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
     notificationAccount:String?=null,notificationRequestId:Int=0,notificationTaskChat:Boolean=false,notificationLoanId:String?=null) {
     val state by vm.state.collectAsStateWithLifecycle()
     val themeMode by vm.themeMode.collectAsStateWithLifecycle()
+    val planikWake=rememberPlanikWake(state.user?.id,!state.loading && state.error==null)
     val focusManager=LocalFocusManager.current
     val softwareKeyboard=LocalSoftwareKeyboardController.current
     val density=LocalDensity.current
@@ -397,6 +400,7 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
         { authMode = it; settings = false }, { vm.logout { settings = false } },
         updateAvailable=updateAvailable,onCheckUpdates={settings=false;onCheckUpdates()},
         onOpenWardrobe={settings=false;wardrobeOpen=true;vm.refreshMascotWardrobe(state.user?.id)},
+        planikWake=planikWake,
     )
     if(wardrobeOpen) NativeMascotWardrobeDialog(vm,dark,state.user?.id){wardrobeOpen=false}
     authMode?.let { mode ->
@@ -833,7 +837,8 @@ private fun SettingsSheet(
     close: () -> Unit,
     auth: (AuthMode) -> Unit,
     logout: () -> Unit,
-    updateAvailable:Boolean=false,onCheckUpdates:()->Unit={},onOpenWardrobe:()->Unit={}
+    updateAvailable:Boolean=false,onCheckUpdates:()->Unit={},onOpenWardrobe:()->Unit={},
+    planikWake:PlanikWakeControls
 ) {
     // Open at the content's natural expanded height rather than the
     // half-screen anchor. It remains a wrap-content sheet, not fullscreen.
@@ -874,6 +879,20 @@ private fun SettingsSheet(
                         uncheckedBorderColor=Color(0xFFB8A8D6),
                         uncheckedIconColor=Color(0xFF6D28D9)
                     ))
+            }
+            Row(verticalAlignment=Alignment.CenterVertically) {
+                Icon(Icons.Default.Mic,null)
+                Column(Modifier.padding(start=10.dp,end=8.dp).weight(1f)) {
+                    Text("Эй, Планик")
+                    Text("Голосовой вызов только внутри открытого приложения. Распознавание локальное.",
+                        style=MaterialTheme.typography.bodySmall,
+                        color=MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(planikWake.status,style=MaterialTheme.typography.bodySmall,
+                        color=MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Switch(checked=planikWake.enabled,
+                    enabled=planikWake.available || planikWake.enabled,
+                    onCheckedChange=planikWake.onChange)
             }
             OutlinedButton(onClick=onOpenWardrobe,enabled=user?.id!=null,modifier=Modifier.fillMaxWidth()){Text("Аксессуары и скины Планика")}
             OutlinedButton(onClick=onCheckUpdates,modifier=Modifier.fillMaxWidth()){
