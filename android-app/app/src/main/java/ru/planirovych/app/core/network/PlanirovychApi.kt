@@ -61,6 +61,8 @@ interface PlanirovychApi {
         @Path("attachmentId") attachmentId: String): TaskAttachmentLink
     // The native general chat uses the exact same project tree and thread API
     // as the web client and Telegram Mini App.
+    @POST("api/system-notifications/{id}/android-action")
+    suspend fun androidNotificationAction(@Path("id") id:String,@Body body:JsonObject):JsonObject
     @GET("api/system-notifications")
     suspend fun systemNotifications():AndroidSystemNotificationFeed
     @POST("api/system-notifications/android-devices")

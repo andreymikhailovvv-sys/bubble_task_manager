@@ -156,11 +156,16 @@ object AndroidNotificationDelivery {
     private fun publish(context:Context,account:String,id:String,content:String,
         taskId:String?,eventKey:String?){
         createChannel(context)
+        val spec=NotificationActionSpec.from(eventKey,taskId,content)
         val destination=Intent(context,MainActivity::class.java).apply{
+            data=android.net.Uri.parse("planirovych://notification/"+android.net.Uri.encode(id))
+            putExtra(MainActivity.EXTRA_NOTIFICATION_ACCOUNT,account)
+            putExtra(MainActivity.EXTRA_NOTIFICATION_HABIT_ID,spec.habitId)
+            putExtra(MainActivity.EXTRA_NOTIFICATION_CHAT_ID,spec.chatId)
             flags=Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             putExtra(MainActivity.EXTRA_NOTIFICATION_TASK_ID,taskId)
             putExtra(MainActivity.EXTRA_NOTIFICATION_ID,id)
-            if(eventKey?.startsWith("ai-checkup:")==true || eventKey?.startsWith("economic-repeat:")==true)
+            if(spec.openAi)
                 putExtra(MainActivity.EXTRA_OPEN_GENERAL_AI,true)
         }
         val requestCode=(account+":"+id).hashCode()
@@ -179,6 +184,23 @@ object AndroidNotificationDelivery {
                 // Only the headline and monitored-task line belong in native
                 // notifications. The full AI answer remains in the task chat.
                 if(!monitoring)setStyle(Notification.BigTextStyle().bigText(content))
+            }
+            .apply {
+                if(spec.max>0)setProgress(spec.max,spec.progress.coerceIn(0,spec.max),false)
+                spec.actions.forEach { (command,label) ->
+                    val intent=Intent(context,NotificationActionReceiver::class.java).apply{
+                        data=android.net.Uri.parse("planirovych://notification-action/"+android.net.Uri.encode(id)+"/"+command)
+                        putExtra("account",account);putExtra("id",id);putExtra("command",command)
+                        putExtra("taskId",taskId);putExtra("eventKey",eventKey)
+                    }
+                    val target=PendingIntent.getBroadcast(context,(account+":"+id+":"+command).hashCode(),intent,
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+                    val button=Notification.Action.Builder(null,label,target)
+                    if(Build.VERSION.SDK_INT>=31)button.setAuthenticationRequired(true)
+                    addAction(button.build())
+                }
+                if(spec.actions.isNotEmpty() || taskId!=null || spec.habitId!=null || spec.openAi)
+                    addAction(Notification.Action.Builder(null,"Открыть",pending).build())
             }
             .setContentIntent(pending)
             .setAutoCancel(true)

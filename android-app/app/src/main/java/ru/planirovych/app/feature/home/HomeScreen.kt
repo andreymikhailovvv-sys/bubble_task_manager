@@ -53,7 +53,9 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
     notificationTaskId:String?=null,openGeneralAi:Boolean=false,
     quickAiMode:String?=null,quickAiRequestId:Int=0,
     onQuickAiHandled:(Int)->Unit={},
-    updateAvailable:Boolean=false,onCheckUpdates:()->Unit={}) {
+    updateAvailable:Boolean=false,onCheckUpdates:()->Unit={},
+    notificationHabitId:String?=null,notificationChatId:String?=null,
+    notificationAccount:String?=null,notificationRequestId:Int=0) {
     val state by vm.state.collectAsStateWithLifecycle()
     val themeMode by vm.themeMode.collectAsStateWithLifecycle()
     val focusManager=LocalFocusManager.current
@@ -152,8 +154,9 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
             }
         }
     }
-    var quickNavigationHandled by remember(openGeneralAi,quickAiRequestId){mutableStateOf(false)}
-    LaunchedEffect(openGeneralAi,quickAiMode,quickAiRequestId,sharedChat.projects,state.loading){
+    var quickNavigationHandled by remember(openGeneralAi,quickAiRequestId,notificationRequestId){mutableStateOf(false)}
+    LaunchedEffect(openGeneralAi,quickAiMode,quickAiRequestId,sharedChat.projects,state.loading,notificationRequestId,state.user?.id){
+        if(notificationAccount!=null && state.user?.id!=notificationAccount)return@LaunchedEffect
         if(quickAiMode=="voice" && quickAiRequestId>0 && !quickNavigationHandled && !state.loading){
             quickNavigationHandled=true
             onQuickAiHandled(quickAiRequestId)
@@ -164,11 +167,12 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
             pagerState.scrollToPage(2)
             // Widget result and scheduled checkup alerts must open Quick Requests,
             // not whichever project conversation happened to be selected last.
+            val chatId=notificationChatId?:QUICK_AI_THREAD_ID
             val quickProject=sharedChat.projects.firstOrNull{p->
-                p.chats.any{it.id==QUICK_AI_THREAD_ID}
+                p.chats.any{it.id==chatId}
             }
             if(quickProject!=null){
-                vm.chooseGeneralAiChat(quickProject.id,QUICK_AI_THREAD_ID)
+                vm.chooseGeneralAiChat(quickProject.id,chatId)
                 quickNavigationHandled=true
             }
         }
@@ -225,8 +229,15 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
         subtaskReturnToTaskId = null
         taskAiChatId = null
     }
-    LaunchedEffect(notificationTaskId,state.user?.id){
-        if(!notificationTaskId.isNullOrBlank()){
+    var openedNotificationHabitId by remember(state.user?.id){mutableStateOf<String?>(null)}
+    LaunchedEffect(notificationHabitId,notificationRequestId,state.user?.id,state.loading){
+        if(!state.loading && notificationAccount==state.user?.id && !notificationHabitId.isNullOrBlank()){
+            pagerState.scrollToPage(0)
+            openedNotificationHabitId=notificationHabitId
+        }
+    }
+    LaunchedEffect(notificationTaskId,state.user?.id,notificationRequestId){
+        if(!notificationTaskId.isNullOrBlank() && (notificationAccount==null || notificationAccount==state.user?.id)){
             openedTaskId=notificationTaskId
             newSubtaskParentId=null
             overlaySubtaskId=null
@@ -362,6 +373,9 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
     creationType?.let { type ->
         NativeQuickTaskCreateSheet(type=type,vm=vm,dark=dark,
             onClose={creationType=null})
+    }
+    state.habits.firstOrNull{it.id==openedNotificationHabitId}?.let{habit->
+        NativeHabitDetailSheet(vm,habit,dark,onClose={openedNotificationHabitId=null})
     }
     if(createHabit) NativeHabitCreateSheet(vm=vm,dark=dark,
         onClose={createHabit=false})
