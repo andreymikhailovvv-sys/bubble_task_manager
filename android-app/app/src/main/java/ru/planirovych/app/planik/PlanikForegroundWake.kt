@@ -112,7 +112,17 @@ internal class ForegroundWakeListener(
     private var retryAt = 0L
     @Volatile private var lastFrameAt = 0L
     @Volatile private var capturing = false
-    private val retry = Runnable { start() }
+    // Track the queued retry ourselves: the platform callback-query API needs API 29.
+    private var retryScheduled = false
+    private val retry = Runnable {
+        retryScheduled = false
+        start()
+    }
+
+    private fun cancelRetry() {
+        handler.removeCallbacks(retry)
+        retryScheduled = false
+    }
     private val health = object : Runnable {
         override fun run() {
             if (!foreground) return
@@ -144,7 +154,7 @@ internal class ForegroundWakeListener(
     fun refresh() {
         if (!foreground || PlanikWakeMicGate.busy || !screenAvailable()) {
             if(worker != null || recorder != null) release()
-            handler.removeCallbacks(retry)
+            cancelRetry()
             if (PlanikWakeMicGate.busy) triggered = false
             onStatus(if (!screenAvailable()) "Пауза до разблокировки" else "На паузе")
             return
@@ -158,8 +168,8 @@ internal class ForegroundWakeListener(
             worker = null
             capturing = false
         }
-        if (worker == null && !handler.hasCallbacks(retry)) {
-            handler.postDelayed(retry,maxOf(400L,retryAt-SystemClock.elapsedRealtime()))
+        if (worker == null && !retryScheduled) {
+            retryScheduled = handler.postDelayed(retry,maxOf(400L,retryAt-SystemClock.elapsedRealtime()))
         }
     }
 
@@ -167,7 +177,7 @@ internal class ForegroundWakeListener(
         generation++
         capturing = false
         lastFrameAt = 0L
-        handler.removeCallbacks(retry)
+        cancelRetry()
         synchronized(captureLock) {
             runCatching { recorder?.stop() }
             recorder = null

@@ -25,6 +25,9 @@ test('Planik foreground activation is opt-in, local and lifecycle bound', async 
   assert.match(wake, /lastFrameAt>15_000L/);
   assert.match(wake, /recoverable=true/);
   assert.match(wake, /worker\?\.isAlive == false/);
+  assert.doesNotMatch(wake, /handler\.hasCallbacks\(/);
+  assert.match(wake, /retryScheduled = handler\.postDelayed\(retry,/);
+  assert.match(wake, /private fun cancelRetry\(\) \{[\s\S]*?retryScheduled = false/);
   assert.match(wake, /generation\+\+/);
   assert.match(manifest, /android\.permission\.RECORD_AUDIO/);
   assert.match(manifest, /FOREGROUND_SERVICE_MICROPHONE/);

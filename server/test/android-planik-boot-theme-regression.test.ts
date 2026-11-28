@@ -84,8 +84,8 @@ test('small Planik matches light/dark website palette with tight tap bounds and 
   assert.match(native, /if \(dark\) "" else "_light"/);
   assert.match(general, /PlanikNativeLauncher\([\s\S]{0,70}dark = dark/);
   assert.match(task, /PlanikNativeLauncher\([\s\S]{0,70}dark = dark/);
-  assert.match(general, /bottom = composerHeight \+ 1\.dp/);
-  assert.match(task, /bottom = composerHeight \+ 1\.dp/);
+  assert.match(general, /bottom = \(composerHeight - 17\.dp\)\.coerceAtLeast\(0\.dp\)/);
+  assert.match(task, /bottom = \(composerHeight - 17\.dp\)\.coerceAtLeast\(0\.dp\)/);
   assert.match(idle, /#5e5ca3/);
   assert.match(blink, /#5e5ca3/);
   assert.match(light, /#b8b3ec/);
