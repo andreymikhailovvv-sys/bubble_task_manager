@@ -958,15 +958,23 @@ private fun SettingsSheet(
                         Text(label)
                     }
                 }
-                Row(verticalAlignment=Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Слушать в фоне")
-                        Text("Работает при включённом разблокированном экране. Автооткрытие требует разрешения поверх других приложений.",
-                            style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Режим прослушивания",style=MaterialTheme.typography.titleSmall)
+                listOf(
+                    Triple("app","Только в приложении","Микрофон активен только в открытом Планировыче."),
+                    Triple("background","Фоновый режим","Работает в других приложениях. На блокировке пауза, после разблокировки автоматически возобновляется."),
+                    Triple("always","Постоянное прослушивание","Экспериментально: включая выключенный экран. Повышенный расход аккумулятора. Для доступа к данным потребуется разблокировка.")
+                ).forEach { (value,label,description) ->
+                    Row(Modifier.fillMaxWidth().clickable { planikWake.onListeningMode(value) },
+                        verticalAlignment=Alignment.CenterVertically) {
+                        RadioButton(selected=planikWake.listeningMode==value,onClick={planikWake.onListeningMode(value)})
+                        Column(Modifier.weight(1f).padding(vertical=6.dp)) {
+                            Text(label)
+                            Text(description,style=MaterialTheme.typography.bodySmall,
+                                color=MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
-                    Switch(checked=planikWake.background,onCheckedChange=planikWake.onBackground)
                 }
-                if(planikWake.background) {
+                if(planikWake.listeningMode!="app") {
                     OutlinedButton(onClick=planikWake.onAutoOpen,modifier=Modifier.fillMaxWidth()) {
                         Text(if(planikWake.autoOpen)"Автооткрытие разрешено · Настройки" else "Разрешить автооткрытие приложения")
                     }
