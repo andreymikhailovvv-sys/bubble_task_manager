@@ -15,6 +15,9 @@ import android.os.Looper
 import android.util.Log
 import android.view.Gravity
 import android.view.View
+import android.view.WindowManager
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import android.webkit.ConsoleMessage
 import android.webkit.CookieManager
 import android.webkit.PermissionRequest
@@ -55,6 +58,12 @@ import ru.planirovych.app.core.network.PersistentCookieJar
  * root, and surface network/JavaScript/render errors with a retry action.
  * The website runs only on the authenticated HTTPS origin.
  */
+internal object PlanikLiveUpdates {
+    private val mutable = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val events = mutable.asSharedFlow()
+    fun publish() { mutable.tryEmit(Unit) }
+}
+
 class PlanikLiveActivity : ComponentActivity() {
     companion object {
         private const val TAG = "PlanikLive"
@@ -88,6 +97,9 @@ class PlanikLiveActivity : ComponentActivity() {
     private var loadingIndicator: View? = null
     private var loadingLabel: TextView? = null
     private var retryButton: Button? = null
+    private var compact = false
+    private var lastCompactRefresh = 0L
+    private var missingFrames = 0
     private var loaded = false
     private var failed = false
     private var deadline = 0L
@@ -109,6 +121,7 @@ class PlanikLiveActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        PlanikWakeMicGate.acquire(this)
         window.statusBarColor = Color.rgb(13, 19, 38)
         window.navigationBarColor = Color.rgb(9, 14, 27)
         window.decorView.systemUiVisibility = 0
@@ -156,7 +169,14 @@ class PlanikLiveActivity : ComponentActivity() {
 
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest): Boolean {
                 val url = request.url
-                if (url.scheme == "https" && url.host == baseHost) return false
+                if (url.scheme == "https" && url.host == baseHost) {
+                    // The embedded browser is a voice surface, not a second workspace.
+                    if (request.isForMainFrame && url.encodedPath != "/android-planik") {
+                        finish()
+                        return true
+                    }
+                    return false
+                }
                 if (url.scheme == "https") {
                     startActivity(Intent(Intent.ACTION_VIEW, url))
                 }
@@ -274,7 +294,7 @@ class PlanikLiveActivity : ComponentActivity() {
             scaleType = ImageView.ScaleType.FIT_CENTER
             contentDescription = "Планик"
         }
-        preview.addView(mascot, LinearLayout.LayoutParams(dp(160), dp(150)))
+        preview.addView(mascot, LinearLayout.LayoutParams(dp(180), dp(170)))
         intArrayOf(196, 150, 176).forEachIndexed { index, width ->
             val bar = View(this).apply {
                 background = GradientDrawable().apply {
@@ -460,6 +480,79 @@ class PlanikLiveActivity : ComponentActivity() {
         handler.removeCallbacksAndMessages(null)
         loadingIndicator?.clearAnimation()
         (loadingLabel?.parent as? View)?.visibility = View.GONE
+        watchLivePresentation()
+    }
+
+    private fun setCompact(next: Boolean) {
+        if (compact == next) return
+        compact = next
+        val view = browser ?: return
+        val params = window.attributes
+        if (next) {
+            val density = resources.displayMetrics.density
+            params.width = (190 * density).toInt()
+            params.height = (235 * density).toInt()
+            params.gravity = Gravity.BOTTOM or Gravity.END
+            params.y = (65 * density).toInt()
+            window.addFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
+            window.statusBarColor = Color.TRANSPARENT
+            window.navigationBarColor = Color.TRANSPARENT
+            view.setBackgroundColor(Color.TRANSPARENT)
+            (view.parent as? View)?.setBackgroundColor(Color.TRANSPARENT)
+            PlanikLiveUpdates.publish()
+        } else {
+            params.width = WindowManager.LayoutParams.MATCH_PARENT
+            params.height = WindowManager.LayoutParams.MATCH_PARENT
+            params.gravity = Gravity.CENTER
+            params.y = 0
+            window.clearFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
+            window.statusBarColor = Color.rgb(13, 19, 38)
+            window.navigationBarColor = Color.rgb(9, 14, 27)
+            view.setBackgroundColor(Color.rgb(13, 19, 38))
+            (view.parent as? View)?.setBackgroundColor(Color.rgb(13, 19, 38))
+        }
+        // Re-read flags after addFlags/clearFlags before assigning the layout.
+        params.flags = window.attributes.flags
+        window.attributes = params
+    }
+
+    private fun watchLivePresentation() {
+        val view = browser ?: return
+        if (isFinishing || isDestroyed || !loaded) return
+        val script = """(function(){
+            var full=document.querySelector('.planik-live-fullscreen');
+            var small=document.querySelector('.planik-live-compact');
+            var style=document.getElementById('android-native-voice-only');
+            if(!style){style=document.createElement('style');style.id='android-native-voice-only';
+              style.textContent='html,body{background:transparent!important} #root{visibility:hidden!important;pointer-events:none!important} .planik-live-compact{bottom:8px!important;right:12px!important}';
+              document.head.appendChild(style);}
+            if(small)return 'compact';
+            if(full)return 'full';
+            return document.documentElement.dataset.planikAndroid==='ended'?'ended':'missing';
+        })();"""
+        view.evaluateJavascript(script) { raw ->
+            if (isFinishing || isDestroyed) return@evaluateJavascript
+            val state = runCatching { JSONTokener(raw).nextValue()?.toString() }.getOrNull()
+            when(state) {
+                "ended" -> { finish(); return@evaluateJavascript }
+                "missing" -> {
+                    missingFrames++
+                    if(missingFrames >= 3) { finish(); return@evaluateJavascript }
+                }
+                "compact", "full" -> {
+                    missingFrames=0
+                    setCompact(state=="compact")
+                    val now=android.os.SystemClock.uptimeMillis()
+                    if(compact && now-lastCompactRefresh>=5000L) {
+                        lastCompactRefresh=now
+                        PlanikLiveUpdates.publish()
+                    }
+                }
+            }
+            handler.postDelayed({ watchLivePresentation() }, 250L)
+        }
     }
 
     private fun startRootChecks() {
@@ -537,6 +630,8 @@ class PlanikLiveActivity : ComponentActivity() {
             destroy()
         }
         browser = null
+        PlanikWakeMicGate.release(this)
+        PlanikLiveUpdates.publish()
         super.onDestroy()
     }
 }

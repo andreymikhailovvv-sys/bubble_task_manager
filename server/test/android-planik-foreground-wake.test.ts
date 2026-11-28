@@ -17,11 +17,12 @@ test('Planik foreground activation is opt-in, local and lifecycle bound', async 
   assert.match(wake, /EXTRA_LANGUAGE, "ru-RU"/);
   assert.match(wake, /Lifecycle\.Event\.ON_RESUME -> listener\.resume\(\)/);
   assert.match(wake, /Lifecycle\.Event\.ON_PAUSE[\s\S]*?listener\.pause\(\)/);
-  assert.match(wake, /expectedUserId = accountId/);
+  assert.match(wake, /dispatchPlanikWake\(accountId, latestAction\)/);
   assert.match(wake, /isKeyguardLocked/);
   assert.match(wake, /generation\+\+/);
   assert.match(manifest, /android\.speech\.RecognitionService/);
-  assert.doesNotMatch(manifest, /FOREGROUND_SERVICE_MICROPHONE|BOOT_COMPLETED/);
+  assert.match(manifest, /FOREGROUND_SERVICE_MICROPHONE/);
+  assert.doesNotMatch(manifest, /BOOT_COMPLETED/);
   assert.match(home, /rememberPlanikWake\(state\.user\?\.id/);
   assert.match(home, /Text\("Эй, Планик"\)/);
 });

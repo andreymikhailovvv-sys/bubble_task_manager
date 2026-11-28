@@ -42,14 +42,18 @@ internal data class PlanikWakeControls(
     val enabled: Boolean,
     val available: Boolean,
     val status: String,
+    val action: String,
+    val background: Boolean,
+    val onAction: (String) -> Unit,
+    val onBackground: (Boolean) -> Unit,
     val onChange: (Boolean) -> Unit
 )
 
-private fun supported(context: Context): Boolean =
+internal fun supported(context: Context): Boolean =
     Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
         runCatching { SpeechRecognizer.isOnDeviceRecognitionAvailable(context) }.getOrDefault(false)
 
-private fun hasPermission(context: Context): Boolean =
+internal fun hasPermission(context: Context): Boolean =
     ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
 
 internal fun isPlanikWakePhrase(raw: String): Boolean {
@@ -63,7 +67,7 @@ internal fun isPlanikWakePhrase(raw: String): Boolean {
  * Android SpeechRecognizer is not an always-on hotword engine; sessions can have
  * gaps and the local Russian model must be installed on the device.
  */
-private class ForegroundWakeListener(
+internal class ForegroundWakeListener(
     private val context: Context,
     private val onStatus: (String) -> Unit,
     private val onWake: () -> Unit
@@ -91,6 +95,7 @@ private class ForegroundWakeListener(
 
     fun pause() {
         foreground = false
+        handler.removeCallbacksAndMessages(null)
         release()
         onStatus("На паузе")
     }
@@ -98,6 +103,7 @@ private class ForegroundWakeListener(
     fun refresh() {
         if (!foreground || PlanikWakeMicGate.busy || !screenAvailable()) {
             release()
+            if (PlanikWakeMicGate.busy) triggered = false
             onStatus("На паузе")
         } else if (!triggered && !failed && recognizer == null) {
             schedule(650)
@@ -152,6 +158,12 @@ private class ForegroundWakeListener(
                     onStatus("Планик услышал вас")
                     try {
                         onWake()
+                        handler.postDelayed({
+                            if (foreground && triggered) {
+                                triggered = false
+                                refresh()
+                            }
+                        }, 2500)
                     } catch (_: Exception) {
                         triggered = false
                         fail("Не удалось открыть диалог. Выключите и включите функцию.")
@@ -227,7 +239,21 @@ internal fun rememberPlanikWake(accountId: String?, ready: Boolean): PlanikWakeC
     var enabled by remember(accountId) {
         mutableStateOf(accountId != null && preferences.getBoolean("enabled_" + accountId, false))
     }
+    var action by remember(accountId) { mutableStateOf(preferences.getString("action_" + accountId, "live") ?: "live") }
+    var background by remember(accountId) { mutableStateOf(accountId != null && preferences.getBoolean("background_" + accountId, false)) }
     val available = remember(context) { supported(context) }
+    val activity = context as? ru.planirovych.app.MainActivity
+    val latestAction by rememberUpdatedState(action)
+    DisposableEffect(preferences, accountId) {
+        val observer = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (accountId != null && key == "background_" + accountId)
+                background = preferences.getBoolean(key, false)
+            if (accountId != null && key == "enabled_" + accountId)
+                enabled = preferences.getBoolean(key, false)
+        }
+        preferences.registerOnSharedPreferenceChangeListener(observer)
+        onDispose { preferences.unregisterOnSharedPreferenceChangeListener(observer) }
+    }
     var status by remember(accountId) { mutableStateOf("Выключено") }
     var requestedAccount by remember { mutableStateOf<String?>(null) }
     val currentAccount by rememberUpdatedState(accountId)
@@ -235,7 +261,10 @@ internal fun rememberPlanikWake(accountId: String?, ready: Boolean): PlanikWakeC
         if (accountId == null) return
         preferences.edit().putBoolean("enabled_" + accountId, value).apply()
         enabled = value
-        if (!value) status = "Выключено"
+        if (!value) {
+            status = "Выключено"
+            PlanikWakeBackgroundService.stop(context)
+        }
     }
     val requestPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (requestedAccount != null && requestedAccount == currentAccount) {
@@ -244,12 +273,33 @@ internal fun rememberPlanikWake(accountId: String?, ready: Boolean): PlanikWakeC
         }
         requestedAccount = null
     }
-    DisposableEffect(owner, context, accountId, enabled, available, ready) {
+    DisposableEffect(owner, context, accountId, enabled, available, ready, background) {
+        if (accountId == null || !enabled || !background)
+            PlanikWakeBackgroundService.stop(context)
         if (!enabled || !available || !ready || accountId == null) {
             onDispose { }
+        } else if (background) {
+            val callback: (String) -> Unit = { mode -> activity?.dispatchPlanikWake(accountId, mode) }
+            val observer = LifecycleEventObserver { _, event ->
+                when (event) {
+                    Lifecycle.Event.ON_RESUME -> {
+                        PlanikWakeDispatch.attach(accountId, callback)
+                        status = if (PlanikWakeBackgroundService.start(context, accountId))
+                            "Фоновое прослушивание включено" else "Не удалось включить фоновый микрофон"
+                    }
+                    Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP, Lifecycle.Event.ON_DESTROY ->
+                        PlanikWakeDispatch.detach(callback)
+                    else -> Unit
+                }
+            }
+            owner.lifecycle.addObserver(observer)
+            onDispose {
+                owner.lifecycle.removeObserver(observer)
+                PlanikWakeDispatch.detach(callback)
+            }
         } else {
             val listener = ForegroundWakeListener(context, { status = it }) {
-                context.startActivity(PlanikLiveActivity.intent(context, expectedUserId = accountId))
+                activity?.dispatchPlanikWake(accountId, latestAction)
             }
             val gateObserver: () -> Unit = { listener.refresh() }
             val lifecycleObserver = LifecycleEventObserver { _, event ->
@@ -274,9 +324,30 @@ internal fun rememberPlanikWake(accountId: String?, ready: Boolean): PlanikWakeC
         accountId == null -> "Откройте профиль"
         !enabled && status == "На паузе" -> "Выключено"
         enabled && !ready -> "Ожидание рабочего пространства"
+        enabled && background -> PlanikWakeBackgroundService.status.ifBlank { status }
         else -> status
     }
-    return PlanikWakeControls(enabled, available && accountId != null, visibleStatus) { value ->
+    return PlanikWakeControls(enabled, available && accountId != null, visibleStatus,
+        action, background,
+        onAction = { value ->
+            if (accountId != null && value in listOf("live", "voice")) {
+                preferences.edit().putString("action_" + accountId, value).apply()
+                action = value
+            }
+        },
+        onBackground = { value ->
+            if (accountId != null) {
+                if (value && Build.VERSION.SDK_INT >= 33 &&
+                    ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                    status = "Разрешите уведомления в настройках Android для фонового режима"
+                } else {
+                    preferences.edit().putBoolean("background_" + accountId, value).apply()
+                    background = value
+                    if (!value) PlanikWakeBackgroundService.stop(context)
+                }
+            }
+        }
+    ) { value ->
         if (!value) setConsent(false)
         else if (available && accountId != null) {
             if (hasPermission(context)) setConsent(true)
