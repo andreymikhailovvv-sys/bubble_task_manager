@@ -55,7 +55,7 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
     onQuickAiHandled:(Int)->Unit={},
     updateAvailable:Boolean=false,onCheckUpdates:()->Unit={},
     notificationHabitId:String?=null,notificationChatId:String?=null,
-    notificationAccount:String?=null,notificationRequestId:Int=0) {
+    notificationAccount:String?=null,notificationRequestId:Int=0,notificationTaskChat:Boolean=false) {
     val state by vm.state.collectAsStateWithLifecycle()
     val themeMode by vm.themeMode.collectAsStateWithLifecycle()
     val focusManager=LocalFocusManager.current
@@ -236,9 +236,9 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
             openedNotificationHabitId=notificationHabitId
         }
     }
-    LaunchedEffect(notificationTaskId,state.user?.id,notificationRequestId){
-        if(!notificationTaskId.isNullOrBlank() && (notificationAccount==null || notificationAccount==state.user?.id)){
-            openedTaskId=notificationTaskId
+    LaunchedEffect(notificationTaskId,state.user?.id,notificationRequestId,state.loading){
+        if(!state.loading && !notificationTaskId.isNullOrBlank() && (notificationAccount==null || notificationAccount==state.user?.id)){
+            if(notificationTaskChat){taskAiChatId=notificationTaskId;openedTaskId=null}else openedTaskId=notificationTaskId
             newSubtaskParentId=null
             overlaySubtaskId=null
             overlayNewSubtaskParentId=null

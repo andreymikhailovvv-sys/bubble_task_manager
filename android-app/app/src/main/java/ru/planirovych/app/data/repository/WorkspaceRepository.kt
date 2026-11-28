@@ -23,8 +23,8 @@ import ru.planirovych.app.data.model.*
 
 class WorkspaceRepository(private val api: PlanirovychApi,private val context:Context) {
     suspend fun establishSession() = api.me().user
-    suspend fun performNotificationAction(id:String,command:String):JsonObject =
-        api.androidNotificationAction(id,buildJsonObject{put("command",command)})
+    suspend fun performNotificationAction(id:String,command:String,account:String,replyHash:String?):JsonObject =
+        api.androidNotificationAction(id,buildJsonObject{put("command",command);put("account",account);replyHash?.let{put("replyHash",it)}})
     suspend fun loadWorkspace() = coroutineScope {
         val spheres = async { api.spheres() }; val tasks = async { api.tasks() }; val habits = async { api.habits() }
         Workspace(spheres.await(), tasks.await(), habits.await())

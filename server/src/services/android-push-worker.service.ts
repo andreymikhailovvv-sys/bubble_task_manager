@@ -1,6 +1,7 @@
 import { prisma } from '../db/prisma.js';
 import { measureBackground } from '../lib/performance-diagnostics.js';
 import { sendAndroidPush } from './android-fcm.service.js';
+import { describeAndroidNotification } from './android-notification-actions.service.js';
 
 let busy = false;
 
@@ -39,6 +40,11 @@ export async function dispatchPendingAndroidPush(): Promise<void> {
       let retry = false;
       try {
         if (!event.readAt) {
+          const actions = await describeAndroidNotification(event);
+          if (actions.hide) {
+            await prisma.systemNotification.updateMany({ where: { id: event.id, pushClaimedAt: claimedAt }, data: { readAt: new Date(), pushDispatchedAt: new Date(), pushClaimedAt: null } });
+            continue;
+          }
           const devices = await prisma.androidPushDevice.findMany({
             where: {
               userId: event.userId,
@@ -48,7 +54,7 @@ export async function dispatchPendingAndroidPush(): Promise<void> {
             select: { id: true, token: true }
           });
           for (const device of devices) {
-            const result = await sendAndroidPush(device.token, event);
+            const result = await sendAndroidPush(device.token, { ...event, androidActions: JSON.stringify(actions) });
             if (result === 'invalid') {
               await prisma.androidPushDevice.deleteMany({
                 where: { id: device.id, token: device.token }

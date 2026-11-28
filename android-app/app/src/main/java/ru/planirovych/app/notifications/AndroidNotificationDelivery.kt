@@ -147,21 +147,23 @@ object AndroidNotificationDelivery {
                 List(array.length()){index->array.getString(index)}
             }.getOrDefault(emptyList()).toMutableList()
             if(id in seen)return@withLock
-            publish(context,recipient,id,content,data["taskId"],data["eventKey"])
+            publish(context,recipient,id,content,data["taskId"],data["eventKey"],data["androidActions"])
             seen.add(id)
             prefs.edit().putString("seen",JSONArray(seen.distinct().takeLast(SEEN_MAX)).toString()).apply()
         }
     }
 
     private fun publish(context:Context,account:String,id:String,content:String,
-        taskId:String?,eventKey:String?){
+        taskId:String?,eventKey:String?,metadata:String?=null){
         createChannel(context)
-        val spec=NotificationActionSpec.from(eventKey,taskId,content)
+        val spec=NotificationActionSpec.from(eventKey,taskId,content,metadata)
+        if(spec.hide)return
         val destination=Intent(context,MainActivity::class.java).apply{
             data=android.net.Uri.parse("planirovych://notification/"+android.net.Uri.encode(id))
             putExtra(MainActivity.EXTRA_NOTIFICATION_ACCOUNT,account)
             putExtra(MainActivity.EXTRA_NOTIFICATION_HABIT_ID,spec.habitId)
             putExtra(MainActivity.EXTRA_NOTIFICATION_CHAT_ID,spec.chatId)
+            putExtra(MainActivity.EXTRA_NOTIFICATION_TASK_CHAT,spec.taskChat)
             flags=Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             putExtra(MainActivity.EXTRA_NOTIFICATION_TASK_ID,taskId)
             putExtra(MainActivity.EXTRA_NOTIFICATION_ID,id)
@@ -175,7 +177,8 @@ object AndroidNotificationDelivery {
         val monitoring=eventKey?.startsWith("monitoring:")==true &&
             lines.size>=2 && lines[0].isNotBlank()
         val headline=if(monitoring)lines[0].trim() else "Планировыч"
-        val contextLine=if(monitoring)lines[1].trim() else content
+        val displayContent=content+listOfNotNull(spec.status,spec.preview?.let{"Предложенный ответ: "+it}).joinToString("\n",prefix=if(spec.status!=null||spec.preview!=null)"\n\n" else "")
+        val contextLine=if(monitoring)lines[1].trim() else displayContent
         val notification=Notification.Builder(context,CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_planirovych)
             .setContentTitle(headline)
@@ -183,7 +186,7 @@ object AndroidNotificationDelivery {
             .apply {
                 // Only the headline and monitored-task line belong in native
                 // notifications. The full AI answer remains in the task chat.
-                if(!monitoring)setStyle(Notification.BigTextStyle().bigText(content))
+                if(!monitoring)setStyle(Notification.BigTextStyle().bigText(displayContent))
             }
             .apply {
                 if(spec.max>0)setProgress(spec.max,spec.progress.coerceIn(0,spec.max),false)
@@ -191,7 +194,7 @@ object AndroidNotificationDelivery {
                     val intent=Intent(context,NotificationActionReceiver::class.java).apply{
                         data=android.net.Uri.parse("planirovych://notification-action/"+android.net.Uri.encode(id)+"/"+command)
                         putExtra("account",account);putExtra("id",id);putExtra("command",command)
-                        putExtra("taskId",taskId);putExtra("eventKey",eventKey)
+                        putExtra("taskId",taskId);putExtra("eventKey",eventKey);putExtra("replyHash",spec.replyHash)
                     }
                     val target=PendingIntent.getBroadcast(context,(account+":"+id+":"+command).hashCode(),intent,
                         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
@@ -203,6 +206,7 @@ object AndroidNotificationDelivery {
                     addAction(Notification.Action.Builder(null,"Открыть",pending).build())
             }
             .setContentIntent(pending)
+            .setVisibility(Notification.VISIBILITY_PRIVATE)
             .setAutoCancel(true)
             .setCategory(Notification.CATEGORY_REMINDER)
             .setColor(0xFF8B5CF6.toInt())
@@ -249,7 +253,7 @@ object AndroidNotificationDelivery {
                 createChannel(context)
                 fresh.filter{it.readAt==null}.forEach{entry->
                     publish(context,account,entry.id,entry.content,
-                        entry.taskId,entry.eventKey)
+                        entry.taskId,entry.eventKey,entry.androidActions)
                 }
             }
             selected.addAll(fresh.map{it.id})

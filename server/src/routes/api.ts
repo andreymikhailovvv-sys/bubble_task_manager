@@ -24,6 +24,9 @@ import { taskParticipantMessageController } from '../controllers/task-participan
 import { taskCommentController } from '../controllers/task-comment.controller.js';
 import { habitController } from '../controllers/habit.controller.js';
 import { habitService } from '../services/habit.service.js';
+import { taskService } from '../services/task.service.js';
+import { describeAndroidNotification, currentNotificationTask, originalAndroidEventKey, notificationReplyHash } from '../services/android-notification-actions.service.js';
+import { applyEconomicProposal, rejectEconomicProposal } from '../services/economic-ai-proposals.service.js';
 import { standaloneNoteController, sendNoteInputError } from '../controllers/standalone-note.controller.js';
 import { standaloneNoteGroupController, sendGroupConflict } from '../controllers/standalone-note-group.controller.js';
 import { taskAttachmentController } from '../controllers/task-attachment.controller.js';
@@ -2201,6 +2204,10 @@ apiRouter.get('/system-notifications', requireAuth, asyncHandler(async (req, res
     }),
     prisma.systemNotification.count({ where: { userId: req.user!.id, readAt: null, createdAt: { lte: new Date() } } })
   ]);
+  if (req.query.android === '1') {
+    const enriched = await Promise.all(notifications.map(async event => ({ ...event, androidActions: JSON.stringify(await describeAndroidNotification(event)) })));
+    res.json({ notifications: enriched.reverse(), unreadCount }); return;
+  }
   res.json({ notifications: notifications.reverse(), unreadCount });
 }));
 
@@ -2210,9 +2217,10 @@ apiRouter.post('/system-notifications/:id/android-action', requireAuth, asyncHan
     res.status(403).json({ error: 'Недопустимый источник запроса' }); return;
   }
   const userId = req.user!.id;
+  if (req.body?.account !== userId) { res.status(403).json({ error: 'Аккаунт изменился' }); return; }
   const event = await prisma.systemNotification.findFirst({ where: { id: req.params.id, userId, createdAt: { lte: new Date() } } });
   if (!event) { res.status(404).json({ error: 'Уведомление недоступно' }); return; }
-  const key = event.eventKey.startsWith('android-snooze:') ? event.eventKey.split(':').slice(2).join(':') : event.eventKey;
+  const key = originalAndroidEventKey(event.eventKey);
   const parts = key.split(':');
   const isHabit = parts[0] === 'habit-reminder' && parts.length >= 3;
   const isTask = Boolean(event.taskId && (key.startsWith('reminder:') || key.endsWith(':upcoming') || key.endsWith(':overdue')));
@@ -2231,13 +2239,26 @@ apiRouter.post('/system-notifications/:id/android-action', requireAuth, asyncHan
       if (!(error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002' &&
         await prisma.habitCompletion.findFirst({ where: { id: completionId, userId, habitId: parts[1] } }))) throw error;
     }
-    await finish('Привычка отмечена'); return;
+    const spec = await describeAndroidNotification(event);
+    await prisma.systemNotification.updateMany({ where: { id: event.id, userId }, data: { readAt: new Date() } });
+    res.json({ message: 'Привычка отмечена', progress: spec.progress, max: spec.max }); return;
+  }
+  if (command === 'task_done' && isTask && event.taskId) {
+    if (event.androidActionTaken) { await finish('Действие уже обработано'); return; }
+    const task = await currentNotificationTask(event);
+    if (!task) { res.status(409).json({ error: 'Задача изменилась или уже выполнена' }); return; }
+    const claimed = await prisma.systemNotification.updateMany({ where: { id: event.id, userId, androidActionTaken: null }, data: { androidActionTaken: 'task_done' } });
+    if (!claimed.count) { res.status(409).json({ error: 'Действие уже обработано' }); return; }
+    // On an uncertain failure, do not advance a recurring task twice.
+    await taskService.update(task.id, userId, { status: 'DONE', collaborationScope: 'me' }, { source: 'api:android-notification', requestId: event.id });
+    await finish('Задача выполнена'); return;
   }
   if (command === 'snooze' && (isHabit || isTask)) {
     if (isHabit) {
       const habit = await prisma.habit.findFirst({ where: { id: parts[1], userId, isArchived: false, isAutoCompleted: false } });
       if (!habit) { res.status(409).json({ error: 'Привычка недоступна' }); return; }
     }
+    if (isTask && !await currentNotificationTask(event)) { res.status(409).json({ error: 'Задача изменилась или уже выполнена' }); return; }
     const at = new Date(Date.now() + 30 * 60_000);
     // Defer a new notification, never alter the task's real deadline.
     await prisma.systemNotification.upsert({
@@ -2254,6 +2275,8 @@ apiRouter.post('/system-notifications/:id/android-action', requireAuth, asyncHan
     if (!proposal) { res.status(404).json({ error: 'Предложение недоступно' }); return; }
     if (proposal.status === 'APPLIED') { await finish('Изменения уже применены'); return; }
     if (proposal.status !== 'PENDING') { res.status(409).json({ error: 'Предложение уже обработано' }); return; }
+    const spec = await describeAndroidNotification(event);
+    if (!spec.commands.includes(command)) { res.status(409).json({ error: 'Настройки автоприменения или статус изменились' }); return; }
     const result = command === 'proposal_approve' ? await applyTaskProposal(userId, proposal.id) : await rejectTaskProposal(userId, proposal.id);
     if (result.status !== (command === 'proposal_approve' ? 'APPLIED' : 'REJECTED')) { res.status(409).json({ error: 'Не удалось обработать предложение' }); return; }
     await finish(command === 'proposal_approve' ? 'Изменения применены' : 'Предложение отклонено'); return;
@@ -2261,6 +2284,8 @@ apiRouter.post('/system-notifications/:id/android-action', requireAuth, asyncHan
   if (command === 'reply_send' && key.startsWith('telegram-ai-reply:')) {
     const row = await prisma.telegramAiInboxEvent.findFirst({ where: { id: key, userId } });
     if (!row?.suggestedReplyText || row.suggestedReplyStatus !== 'PENDING') { res.status(409).json({ error: 'Ответ уже обработан или недоступен' }); return; }
+    const spec = await describeAndroidNotification(event);
+    if (!spec.commands.includes(command) || req.body?.replyHash !== notificationReplyHash(row.suggestedReplyText)) { res.status(409).json({ error: 'Ответ изменился. Откройте чат для проверки.' }); return; }
     const result = await sendTelegramAiSuggestedReply(userId, key, row.suggestedReplyText);
     if (!result.ok) { res.status(409).json({ error: 'Статус отправки требует проверки' }); return; }
     await finish('Ответ отправлен'); return;
@@ -2268,9 +2293,18 @@ apiRouter.post('/system-notifications/:id/android-action', requireAuth, asyncHan
   if (command === 'reply_send' && key.startsWith('mail-ai-reply:') && !key.endsWith(':sent')) {
     const row = await prisma.emailAnalysis.findFirst({ where: { id: parts[1], userId, suggestedReplyStatus: 'PENDING' } });
     if (!row?.suggestedReplyText) { res.status(409).json({ error: 'Ответ недоступен' }); return; }
+    const spec = await describeAndroidNotification(event);
+    if (!spec.commands.includes(command) || req.body?.replyHash !== notificationReplyHash(row.suggestedReplyText)) { res.status(409).json({ error: 'Ответ изменился. Откройте чат для проверки.' }); return; }
     const result = await deliverMailReply(userId, row.id, row.suggestedReplyText);
     if (!result.ok) { res.status(409).json({ error: 'Статус отправки требует проверки' }); return; }
     await finish('Ответ отправлен'); return;
+  }
+  if ((command === 'economic_approve' || command === 'economic_reject') && key.startsWith('economic-repeat:') && event.androidActionRef) {
+    const spec = await describeAndroidNotification(event);
+    if (!spec.commands.includes(command)) { res.status(409).json({ error: 'Предложение уже обработано' }); return; }
+    const result = command === 'economic_approve' ? await applyEconomicProposal(userId, event.androidActionRef) : await rejectEconomicProposal(userId, event.androidActionRef);
+    if (result.status !== (command === 'economic_approve' ? 'APPLIED' : 'REJECTED')) { res.status(409).json({ error: 'Не удалось обработать операцию' }); return; }
+    await finish(command === 'economic_approve' ? 'Операция записана' : 'Операция пропущена'); return;
   }
   res.status(400).json({ error: 'Действие недоступно для этого уведомления' });
 }));

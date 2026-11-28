@@ -10,7 +10,8 @@ data class AndroidSystemNotification(
     val taskId:String?=null,
     val content:String,
     val readAt:String?=null,
-    val createdAt:String=""
+    val createdAt:String="",
+    val androidActions:String?=null
 )
 @Serializable
 data class AndroidSystemNotificationFeed(
