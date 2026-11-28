@@ -18,6 +18,7 @@ test('Wake action and foreground service remain explicit and account-bound',asyn
   assert.match(main,/PlanikWakeDispatch.consume\(intent\)/);
   assert.match(home,/quickAiMode=="live"/);
   assert.match(home,/quickAiMode=="voice"/);
+  assert.match(main,/quickAiMode=if\(mode=="voice"\)"wake_voice" else "live"/);
   assert.match(manifest,/android:foregroundServiceType="microphone"/);
 });
 test('Compact live window hides the web workspace without destroying the session',async()=>{

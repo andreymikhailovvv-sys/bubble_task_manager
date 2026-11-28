@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
+import './android-planik-foreground-wake.test.js';
+import './android-planik-background-overlay.test.js';
 
 const read = (path: string) =>
   readFile(new URL(path, import.meta.url), 'utf8');

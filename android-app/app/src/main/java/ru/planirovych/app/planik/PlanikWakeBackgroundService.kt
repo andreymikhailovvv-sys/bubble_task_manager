@@ -88,6 +88,9 @@ class PlanikWakeBackgroundService : Service() {
         internal fun stop(context: Context) {
             context.stopService(Intent(context,PlanikWakeBackgroundService::class.java))
         }
+        internal fun stopOtherAccount(context:Context,id:String) {
+            if(activeAccount!=null && activeAccount!=id)stop(context)
+        }
     }
     private val prefs by lazy { getSharedPreferences("planik_foreground_wake",MODE_PRIVATE) }
     private var listener: ForegroundWakeListener?=null

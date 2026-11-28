@@ -266,6 +266,17 @@ internal fun rememberPlanikWake(accountId: String?, ready: Boolean): PlanikWakeC
             PlanikWakeBackgroundService.stop(context)
         }
     }
+    var requestedBackgroundAccount by remember { mutableStateOf<String?>(null) }
+    val requestBackgroundNotification = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        val requested=requestedBackgroundAccount
+        if(requested!=null && requested==currentAccount && granted && enabled) {
+            preferences.edit().putBoolean("background_" + requested,true).apply()
+            background=true
+        } else if(requested!=null && requested==currentAccount) {
+            status="Для фонового режима разрешите уведомления Android"
+        }
+        requestedBackgroundAccount=null
+    }
     val requestPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (requestedAccount != null && requestedAccount == currentAccount) {
             setConsent(granted)
@@ -274,8 +285,9 @@ internal fun rememberPlanikWake(accountId: String?, ready: Boolean): PlanikWakeC
         requestedAccount = null
     }
     DisposableEffect(owner, context, accountId, enabled, available, ready, background) {
-        if (accountId == null || !enabled || !background)
+        if (accountId == null || !enabled || !background || !available)
             PlanikWakeBackgroundService.stop(context)
+        else PlanikWakeBackgroundService.stopOtherAccount(context,accountId)
         if (!enabled || !available || !ready || accountId == null) {
             onDispose { }
         } else if (background) {
@@ -339,7 +351,8 @@ internal fun rememberPlanikWake(accountId: String?, ready: Boolean): PlanikWakeC
             if (accountId != null) {
                 if (value && Build.VERSION.SDK_INT >= 33 &&
                     ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                    status = "Разрешите уведомления в настройках Android для фонового режима"
+                    requestedBackgroundAccount=accountId
+                    requestBackgroundNotification.launch(Manifest.permission.POST_NOTIFICATIONS)
                 } else {
                     preferences.edit().putBoolean("background_" + accountId, value).apply()
                     background = value

@@ -98,7 +98,7 @@ class MainActivity:ComponentActivity(){
         notificationChatId=null
         notificationTaskChat=false
         notificationAccount=accountId
-        quickAiMode=mode
+        quickAiMode=if(mode=="voice")"wake_voice" else "live"
         openGeneralAi=mode=="live"
         quickAiRequestId++
     }

@@ -66,8 +66,9 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
     val context=LocalContext.current
     LaunchedEffect(vm) {
         ru.planirovych.app.planik.PlanikLiveUpdates.events.collect {
-            vm.reconcileAfterPlanik()
-            vm.refreshGeneralAi()
+            vm.reconcileAfterPlanik().join()
+            val chat=vm.generalAi.value
+            chat.selectedProjectId?.let { vm.syncGeneralAiThread(it,chat.selectedChatId) }
             vm.taskAi.value.taskId?.let { vm.syncTaskAiHistory(it) }
         }
     }
@@ -170,25 +171,13 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
     var quickNavigationHandled by remember(openGeneralAi,quickAiRequestId,notificationRequestId){mutableStateOf(false)}
     LaunchedEffect(openGeneralAi,quickAiMode,quickAiRequestId,sharedChat.projects,state.loading,notificationRequestId,state.user?.id){
         if(notificationAccount!=null && state.user?.id!=notificationAccount)return@LaunchedEffect
-        if(quickAiMode=="live" && quickAiRequestId>0 && !quickNavigationHandled && !state.loading && state.user!=null) {
-            val quickProject=sharedChat.projects.firstOrNull { p -> p.chats.any { it.id==QUICK_AI_THREAD_ID } }
-            if(quickProject==null) {
-                vm.loadGeneralAi(state.user?.id)
-                return@LaunchedEffect
-            }
+        if(quickAiMode=="live" || quickAiMode=="wake_voice")return@LaunchedEffect
+        if(quickAiMode=="voice" && quickAiRequestId>0 && !quickNavigationHandled && !state.loading){
             quickNavigationHandled=true
-            vm.chooseGeneralAiChat(quickProject.id,QUICK_AI_THREAD_ID)
-            pagerState.scrollToPage(2)
-            context.startActivity(ru.planirovych.app.planik.PlanikLiveActivity.intent(context,
-                projectId=quickProject.id,chatId=QUICK_AI_THREAD_ID,expectedUserId=state.user?.id))
             onQuickAiHandled(quickAiRequestId)
-        }else if(quickAiMode=="voice" && quickAiRequestId>0 && !quickNavigationHandled && !state.loading){
-            quickNavigationHandled=true
             voiceFromFinance=false
             pagerState.scrollToPage(0)
-            delay(350)
             voiceInput()
-            onQuickAiHandled(quickAiRequestId)
         }else if((openGeneralAi || quickAiMode!=null) && quickAiMode!="voice" && !quickNavigationHandled){
             pagerState.scrollToPage(2)
             // Widget result and scheduled checkup alerts must open Quick Requests,
@@ -236,6 +225,49 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
             taskAiChatId=null
             settings=false
         }
+    }
+    // Voice activation has a separate route from the widget: a project sync
+    // must not cancel a pending recording or cause the chat composer to open it twice.
+    val wakeProjectId=sharedChat.projects.firstOrNull { p -> p.chats.any { it.id==QUICK_AI_THREAD_ID } }?.id
+    LaunchedEffect(quickAiMode,quickAiRequestId,notificationAccount,state.user?.id,state.loading,
+        if(quickAiMode=="live")wakeProjectId else null) {
+        val mode=quickAiMode
+        val account=state.user?.id
+        if(mode !in listOf("live","wake_voice") || state.loading || account==null ||
+            notificationAccount!=account || quickNavigationHandled)return@LaunchedEffect
+        if(mode=="live" && wakeProjectId==null) {
+            vm.loadGeneralAi(account)
+            return@LaunchedEffect
+        }
+        settings=false
+        accountOpen=false
+        wardrobeOpen=false
+        creationType=null
+        createHabit=false
+        createNote=false
+        pendingFocusTaskId=null
+        openedTaskId=null
+        newSubtaskParentId=null
+        overlaySubtaskId=null
+        overlayNewSubtaskParentId=null
+        taskAiChatId=null
+        focusManager.clearFocus(force=true)
+        softwareKeyboard?.hide()
+        if(mode=="live") {
+            val projectId=wakeProjectId ?: return@LaunchedEffect
+            vm.chooseGeneralAiChat(projectId,QUICK_AI_THREAD_ID)
+            pagerState.scrollToPage(2)
+            quickNavigationHandled=true
+            context.startActivity(ru.planirovych.app.planik.PlanikLiveActivity.intent(context,
+                projectId=projectId,chatId=QUICK_AI_THREAD_ID,expectedUserId=account))
+        } else {
+            voiceFromFinance=false
+            pagerState.scrollToPage(0)
+            delay(350)
+            quickNavigationHandled=true
+            voiceInput()
+        }
+        onQuickAiHandled(quickAiRequestId)
     }
     // Never resume a previously focused chat input just because the user
     // switched back to Chats AI. A widget's explicit text command is different.
