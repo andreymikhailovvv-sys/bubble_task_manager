@@ -18,15 +18,15 @@ test('Wake action and foreground service remain explicit and account-bound',asyn
   assert.match(service,/startActivity\(wakeIntent\)/);
   assert.match(service,/PlanikWakeDispatch.pending\(wakeIntent\)/);
   assert.match(service,/current.recoverListening\(\)/);
-  assert.match(service,/allowLocked=mode==WAKE_ALWAYS/);
   assert.match(service,/unlocked && Settings.canDrawOverlays\(this\)/);
-  assert.match(service,/if\(!unlocked\)pendingLockedWake=wakeIntent/);
-  assert.match(service,/if\(wakeDeviceUnlocked\(this\)\)/);
   assert.match(service,/Intent.ACTION_USER_PRESENT/);
-  assert.match(service,/PowerManager.PARTIAL_WAKE_LOCK/);
-  assert.match(service,/releaseCpuLock\(\)/);
-  assert.match(manifest,/android.permission.WAKE_LOCK/);
-  assert.match(home,/Постоянное прослушивание/);
+  assert.doesNotMatch(service,/WAKE_ALWAYS|PARTIAL_WAKE_LOCK|pendingLockedWake/);
+  assert.doesNotMatch(manifest,/android.permission.WAKE_LOCK/);
+  assert.match(home,/Системный ассистент · эксперимент/);
+  assert.match(home,/PlanikVoiceSettingsSheet/);
+  assert.match(wake,/"always" -> WAKE_BACKGROUND/);
+  assert.match(wake,/listeningMode==WAKE_SYSTEM/);
+  assert.match(service,/wakeListeningMode\(prefs,account\)!=WAKE_BACKGROUND/);
   assert.match(home,/Фоновый режим/);
   assert.match(home,/Только в приложении/);
   assert.match(manifest,/android.permission.SYSTEM_ALERT_WINDOW/);
@@ -48,4 +48,30 @@ test('Compact live window hides the web workspace without destroying the session
   assert.match(live,/PlanikWakeMicGate.release\(this\)/);
   assert.match(home,/PlanikLiveUpdates.events.collect/);
   assert.match(manifest,/Theme.Planirovych.LiveOverlay/);
+});
+
+test('System assistant has a distinct opt-in route without persistent capture',async()=>{
+  const [wake, service, assistant, metadata, recognition, manifest, home, voice, general, task]=await Promise.all([
+    read(pkg+'planik/PlanikForegroundWake.kt'),read(pkg+'planik/PlanikWakeBackgroundService.kt'),
+    read(pkg+'planik/PlanikSystemAssistant.kt'),read('res/xml/planik_voice_interaction.xml'),
+    read('res/xml/planik_recognition_service.xml'),read('AndroidManifest.xml'),
+    read(pkg+'feature/home/HomeScreen.kt'),read(pkg+'feature/home/AiChatVoiceInput.kt'),
+    read(pkg+'feature/home/NativeGeneralAiChat.kt'),read(pkg+'feature/home/NativeTaskAiChat.kt')
+  ]);
+  assert.match(manifest,/android.permission.BIND_VOICE_INTERACTION/);
+  assert.match(metadata,/android:supportsAssist="true"/);
+  assert.match(metadata,/android:supportsLaunchVoiceAssistFromKeyguard="false"/);
+  assert.match(recognition,/android:selectableAsDefault="false"/);
+  assert.match(assistant,/VoiceInteractionService.isActiveService/);
+  assert.match(assistant,/wakeListeningMode\(prefs,account\)!=WAKE_SYSTEM/);
+  assert.match(assistant,/PlanikWakeDispatch.intent\(context,account,action\)/);
+  assert.match(assistant,/setDisabledShowContext/);
+  assert.doesNotMatch(assistant,/AudioRecord|MediaRecorder|startForegroundService|createAlwaysOnHotwordDetector/);
+  assert.match(wake,/listeningMode==WAKE_SYSTEM\) \{/);
+  assert.match(home,/clickable \{ planikSettings=true \}/);
+  assert.match(home,/Назначить Планировыч ассистентом/);
+  assert.match(voice,/native.start\(\)[\s\S]*?stage=VoiceRecordingStage.RECORDING\s+[\s\S]*?playVoiceInputStarted\(context\)/);
+  assert.match(voice,/TONE_PROP_BEEP,110/);
+  assert.match(voice,/RINGER_MODE_NORMAL/);
+  for(const chat of [general,task])assert.match(chat,/end = 0\.dp, bottom = \(composerHeight - 29\.dp\)/);
 });

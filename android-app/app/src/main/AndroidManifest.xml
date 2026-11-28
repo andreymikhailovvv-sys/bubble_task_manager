@@ -1,8 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    <!-- Only held during explicitly enabled experimental always-on listening. -->
-    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Optional user-granted permission for opening the assistant from background. -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
@@ -28,6 +26,20 @@
             android:exported="false" android:windowSoftInputMode="adjustResize" />
         <service android:name=".planik.PlanikWakeBackgroundService" android:exported="false"
             android:foregroundServiceType="microphone" android:stopWithTask="true" />
+        <!-- User-selected assistant, not an ordinary exported microphone service. -->
+        <service android:name=".planik.PlanikVoiceInteractionService"
+            android:exported="true" android:permission="android.permission.BIND_VOICE_INTERACTION"
+            android:label="Планик">
+            <intent-filter><action android:name="android.service.voice.VoiceInteractionService" /></intent-filter>
+            <meta-data android:name="android.voice_interaction" android:resource="@xml/planik_voice_interaction" />
+        </service>
+        <service android:name=".planik.PlanikVoiceSessionService"
+            android:exported="true" android:permission="android.permission.BIND_VOICE_INTERACTION" />
+        <service android:name=".planik.PlanikAssistantRecognitionService"
+            android:exported="true" android:permission="android.permission.BIND_VOICE_INTERACTION">
+            <intent-filter><action android:name="android.speech.RecognitionService" /></intent-filter>
+            <meta-data android:name="android.speech" android:resource="@xml/planik_recognition_service" />
+        </service>
         <activity android:name=".MainActivity" android:exported="true"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>

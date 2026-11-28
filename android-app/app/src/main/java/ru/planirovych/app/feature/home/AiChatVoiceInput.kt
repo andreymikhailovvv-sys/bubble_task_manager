@@ -120,6 +120,9 @@ internal fun rememberAiChatSpeechInput(
             elapsedSeconds=0
             amplitude=0f
             stage=VoiceRecordingStage.RECORDING
+            // One cue only after the actual recording starts. Respect the
+            // system stream/ringer; no volume changes or background beeps.
+            playVoiceInputStarted(context)
         }catch(error:Exception){
             releaseRecorder(true)
             errorCallback("Не удалось включить запись. Проверьте доступ к микрофону.")
@@ -566,3 +569,19 @@ internal fun MiniAppAiSendIcon(tint:Color){
 internal fun appendAiDictation(draft:String,recognized:String):String =
     listOf(draft.trimEnd(),recognized.trim())
         .filter{it.isNotBlank()}.joinToString(" ")
+
+private fun playVoiceInputStarted(context:android.content.Context) {
+    runCatching {
+        val audio=context.getSystemService(android.media.AudioManager::class.java)
+        if(audio.ringerMode!=android.media.AudioManager.RINGER_MODE_NORMAL ||
+            audio.getStreamVolume(android.media.AudioManager.STREAM_SYSTEM)==0)return
+        val tone=android.media.ToneGenerator(android.media.AudioManager.STREAM_SYSTEM,65)
+        try {
+            tone.startTone(android.media.ToneGenerator.TONE_PROP_BEEP,110)
+        } finally {
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                runCatching { tone.release() }
+            },250L)
+        }
+    }
+}
