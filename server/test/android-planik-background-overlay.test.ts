@@ -64,7 +64,10 @@ test('System assistant has a distinct opt-in route without persistent capture',a
   assert.match(recognition,/android:selectableAsDefault="false"/);
   assert.match(assistant,/VoiceInteractionService.isActiveService/);
   assert.match(assistant,/wakeListeningMode\(prefs,account\)!=WAKE_SYSTEM/);
-  assert.match(assistant,/PlanikWakeDispatch.intent\(context,account,action\)/);
+  assert.match(assistant,/return Invocation\(account,action\)/);
+  assert.match(assistant,/surface\?\.show\(PlanikSystemAssistant.invocation\(appContext\)\)/);
+  assert.match(assistant,/clearFlags\(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND\)/);
+  assert.doesNotMatch(assistant,/Открыть Планика/);
   assert.match(assistant,/setDisabledShowContext/);
   assert.doesNotMatch(assistant,/AudioRecord|MediaRecorder|startForegroundService|createAlwaysOnHotwordDetector/);
   assert.match(wake,/listeningMode==WAKE_SYSTEM\) \{/);
@@ -74,4 +77,21 @@ test('System assistant has a distinct opt-in route without persistent capture',a
   assert.match(voice,/TONE_PROP_BEEP,110/);
   assert.match(voice,/RINGER_MODE_NORMAL/);
   for(const chat of [general,task])assert.match(chat,/end = 0\.dp, bottom = \(composerHeight - 29\.dp\)/);
+});
+
+test('System invocation uses a bottom overlay and tears down audio on dismissal',async()=>{
+  const [session,panel]=await Promise.all([read(pkg+'planik/PlanikSystemAssistant.kt'),read(pkg+'planik/PlanikAssistantPanel.kt')]);
+  assert.match(session,/override fun onHide\(\) \{\s*surface\?\.close\(\)/);
+  assert.match(panel,/Gravity.BOTTOM/);
+  assert.match(panel,/translationY\(0f\)/);
+  assert.match(panel,/PlanikWakeMicGate.acquire\(this\)/);
+  assert.match(panel,/PlanikWakeMicGate.release\(this\)/);
+  assert.match(panel,/repository.transcribeVoice/);
+  assert.match(panel,/repository.askGeneralAi/);
+  assert.match(panel,/encodedPath\("\/android-planik"\)/);
+  assert.match(panel,/CookieManager.getInstance\(\)/);
+  assert.match(panel,/previous.isNotEmpty\(\) && previous!=expected/);
+  assert.match(panel,/current.id!=request.account/);
+  assert.match(panel,/view.destroy\(\)/);
+  assert.doesNotMatch(panel,/startActivity\(/);
 });

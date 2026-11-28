@@ -570,7 +570,7 @@ internal fun appendAiDictation(draft:String,recognized:String):String =
     listOf(draft.trimEnd(),recognized.trim())
         .filter{it.isNotBlank()}.joinToString(" ")
 
-private fun playVoiceInputStarted(context:android.content.Context) {
+internal fun playVoiceInputStarted(context:android.content.Context) {
     runCatching {
         val audio=context.getSystemService(android.media.AudioManager::class.java)
         if(audio.ringerMode!=android.media.AudioManager.RINGER_MODE_NORMAL ||
