@@ -57,8 +57,8 @@ test('Android launcher uses real static SVG artwork, animated natively instead o
   assert.match(manifest, /\.planik\.PlanikLiveActivity/);
   assert.match(manifest, /android:exported="false"/);
   assert.match(build, /com\.caverock:androidsvg:1\.4/);
-  assert.match(build, /versionCode = 27/);
-  assert.match(build, /versionName = "1\.0\.25"/);
+  assert.match(build, /versionCode = 28/);
+  assert.match(build, /versionName = "1\.0\.26"/);
 });
 
 test('Realtime WebView has visible loading, diagnostics, first-party cookies and retry instead of blank', async () => {
