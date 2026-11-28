@@ -147,7 +147,7 @@ object AndroidNotificationDelivery {
                 List(array.length()){index->array.getString(index)}
             }.getOrDefault(emptyList()).toMutableList()
             if(id in seen)return@withLock
-            publish(context,recipient,id,content,data["taskId"],data["eventKey"],data["androidActions"])
+            publish(context,recipient,id,content,data["taskId"]?.takeIf{it.isNotBlank()},data["eventKey"],data["androidActions"])
             seen.add(id)
             prefs.edit().putString("seen",JSONArray(seen.distinct().takeLast(SEEN_MAX)).toString()).apply()
         }
@@ -204,6 +204,7 @@ object AndroidNotificationDelivery {
                     addAction(button.build())
                 }
                 if(spec.loanId!=null)addAction(Notification.Action.Builder(null,"Отметить оплату",pending).build())
+                if(spec.actions.any{it.first=="reply_send"})addAction(Notification.Action.Builder(null,"Изменить",pending).build())
                 if(spec.actions.isNotEmpty() || taskId!=null || spec.habitId!=null || spec.openAi || spec.loanId!=null)
                     addAction(Notification.Action.Builder(null,"Открыть",pending).build())
             }

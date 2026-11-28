@@ -2,6 +2,9 @@ package ru.planirovych.app.notifications
 
 import android.app.Notification
 import android.app.NotificationManager
+import android.app.PendingIntent
+import android.net.Uri
+import ru.planirovych.app.MainActivity
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -40,12 +43,10 @@ internal data class NotificationActionSpec(
                 val match=Regex("""Сегодня:\s*(\d+)/(\d+)""").find(content)
                 val progress=match?.groupValues?.get(1)?.toIntOrNull()?:0
                 val max=match?.groupValues?.get(2)?.toIntOrNull()?:0
-                return NotificationActionSpec(habitId=parts[1],progress=progress,max=max,
-                    actions=if(max>0&&progress>=max)emptyList() else listOf(
-                        "habit_done" to if(max>1)"Отметить +1" else "Выполнено","snooze" to "Через 30 мин"))
+                return NotificationActionSpec(habitId=parts[1],progress=progress,max=max)
             }
             if(!taskId.isNullOrBlank()&&(key.startsWith("reminder:")||key.endsWith(":upcoming")||key.endsWith(":overdue")))
-                return NotificationActionSpec(actions=listOf("task_done" to "Выполнить","snooze" to "Через 30 мин"))
+                return NotificationActionSpec()
             // Old-server fallback must not offer unverified assistant mutations.
             if(key.startsWith("telegram-ai-")||key.startsWith("mail-ai-"))return NotificationActionSpec(openAi=true)
             if(key.startsWith("monitoring:"))return NotificationActionSpec(taskChat=true)
@@ -79,11 +80,17 @@ class NotificationActionWorker(context:Context,params:WorkerParameters):Coroutin
         val repo=(applicationContext as PlanirovychApplication).repository
         val manager=applicationContext.getSystemService(NotificationManager::class.java)
         val notificationId=(account+":"+id).hashCode()
+        val open=PendingIntent.getActivity(applicationContext,notificationId,
+            Intent(applicationContext,MainActivity::class.java).apply{
+                data=Uri.parse("planirovych://notification/"+Uri.encode(id))
+                flags=Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            },PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE)
         fun show(message:String,progress:Int=0,max:Int=0){
             if(prefs.getString("user",null)==account&&AndroidNotificationDelivery.canNotify(applicationContext))
                 manager.notify(notificationId,Notification.Builder(applicationContext,"planirovych_system_events")
                     .setSmallIcon(R.drawable.ic_stat_planirovych).setContentTitle("Планировыч")
                     .setContentText(message).apply{if(max>0)setProgress(max,progress.coerceIn(0,max),false)}
+                    .apply{if(open!=null){setContentIntent(open);addAction(Notification.Action.Builder(null,"Открыть",open).build())}}
                     .setVisibility(Notification.VISIBILITY_PRIVATE).setAutoCancel(true).setOnlyAlertOnce(true).build())
         }
         try{
