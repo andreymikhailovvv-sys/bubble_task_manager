@@ -239,7 +239,7 @@ struct NativeEconomicView: View {
                                          startPoint: .topLeading, endPoint: .bottomTrailing))
                     .frame(width: 59, height: 59)
                 if awaitingVoice {
-                    ProgressView().tint(.white).scaleEffect(1.2)
+                    NativeAIWaitingIcon(tint: .white).frame(width: 44, height: 44)
                 } else {
                     Image(systemName: "plus")
                         .font(.system(size: 28, weight: .medium))
@@ -273,17 +273,24 @@ struct NativeEconomicView: View {
     }
 
     private func metric(_ title: String, amount: String, icon: String,
-                        tint: Color = .primary) -> some View {
+                        tint: Color = .primary, category: String? = nil) -> some View {
         card {
             Image(systemName: icon)
                 .font(.title3)
                 .foregroundStyle(gold)
             Text(title).font(.caption).foregroundStyle(.secondary)
-            Text(EcoMoney.formatted(amount))
-                .font(.system(size: 19, weight: .bold, design: .rounded))
-                .minimumScaleFactor(0.7)
-                .lineLimit(1)
-                .foregroundStyle(tint)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(category ?? EcoMoney.formatted(amount))
+                    .font(.system(size: 19, weight: .bold, design: .rounded))
+                    .minimumScaleFactor(0.65)
+                    .lineLimit(1)
+                    .foregroundStyle(tint)
+                if category != nil {
+                    Text(EcoMoney.formatted(amount))
+                        .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                }
+            }
+            .frame(height: 42, alignment: .topLeading)
         }
     }
 
@@ -306,15 +313,8 @@ struct NativeEconomicView: View {
             HStack(alignment: .top, spacing: 10) {
                 metric("Расходы за месяц", amount: data.totals.monthExpenseMinor,
                        icon: "arrow.up.right", tint: .orange)
-                card {
-                    Image(systemName: "chart.bar.xaxis")
-                        .font(.title3).foregroundStyle(gold)
-                    Text("Главная категория").font(.caption).foregroundStyle(.secondary)
-                    Text(data.totals.topExpenseCategory ?? "Нет расходов")
-                        .font(.subheadline.bold()).lineLimit(1)
-                    Text(EcoMoney.formatted(data.totals.topExpenseCategoryMinor))
-                        .font(.caption.weight(.medium)).foregroundStyle(.secondary)
-                }
+                metric("Главная категория", amount: data.totals.topExpenseCategoryMinor ?? "0",
+                       icon: "chart.bar.xaxis", category: data.totals.topExpenseCategory ?? "Нет расходов")
             }
             card {
                 sectionHeader("Мои счета", action: "Все счета") { section = .accounts }

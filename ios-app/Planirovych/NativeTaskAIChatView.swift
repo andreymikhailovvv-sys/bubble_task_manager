@@ -64,6 +64,9 @@ struct NativeTaskAIChatView: View {
                             proxy.scrollTo("taskai-\(count - 1)", anchor: .bottom)
                         }
                     }
+                    .onChange(of: isSending) { _, sending in
+                        if sending { proxy.scrollTo("taskai-stream", anchor: .bottom) }
+                    }
                     .onChange(of: previewText) { _, _ in
                         proxy.scrollTo("taskai-stream", anchor: .bottom)
                     }
@@ -181,10 +184,13 @@ struct NativeTaskAIChatView: View {
                 Text(mine ? "Вы" : "Планировыч")
                     .font(.caption2.bold())
                     .foregroundStyle(mine ? Color.white.opacity(0.85) : accent)
-                markdown(message.content)
+                markdown(mine ? message.content : NativeTaskReferences.clean(message.content))
                     .font(.system(size: 15))
                     .foregroundStyle(mine ? Color.white : Color.primary)
                     .textSelection(.enabled)
+                if !mine {
+                    NativeTaskReferenceButtons(session: session, content: message.content)
+                }
                 if !mine, let doc = message.generatedDocument {
                     if doc.isImage {
                         NativeGeneratedImageCard(document: doc)
@@ -220,31 +226,9 @@ struct NativeTaskAIChatView: View {
         }
     }
 
-    private func progressLabel(_ status: String?) -> String {
-        switch status {
-        case "analyzing_request": return "Анализирую задачу"
-        case "searching_subtasks": return "Ищу подзадачи"
-        case "searching_files": return "Ищу файлы"
-        case "reading_file": return "Изучаю документ"
-        case "forming_answer": return "Формирую ответ"
-        case "applying_changes": return "Вношу изменения"
-        case "generating_image": return "Создаю изображение"
-        default: return "Работаю над задачей"
-        }
-    }
-
     private var streamingBubble: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Image(systemName: "sparkles")
-                    .foregroundStyle(accent)
-                    .symbolEffect(.pulse, options: .repeating)
-                Text(progressLabel(status))
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                Spacer()
-                ProgressView().controlSize(.mini)
-            }
+            NativeAIProgressHeader(status: status, tint: accent)
             if status == "generating_image" || status == "editing_image" {
                 Image(systemName: "photo.artframe")
                     .font(.system(size: 40, weight: .ultraLight))
@@ -254,7 +238,7 @@ struct NativeTaskAIChatView: View {
                     .symbolEffect(.pulse, options: .repeating)
             }
             if !previewText.isEmpty {
-                markdown(previewText)
+                markdown(NativeTaskReferences.clean(previewText))
                     .font(.system(size: 15))
                     .textSelection(.enabled)
             }

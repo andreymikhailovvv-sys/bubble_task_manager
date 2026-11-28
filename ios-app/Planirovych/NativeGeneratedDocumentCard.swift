@@ -71,7 +71,10 @@ struct NativeGeneratedDocumentCard: View {
         .padding(13)
         .background(Color(uiColor: .secondarySystemGroupedBackground),
                     in: RoundedRectangle(cornerRadius: 17))
-        .task(id: document.id) { await load() }
+        .onChange(of: document.id) { _, _ in
+            url = nil
+            errorText = nil
+        }
     }
 
     private func load() async {

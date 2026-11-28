@@ -182,8 +182,8 @@ struct RemoteWorkspaceView: View {
             showOverdue = false; showSectorSettings = false; showAccount = false
             showAppSettings = false; showTaskFilters = false; searchFocused = false
         }
-        .onChange(of: session.firstChatReactionSerial) { _, _ in
-            if quickAIWaiting {
+        .onChange(of: session.isSendingChat) { _, sending in
+            if sending && quickAIWaiting {
                 selectedTab = .chat
                 quickAIWaiting = false
             }
@@ -879,17 +879,12 @@ struct RemoteWorkspaceView: View {
                     ], startPoint: .topLeading, endPoint: .bottomTrailing))
                     .frame(width: 58, height: 58)
                 if quickAIWaiting {
-                    Circle()
-                        .trim(from: 0.05, to: 0.8)
-                        .stroke(.white.opacity(0.9), style: StrokeStyle(lineWidth: 3, lineCap: .round))
-                        .frame(width: 42, height: 42)
-                        .rotationEffect(.degrees(quickAIWaiting ? 360 : 0))
-                        .animation(.linear(duration: 1.1).repeatForever(autoreverses: false),
-                                   value: quickAIWaiting)
+                    NativeAIWaitingIcon(tint: .white).frame(width: 44, height: 44)
+                } else {
+                    Image(systemName: "plus")
+                        .font(.system(size: 27, weight: .semibold))
+                        .foregroundStyle(.white)
                 }
-                Image(systemName: quickAIWaiting ? "sparkles" : "plus")
-                    .font(.system(size: 27, weight: .semibold))
-                    .foregroundStyle(.white)
             }
             .shadow(color: Color.purple.opacity(0.25), radius: 12, y: 6)
         }
