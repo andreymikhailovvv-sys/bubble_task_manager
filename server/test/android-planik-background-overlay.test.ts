@@ -22,10 +22,10 @@ test('Wake action and foreground service remain explicit and account-bound',asyn
   assert.match(service,/Intent.ACTION_USER_PRESENT/);
   assert.doesNotMatch(service,/WAKE_ALWAYS|PARTIAL_WAKE_LOCK|pendingLockedWake/);
   assert.doesNotMatch(manifest,/android.permission.WAKE_LOCK/);
-  assert.match(home,/Системный ассистент · эксперимент/);
+  assert.match(home,/PlanikSystemSettingsSheet/);
   assert.match(home,/PlanikVoiceSettingsSheet/);
   assert.match(wake,/"always" -> WAKE_BACKGROUND/);
-  assert.match(wake,/listeningMode==WAKE_SYSTEM/);
+  assert.match(wake,/systemEnabled && available/);
   assert.match(service,/wakeListeningMode\(prefs,account\)!=WAKE_BACKGROUND/);
   assert.match(home,/Фоновый режим/);
   assert.match(home,/Только в приложении/);
@@ -64,14 +64,14 @@ test('System assistant has a distinct opt-in route without persistent capture',a
   assert.match(metadata,/android:supportsLaunchVoiceAssistFromKeyguard="false"/);
   assert.match(recognition,/android:selectableAsDefault="false"/);
   assert.match(assistant,/VoiceInteractionService.isActiveService/);
-  assert.match(assistant,/wakeListeningMode\(prefs,account\)!=WAKE_SYSTEM/);
+  assert.match(assistant,/!systemAssistantEnabled\(prefs,account\)/);
   assert.match(assistant,/return Invocation\(account,action\)/);
   assert.match(assistant,/surface\?\.show\(PlanikSystemAssistant.invocation\(appContext\)\)/);
   assert.match(assistant,/clearFlags\(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND\)/);
   assert.doesNotMatch(assistant,/Открыть Планика/);
   assert.match(assistant,/setDisabledShowContext/);
   assert.doesNotMatch(assistant,/AudioRecord|MediaRecorder|startForegroundService|createAlwaysOnHotwordDetector/);
-  assert.match(wake,/listeningMode==WAKE_SYSTEM\) \{/);
+  assert.match(wake,/DisposableEffect\(accountId,systemEnabled,available,ready\)/);
   assert.match(home,/clickable \{ planikSettings=true \}/);
   assert.match(home,/Назначить Планировыч ассистентом/);
   assert.match(voice,/native.start\(\)[\s\S]*?stage=VoiceRecordingStage.RECORDING\s+[\s\S]*?playVoiceInputStarted\(context\)/);
@@ -106,7 +106,7 @@ test('System panel has stable insets, gesture expansion, markdown, real progress
   assert.match(panel,/WindowInsetsCompat.Type.mandatorySystemGestures/);
   assert.match(panel,/params.bottomMargin=bottomInset/);
   assert.match(panel,/panel.translationY=\(panel.height\+bottomInset\+dp\(24\)\)/);
-  assert.match(panel,/setDuration\(430\)/);
+  assert.match(panel,/setDuration\(560\)/);
   assert.match(panel,/MotionEvent.ACTION_MOVE/);
   assert.match(panel,/settle\(true\)/);
   assert.match(panel,/dismissAnimated\(\)/);
@@ -142,4 +142,31 @@ test('System voice result includes inline owner-verified proposal cards',async()
   assert.match(cards,/"APPLIED"->/);
   assert.match(cards,/confirm\("undo"\)/);
   assert.match(cards,/confirm\("reject"\)/);
+});
+
+test('Independent system and phrase opt-ins, smooth waveform and pause endpointer',async()=>{
+  const [wake,assistant,home,panel,pause]=await Promise.all([
+    read(pkg+'planik/PlanikForegroundWake.kt'),read(pkg+'planik/PlanikSystemAssistant.kt'),
+    read(pkg+'feature/home/HomeScreen.kt'),read(pkg+'planik/PlanikAssistantPanel.kt'),
+    read(pkg+'planik/PlanikSpeechPause.kt')
+  ]);
+  assert.match(wake,/putBoolean\("system_enabled_"\+accountId,value\)/);
+  assert.match(wake,/putBoolean\("enabled_" \+ accountId, value\)/);
+  assert.match(wake,/fun migrateWakeSettings/);
+  assert.doesNotMatch(wake,/WAKE_SYSTEM/);
+  assert.match(assistant,/systemAssistantAction\(prefs,account\)/);
+  assert.match(wake,/prefs.getString\("system_action_"\+accountId,"live"\)/);
+  assert.match(wake,/DisposableEffect\(preferences, accountId\) \{[\s\S]*?accountId\?\.let \{ migrateWakeSettings\(preferences,it\) \}/);
+  assert.doesNotMatch(wake,/remember\([^)]*\) \{[^\n]*migrateWakeSettings/);
+  assert.match(wake,/mutableStateOf\(accountId != null && preferences.getBoolean\("enabled_" \+ accountId, false\) &&\s*preferences.getString\("mode_" \+ accountId,null\)!="system"\)/);
+  assert.match(home,/Switch\(checked=planikWake.systemEnabled/);
+  assert.match(home,/Switch\(checked=planikWake.enabled/);
+  assert.match(home,/Text\("Эй, Планик"\)\s+Text\("›"/);
+  assert.match(panel,/panel.doOnPreDraw/);
+  assert.match(panel,/launchGlow.animate\(\)/);
+  assert.match(panel,/postInvalidateOnAnimation\(\)/);
+  assert.match(panel,/silence.sample\(now,amplitude\)/);
+  assert.match(panel,/button\("Отправить"\)/);
+  assert.match(pause,/speechRun>=240L/);
+  assert.match(pause,/hasSpeech && lastSpeech>0L && now-lastSpeech>=1800L/);
 });

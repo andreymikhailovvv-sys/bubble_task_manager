@@ -26,6 +26,9 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.RadialGradient
+import android.graphics.Shader
+import androidx.core.view.doOnPreDraw
 import android.graphics.drawable.GradientDrawable
 import android.media.MediaRecorder
 import android.os.Handler
@@ -122,11 +125,13 @@ internal class PlanikAssistantPanel(
         setPadding(dp(16),dp(6),dp(16),dp(16))
         isClickable=true
     }
+    private val launchGlow=LaunchGlow(context).apply {alpha=0f;importantForAccessibility=View.IMPORTANT_FOR_ACCESSIBILITY_NO}
     val root=FrameLayout(context).apply {
         setBackgroundColor(Color.TRANSPARENT)
         isClickable=true
         setOnClickListener { dismissAnimated() }
-        addView(panel,FrameLayout.LayoutParams(-1,dp(330),Gravity.BOTTOM).apply {
+        addView(launchGlow,FrameLayout.LayoutParams(-1,-1))
+        addView(panel,FrameLayout.LayoutParams(-1,dp(370),Gravity.BOTTOM).apply {
             setMargins(dp(12),0,dp(12),dp(36))
         })
         panel.visibility=View.INVISIBLE
@@ -146,7 +151,7 @@ internal class PlanikAssistantPanel(
         ?:context.resources.displayMetrics.heightPixels).coerceAtLeast(dp(160))
     private fun targetHeight(open:Boolean):Int {
         val available=(screenHeight()-bottomInset-dp(16)).coerceAtLeast(dp(120))
-        val compact=dp(if(request?.action=="live")420 else 350).coerceAtMost((available*.85f).toInt())
+        val compact=dp(if(request?.action=="live")420 else 370).coerceAtMost((available*.85f).toInt())
         return if(open)maxOf(compact,(available*.69f).toInt()).coerceAtMost(available) else compact
     }
     private fun setPanelHeight(value:Int) {
@@ -290,14 +295,21 @@ internal class PlanikAssistantPanel(
         root.setBackgroundColor(Color.TRANSPARENT)
         applyGeometry()
         val token=generation
-        panel.post {
-            if(!active || generation!=token || closing)return@post
+        // Wait for measured layout before the first visible frame.
+        panel.doOnPreDraw {
+            if(!active || generation!=token || closing)return@doOnPreDraw
             panel.translationY=(panel.height+bottomInset+dp(24)).toFloat()
-            panel.alpha=1f
+            panel.alpha=0f
             panel.visibility=View.VISIBLE
-            panel.animate().translationY(0f).setDuration(430)
-                .setInterpolator(PathInterpolator(.16f,1f,.3f,1f))
+            panel.animate().translationY(0f).alpha(1f).setDuration(560)
+                .setInterpolator(PathInterpolator(.22f,.72f,.22f,1f))
                 .withEndAction {entering=false}.start()
+            launchGlow.animate().cancel()
+            launchGlow.alpha=0f
+            launchGlow.animate().alpha(.76f).setDuration(210).withEndAction {
+                if(active && generation==token && !closing)
+                    launchGlow.animate().alpha(0f).setDuration(520).start()
+            }.start()
         }
     }
 
@@ -313,7 +325,7 @@ internal class PlanikAssistantPanel(
             contentDescription="Планик"
             scaleType=ImageView.ScaleType.FIT_CENTER
         }
-        body.addView(mascot,LinearLayout.LayoutParams(-1,dp(if(compact)100 else 118)).apply {
+        body.addView(mascot,LinearLayout.LayoutParams(-1,if(compact)dp(112) else 0,if(compact)0f else 1f).apply {
             gravity=Gravity.CENTER_HORIZONTAL
         })
         mascotFloat=ObjectAnimator.ofPropertyValuesHolder(mascot,
@@ -332,11 +344,15 @@ internal class PlanikAssistantPanel(
                         val action=planikActionSvg(state,index==1)
                         // Existing drawing is centered on x=215; symmetric padding
                         // prevents both asymmetric alignment and clipped accessories.
-                        val svg=source.replace(Regex("viewBox=\\\"[^\\\"]+\\\""),"viewBox=\"-10 -30 450 365\"")
+                        // Crop around the visible body, not the asymmetric SVG canvas.
+                        val bounds=if(state=="idle")"95 20 240 240" else "45 -10 340 340"
+                        val svg=source.replace(Regex("""viewBox="[^"]+""""),"viewBox=\"$bounds\"")
+                            .replaceFirst(Regex("""width="[^"]+""""),"width=\"420\"")
+                            .replaceFirst(Regex("""height="[^"]+""""),"height=\"420\"")
                             .replace("</svg>",action+"</svg>")
                         runCatching {
-                            val picture=SVG.getFromString(svg).renderToPicture(450,365)
-                            Bitmap.createBitmap(450,365,Bitmap.Config.ARGB_8888).apply {Canvas(this).drawPicture(picture)}
+                            val picture=SVG.getFromString(svg).renderToPicture(420,420)
+                            Bitmap.createBitmap(420,420,Bitmap.Config.ARGB_8888).apply {Canvas(this).drawPicture(picture)}
                         }.getOrNull()
                     }
                 }
@@ -447,8 +463,7 @@ internal class PlanikAssistantPanel(
         controls.addView(button("Отмена"){dismissAnimated()},LinearLayout.LayoutParams(0,dp(46),1f).apply{marginEnd=dp(8)})
         val send=button("Отправить"){finishDictation(invocation,token)}
         controls.addView(send,LinearLayout.LayoutParams(0,dp(46),1f))
-        body.addView(View(context),LinearLayout.LayoutParams(-1,0,1f))
-        body.addView(controls,LinearLayout.LayoutParams(-1,-2))
+        body.addView(controls,LinearLayout.LayoutParams(-1,-2).apply {topMargin=dp(12)})
         try {
             val output=File.createTempFile("planik-system-voice-",".m4a",context.cacheDir)
             file=output
@@ -469,14 +484,27 @@ internal class PlanikAssistantPanel(
             return
         }
         scope?.launch {
+            val silence=PlanikSpeechPause()
+            var lastSecond=-1L
             while(valid(token) && recorder!=null) {
-                val elapsed=(SystemClock.elapsedRealtime()-startedAt)/1000L
-                status?.text="Слушаю · "+String.format(java.util.Locale.ROOT,"%02d:%02d",elapsed/60,elapsed%60)
+                val now=SystemClock.elapsedRealtime()
+                val elapsed=(now-startedAt)/1000L
+                if(elapsed!=lastSecond) {
+                    lastSecond=elapsed
+                    status?.text="Слушаю · "+String.format(java.util.Locale.ROOT,"%02d:%02d",elapsed/60,elapsed%60)
+                }
                 val amplitude=runCatching{recorder?.maxAmplitude?:0}.getOrDefault(0)
-                wave.level=(amplitude/16000f).coerceIn(0f,1f)
-                wave.invalidate()
-                if(elapsed>=120){finishDictation(invocation,token);break}
-                delay(75)
+                wave.level=(amplitude/12000f).coerceIn(0f,1f)
+                // Ignore the start cue; never auto-submit initial silence.
+                if(now-startedAt>=350L && silence.sample(now,amplitude)) {
+                    finishDictation(invocation,token);break
+                }
+                if(elapsed>=120){
+                    if(silence.hasSpeech)finishDictation(invocation,token)
+                    else fail("Речь не обнаружена. Вызовите Планика ещё раз.")
+                    break
+                }
+                delay(40)
             }
             if(active && generation==token && !wakeDeviceUnlocked(context))onClose()
         }
@@ -712,6 +740,8 @@ internal class PlanikAssistantPanel(
         heightAnimation?.cancel();heightAnimation=null
         panel.animate().cancel()
         root.animate().cancel()
+        launchGlow.animate().cancel()
+        launchGlow.alpha=0f
         root.alpha=1f
         panel.visibility=View.INVISIBLE
         panel.removeAllViews()
@@ -740,22 +770,41 @@ internal class PlanikAssistantPanel(
         }
     }
 
+    private class LaunchGlow(context:Context):View(context) {
+        private val paint=Paint(Paint.ANTI_ALIAS_FLAG)
+        override fun onSizeChanged(w:Int,h:Int,oldw:Int,oldh:Int) {
+            super.onSizeChanged(w,h,oldw,oldh)
+            if(w>0 && h>0)paint.shader=RadialGradient(w*.5f,h*.97f,maxOf(w,h)*.68f,
+                intArrayOf(0x996e56d5.toInt(),0x446bcbdc,Color.TRANSPARENT),
+                floatArrayOf(0f,.45f,1f),Shader.TileMode.CLAMP)
+        }
+        override fun onDraw(canvas:Canvas){canvas.drawRect(0f,0f,width.toFloat(),height.toFloat(),paint)}
+    }
+
     private class VoiceWave(context:Context):View(context) {
         var level=0f
+        private var smooth=0f
+        private var previousFrame=0L
         private val paint=Paint(Paint.ANTI_ALIAS_FLAG)
         override fun onDraw(canvas:Canvas) {
             super.onDraw(canvas)
+            val now=SystemClock.uptimeMillis()
+            val delta=if(previousFrame==0L)16L else (now-previousFrame).coerceIn(1L,64L)
+            previousFrame=now
+            val tau=if(level>smooth)55.0 else 145.0
+            smooth+=(level-smooth)*(1.0-kotlin.math.exp(-delta/tau)).toFloat()
             val step=width/31f
-            val time=SystemClock.uptimeMillis()/160.0
+            val time=now/185.0
             for(i in 0..30){
                 val envelope=1f-kotlin.math.abs(i-15)/17f
                 val pulse=(0.65+0.35*sin(time+i*.66)).toFloat()
-                val h=height*(.13f+level*.76f*pulse*envelope)
+                val h=height*(.10f+.045f*pulse+smooth*.80f*pulse*envelope)
                 paint.color=if(i%2==0)0xff8ee8e6.toInt() else 0xffa99bff.toInt()
-                paint.alpha=(90+level*155).toInt()
+                paint.alpha=(115+smooth*140).toInt()
                 val x=step*(i+.5f)
                 canvas.drawRoundRect(x-step*.19f,(height-h)/2,x+step*.19f,(height+h)/2,step*.2f,step*.2f,paint)
             }
+            if(isShown)postInvalidateOnAnimation()
         }
     }
 }
