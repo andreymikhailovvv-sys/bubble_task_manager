@@ -17,6 +17,18 @@ test('Wake action and foreground service remain explicit and account-bound',asyn
   assert.match(service,/Settings.canDrawOverlays\(this\)/);
   assert.match(service,/startActivity\(wakeIntent\)/);
   assert.match(service,/PlanikWakeDispatch.pending\(wakeIntent\)/);
+  assert.match(service,/current.recoverListening\(\)/);
+  assert.match(service,/allowLocked=mode==WAKE_ALWAYS/);
+  assert.match(service,/unlocked && Settings.canDrawOverlays\(this\)/);
+  assert.match(service,/if\(!unlocked\)pendingLockedWake=wakeIntent/);
+  assert.match(service,/if\(wakeDeviceUnlocked\(this\)\)/);
+  assert.match(service,/Intent.ACTION_USER_PRESENT/);
+  assert.match(service,/PowerManager.PARTIAL_WAKE_LOCK/);
+  assert.match(service,/releaseCpuLock\(\)/);
+  assert.match(manifest,/android.permission.WAKE_LOCK/);
+  assert.match(home,/Постоянное прослушивание/);
+  assert.match(home,/Фоновый режим/);
+  assert.match(home,/Только в приложении/);
   assert.match(manifest,/android.permission.SYSTEM_ALERT_WINDOW/);
   assert.match(service,/setSound\(null,null\); enableVibration\(false\)/);
   assert.match(main,/PlanikWakeDispatch.consume\(intent\)/);

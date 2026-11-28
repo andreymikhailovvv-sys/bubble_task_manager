@@ -9,6 +9,8 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
+import android.os.SystemClock
+import android.content.SharedPreferences
 import android.media.AudioRecord
 import android.media.AudioFormat
 import android.media.MediaRecorder
@@ -48,13 +50,32 @@ internal data class PlanikWakeControls(
     val available: Boolean,
     val status: String,
     val action: String,
-    val background: Boolean,
+    val listeningMode: String,
     val onAction: (String) -> Unit,
-    val onBackground: (Boolean) -> Unit,
+    val onListeningMode: (String) -> Unit,
     val autoOpen: Boolean,
     val onAutoOpen: () -> Unit,
     val onChange: (Boolean) -> Unit
 )
+
+internal const val WAKE_APP = "app"
+internal const val WAKE_BACKGROUND = "background"
+internal const val WAKE_ALWAYS = "always"
+
+internal fun wakeListeningMode(prefs:SharedPreferences, accountId:String):String =
+    prefs.getString("mode_" + accountId, null)
+        ?.takeIf { it in listOf(WAKE_APP,WAKE_BACKGROUND,WAKE_ALWAYS) }
+        ?: if(prefs.getBoolean("background_" + accountId, false)) WAKE_BACKGROUND else WAKE_APP
+
+internal fun saveWakeListeningMode(prefs:SharedPreferences, accountId:String, mode:String) {
+    require(mode in listOf(WAKE_APP,WAKE_BACKGROUND,WAKE_ALWAYS))
+    prefs.edit().putString("mode_" + accountId,mode)
+        .putBoolean("background_" + accountId,mode!=WAKE_APP).apply()
+}
+
+internal fun wakeDeviceUnlocked(context:Context):Boolean =
+    context.getSystemService(PowerManager::class.java).isInteractive &&
+        !context.getSystemService(KeyguardManager::class.java).isKeyguardLocked
 
 internal fun supported(context: Context): Boolean =
     Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
@@ -76,6 +97,7 @@ internal fun isPlanikWakePhrase(raw: String): Boolean {
 internal class ForegroundWakeListener(
     private val context: Context,
     private val onStatus: (String) -> Unit,
+    private val allowLocked: Boolean = false,
     private val onWake: () -> Unit
 ) {
     private val handler = Handler(Looper.getMainLooper())
@@ -86,17 +108,30 @@ internal class ForegroundWakeListener(
     private var foreground = false
     private var triggered = false
     private var failed = false
+    private var failures = 0
+    private var retryAt = 0L
+    @Volatile private var lastFrameAt = 0L
+    @Volatile private var capturing = false
     private val retry = Runnable { start() }
+    private val health = object : Runnable {
+        override fun run() {
+            if (!foreground) return
+            refresh()
+            handler.postDelayed(this, 5000L)
+        }
+    }
 
-    private fun screenAvailable(): Boolean =
-        context.getSystemService(PowerManager::class.java).isInteractive &&
-            !context.getSystemService(KeyguardManager::class.java).isKeyguardLocked
+    private fun screenAvailable(): Boolean = allowLocked || wakeDeviceUnlocked(context)
 
+    // Idempotent: do not tear down a healthy recorder on every Activity resume.
     fun resume() {
+        if (!foreground) triggered = false
         foreground = true
-        triggered = false
         failed = false
+        retryAt = 0L
         refresh()
+        handler.removeCallbacks(health)
+        handler.postDelayed(health, 5000L)
     }
 
     fun pause() {
@@ -108,17 +143,30 @@ internal class ForegroundWakeListener(
 
     fun refresh() {
         if (!foreground || PlanikWakeMicGate.busy || !screenAvailable()) {
-            release()
-            if (PlanikWakeMicGate.busy) triggered = false
-            onStatus("На паузе")
-        } else if (!triggered && !failed && worker == null) {
+            if(worker != null || recorder != null) release()
             handler.removeCallbacks(retry)
-            handler.postDelayed(retry, 400)
+            if (PlanikWakeMicGate.busy) triggered = false
+            onStatus(if (!screenAvailable()) "Пауза до разблокировки" else "На паузе")
+            return
+        }
+        if (triggered || failed) return
+        if (capturing && SystemClock.elapsedRealtime()-lastFrameAt>15_000L) {
+            fail("Микрофон не отвечает. Восстанавливаю прослушивание…", recoverable=true)
+            return
+        }
+        if (worker?.isAlive == false) {
+            worker = null
+            capturing = false
+        }
+        if (worker == null && !handler.hasCallbacks(retry)) {
+            handler.postDelayed(retry,maxOf(400L,retryAt-SystemClock.elapsedRealtime()))
         }
     }
 
     private fun release() {
         generation++
+        capturing = false
+        lastFrameAt = 0L
         handler.removeCallbacks(retry)
         synchronized(captureLock) {
             runCatching { recorder?.stop() }
@@ -128,10 +176,15 @@ internal class ForegroundWakeListener(
         worker = null
     }
 
-    private fun fail(message: String) {
+    private fun fail(message: String, recoverable:Boolean=false) {
         release()
-        failed = true
+        failed = !recoverable
         onStatus(message)
+        if(recoverable) {
+            failures = (failures+1).coerceAtMost(5)
+            retryAt = SystemClock.elapsedRealtime() + (2000L shl failures).coerceAtMost(60_000L)
+            refresh()
+        }
     }
 
     @SuppressLint("MissingPermission")
@@ -143,6 +196,8 @@ internal class ForegroundWakeListener(
             return
         }
         val session = ++generation
+        lastFrameAt = 0L
+        capturing = false
         fun active() = session == generation && !Thread.currentThread().isInterrupted
         fun report(message: String) {
             handler.post { if (session == generation) onStatus(message) }
@@ -175,8 +230,16 @@ internal class ForegroundWakeListener(
                     recorder = current
                     current.startRecording()
                     check(current.recordingState == AudioRecord.RECORDSTATE_RECORDING)
+                    lastFrameAt = SystemClock.elapsedRealtime()
+                    capturing = true
                 }
-                report("Планик слушает")
+                handler.post {
+                    if(session==generation) {
+                        failures=0
+                        retryAt=0L
+                        onStatus("Планик слушает")
+                    }
+                }
                 while (active()) {
                     val count = requireNotNull(input).read(buffer,0,buffer.size)
                     if (count < 0) {
@@ -184,6 +247,8 @@ internal class ForegroundWakeListener(
                         break
                     }
                     if (count == 0) continue
+                    if (!active()) break
+                    lastFrameAt = SystemClock.elapsedRealtime()
                     val recognition = requireNotNull(decoder)
                     // Final hypotheses only: avoid transient false matches.
                     if (recognition.acceptWaveForm(buffer,count)) {
@@ -197,7 +262,7 @@ internal class ForegroundWakeListener(
             } catch (error: Exception) {
                 if (active()) handler.post {
                     if (session == generation)
-                        fail("Не удалось запустить локальное распознавание. Проверьте интернет для модели и включите функцию повторно.")
+                        fail("Не удалось запустить распознавание. Повторяю подключение…", recoverable=true)
                 }
             } catch (error: LinkageError) {
                 if (active()) handler.post {
@@ -205,7 +270,10 @@ internal class ForegroundWakeListener(
                 }
             } finally {
                 synchronized(captureLock) {
-                    if (recorder === input) recorder = null
+                    if (recorder === input) {
+                        recorder = null
+                        capturing = false
+                    }
                     runCatching { input?.stop() }
                     runCatching { input?.release() }
                 }
@@ -213,9 +281,12 @@ internal class ForegroundWakeListener(
                 runCatching { model?.close() }
             }
             if (detected && active()) handler.post {
-                if (session != generation || !foreground || PlanikWakeMicGate.busy ||
-                    !screenAvailable()) return@post
+                if (session != generation) return@post
                 worker = null
+                if (!foreground || PlanikWakeMicGate.busy || !screenAvailable()) {
+                    refresh()
+                    return@post
+                }
                 triggered = true
                 onStatus("Планик услышал вас")
                 try {
@@ -247,7 +318,10 @@ internal fun rememberPlanikWake(accountId: String?, ready: Boolean): PlanikWakeC
         mutableStateOf(accountId != null && preferences.getBoolean("enabled_" + accountId, false))
     }
     var action by remember(accountId) { mutableStateOf(preferences.getString("action_" + accountId, "live") ?: "live") }
-    var background by remember(accountId) { mutableStateOf(accountId != null && preferences.getBoolean("background_" + accountId, false)) }
+    var listeningMode by remember(accountId) {
+        mutableStateOf(accountId?.let { wakeListeningMode(preferences,it) } ?: WAKE_APP)
+    }
+    val background = listeningMode != WAKE_APP
     val available = remember(context) { supported(context) }
     val activity = context as? ru.planirovych.app.MainActivity
     val latestAction by rememberUpdatedState(action)
@@ -264,8 +338,8 @@ internal fun rememberPlanikWake(accountId: String?, ready: Boolean): PlanikWakeC
     }
     DisposableEffect(preferences, accountId) {
         val observer = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (accountId != null && key == "background_" + accountId)
-                background = preferences.getBoolean(key, false)
+            if (accountId != null && (key == "background_" + accountId || key == "mode_" + accountId))
+                listeningMode = wakeListeningMode(preferences,accountId)
             if (accountId != null && key == "enabled_" + accountId)
                 enabled = preferences.getBoolean(key, false)
         }
@@ -285,11 +359,12 @@ internal fun rememberPlanikWake(accountId: String?, ready: Boolean): PlanikWakeC
         }
     }
     var requestedBackgroundAccount by remember { mutableStateOf<String?>(null) }
+    var requestedMode by remember { mutableStateOf(WAKE_BACKGROUND) }
     val requestBackgroundNotification = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         val requested=requestedBackgroundAccount
         if(requested!=null && requested==currentAccount && granted && enabled) {
-            preferences.edit().putBoolean("background_" + requested,true).apply()
-            background=true
+            saveWakeListeningMode(preferences,requested,requestedMode)
+            listeningMode=requestedMode
         } else if(requested!=null && requested==currentAccount) {
             status="Для фонового режима разрешите уведомления Android"
         }
@@ -302,7 +377,7 @@ internal fun rememberPlanikWake(accountId: String?, ready: Boolean): PlanikWakeC
         }
         requestedAccount = null
     }
-    DisposableEffect(owner, context, accountId, enabled, available, ready, background) {
+    DisposableEffect(owner, context, accountId, enabled, available, ready, listeningMode) {
         if (accountId == null || !enabled || !background || !available)
             PlanikWakeBackgroundService.stop(context)
         else PlanikWakeBackgroundService.stopOtherAccount(context,accountId)
@@ -358,23 +433,24 @@ internal fun rememberPlanikWake(accountId: String?, ready: Boolean): PlanikWakeC
         else -> status
     }
     return PlanikWakeControls(enabled, available && accountId != null, visibleStatus,
-        action, background,
+        action, listeningMode,
         onAction = { value ->
             if (accountId != null && value in listOf("live", "voice")) {
                 preferences.edit().putString("action_" + accountId, value).apply()
                 action = value
             }
         },
-        onBackground = { value ->
-            if (accountId != null) {
-                if (value && Build.VERSION.SDK_INT >= 33 &&
+        onListeningMode = { value ->
+            if (accountId != null && value in listOf(WAKE_APP,WAKE_BACKGROUND,WAKE_ALWAYS)) {
+                if (value != WAKE_APP && Build.VERSION.SDK_INT >= 33 &&
                     ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                     requestedBackgroundAccount=accountId
+                    requestedMode=value
                     requestBackgroundNotification.launch(Manifest.permission.POST_NOTIFICATIONS)
                 } else {
-                    preferences.edit().putBoolean("background_" + accountId, value).apply()
-                    background = value
-                    if (!value) PlanikWakeBackgroundService.stop(context)
+                    saveWakeListeningMode(preferences,accountId,value)
+                    listeningMode = value
+                    if (value == WAKE_APP) PlanikWakeBackgroundService.stop(context)
                 }
             }
         },

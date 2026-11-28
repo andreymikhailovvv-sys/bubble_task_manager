@@ -62,12 +62,12 @@ internal fun PlanikNativeLauncher(
     onClick: () -> Unit
 ) {
     val pressInteraction = remember { MutableInteractionSource() }
-    Box(modifier.size(width = 136.dp, height = 140.dp)) {
+    Box(modifier.size(width = 150.dp, height = 154.dp)) {
         if(skinId=="classic"&&!sharedArtwork&&variant=="planner") NativeMascotFallback(dark,mode,skinId,Modifier.fillMaxSize())
         else SharedMascotArtwork(skinId,dark,mode,Modifier.fillMaxSize(),variant)
           // A central clickable torso lets users scroll through empty corners.
         Box(Modifier.align(Alignment.Center).offset(y = 1.dp)
-            .size(width = 92.dp, height = 90.dp)
+            .size(width = 100.dp, height = 98.dp)
             .clip(RoundedCornerShape(22.dp))
             .clickable(enabled = enabled, interactionSource = pressInteraction,
                 indication = null, onClick = onClick)
