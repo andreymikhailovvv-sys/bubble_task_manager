@@ -517,7 +517,7 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit,
                     skinId = wardrobe?.plannerSkin(home.user?.id) ?: "classic",
                     mode = nativeChatMascotMode(busy,ui.streamText.isNotBlank(),ui.progressStatus),
                     modifier = Modifier.align(Alignment.BottomEnd)
-                        .padding(end = 13.dp, bottom = (composerHeight - 17.dp).coerceAtLeast(0.dp)),
+                        .padding(end = 0.dp, bottom = (composerHeight - 29.dp).coerceAtLeast(0.dp)),
                     onClick = {
                         planikLauncher.launch(PlanikLiveActivity.intent(
                             ctx, taskId = task.id, expectedUserId = home.user?.id

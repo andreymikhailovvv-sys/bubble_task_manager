@@ -895,6 +895,11 @@ private fun SettingsSheet(
     updateAvailable:Boolean=false,onCheckUpdates:()->Unit={},onOpenWardrobe:()->Unit={},
     planikWake:PlanikWakeControls
 ) {
+    var planikSettings by remember { mutableStateOf(false) }
+    if(planikSettings) {
+        PlanikVoiceSettingsSheet(planikWake) { planikSettings=false }
+        return
+    }
     // Open at the content's natural expanded height rather than the
     // half-screen anchor. It remains a wrap-content sheet, not fullscreen.
     val sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true)
@@ -935,51 +940,22 @@ private fun SettingsSheet(
                         uncheckedIconColor=Color(0xFF6D28D9)
                     ))
             }
-            Row(verticalAlignment=Alignment.CenterVertically) {
-                Icon(Icons.Default.Mic,null)
-                Column(Modifier.padding(start=10.dp,end=8.dp).weight(1f)) {
-                    Text("Эй, Планик")
-                    Text("Голосовой вызов Планика. Локальная модель загружается один раз (~45 МБ).",
-                        style=MaterialTheme.typography.bodySmall,
-                        color=MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(planikWake.status,style=MaterialTheme.typography.bodySmall,
-                        color=MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                Switch(checked=planikWake.enabled,
-                    enabled=planikWake.available || planikWake.enabled,
-                    onCheckedChange=planikWake.onChange)
-            }
-            if(planikWake.enabled) {
-                Text("Действие по фразе",style=MaterialTheme.typography.titleSmall)
-                listOf("live" to "Живое общение", "voice" to "Голосовой ввод").forEach { (value,label) ->
-                    Row(Modifier.fillMaxWidth().clickable { planikWake.onAction(value) },
+            Surface(shape=RoundedCornerShape(16.dp),color=MaterialTheme.colorScheme.surfaceVariant,
+                modifier=Modifier.fillMaxWidth()) {
+                Row(Modifier.fillMaxWidth().padding(horizontal=12.dp,vertical=8.dp),
+                    verticalAlignment=Alignment.CenterVertically) {
+                    Row(Modifier.weight(1f).clickable { planikSettings=true }.padding(vertical=6.dp),
                         verticalAlignment=Alignment.CenterVertically) {
-                        RadioButton(selected=planikWake.action==value,onClick={planikWake.onAction(value)})
-                        Text(label)
-                    }
-                }
-                Text("Режим прослушивания",style=MaterialTheme.typography.titleSmall)
-                listOf(
-                    Triple("app","Только в приложении","Микрофон активен только в открытом Планировыче."),
-                    Triple("background","Фоновый режим","Работает в других приложениях. На блокировке пауза, после разблокировки автоматически возобновляется."),
-                    Triple("always","Постоянное прослушивание","Экспериментально: включая выключенный экран. Повышенный расход аккумулятора. Для доступа к данным потребуется разблокировка.")
-                ).forEach { (value,label,description) ->
-                    Row(Modifier.fillMaxWidth().clickable { planikWake.onListeningMode(value) },
-                        verticalAlignment=Alignment.CenterVertically) {
-                        RadioButton(selected=planikWake.listeningMode==value,onClick={planikWake.onListeningMode(value)})
-                        Column(Modifier.weight(1f).padding(vertical=6.dp)) {
-                            Text(label)
-                            Text(description,style=MaterialTheme.typography.bodySmall,
-                                color=MaterialTheme.colorScheme.onSurfaceVariant)
+                        Icon(Icons.Default.Mic,null)
+                        Column(Modifier.padding(start=10.dp,end=8.dp).weight(1f)) {
+                            Text("Эй, Планик")
+                            Text(if(planikWake.enabled)planikWake.status else "Настройки голосового вызова",
+                                style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
                         }
+                        Text("›",style=MaterialTheme.typography.titleLarge)
                     }
-                }
-                if(planikWake.listeningMode!="app") {
-                    OutlinedButton(onClick=planikWake.onAutoOpen,modifier=Modifier.fillMaxWidth()) {
-                        Text(if(planikWake.autoOpen)"Автооткрытие разрешено · Настройки" else "Разрешить автооткрытие приложения")
-                    }
-                    if(!planikWake.autoOpen)Text("Без разрешения останется тихое уведомление по кодовой фразе.",
-                        style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                    Switch(checked=planikWake.enabled,enabled=planikWake.available || planikWake.enabled,
+                        onCheckedChange=planikWake.onChange)
                 }
             }
             OutlinedButton(onClick=onOpenWardrobe,enabled=user?.id!=null,modifier=Modifier.fillMaxWidth()){Text("Аксессуары и скины Планика")}
@@ -998,6 +974,76 @@ private fun SettingsSheet(
                         Text("Регистрация")
                     }
                 }
+            }
+            Spacer(Modifier.height(8.dp))
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PlanikVoiceSettingsSheet(wake:PlanikWakeControls,close:()->Unit) {
+    val sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true)
+    ModalBottomSheet(onDismissRequest=close,sheetState=sheetState) {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal=20.dp,vertical=12.dp),
+            verticalArrangement=Arrangement.spacedBy(12.dp)) {
+            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
+                Text("Эй, Планик",Modifier.weight(1f),style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.Bold)
+                TextButton(onClick=close){Text("Назад")}
+            }
+            Row(verticalAlignment=Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Голосовой вызов")
+                    Text(wake.status,style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Switch(checked=wake.enabled,enabled=wake.available||wake.enabled,onCheckedChange=wake.onChange)
+            }
+            Text("Действие при вызове",style=MaterialTheme.typography.titleSmall)
+            listOf("live" to "Живое общение", "voice" to "Голосовой ввод").forEach { (value,label) ->
+                Row(Modifier.fillMaxWidth().clickable(enabled=wake.enabled) { wake.onAction(value) },
+                    verticalAlignment=Alignment.CenterVertically) {
+                    RadioButton(selected=wake.action==value,enabled=wake.enabled,onClick={wake.onAction(value)})
+                    Text(label)
+                }
+            }
+            Text("Режим работы",style=MaterialTheme.typography.titleSmall)
+            listOf(
+                Triple("app","Только в приложении","Локальное распознавание «Эй, Планик» только в открытом Планировыче."),
+                Triple("background","Фоновый режим","Локальное распознавание в других приложениях. Пауза на блокировке, восстановление после разблокировки."),
+                Triple("system","Системный ассистент · эксперимент","Вызов системным жестом или кнопкой. Без постоянного захвата микрофона. Кодовая фраза пока недоступна.")
+            ).forEach { (value,label,description) ->
+                Row(Modifier.fillMaxWidth().clickable(enabled=wake.enabled) { wake.onListeningMode(value) },
+                    verticalAlignment=Alignment.CenterVertically) {
+                    RadioButton(selected=wake.listeningMode==value,enabled=wake.enabled,onClick={wake.onListeningMode(value)})
+                    Column(Modifier.weight(1f).padding(vertical=6.dp)) {
+                        Text(label)
+                        Text(description,style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+            if(wake.listeningMode=="system") {
+                Text(if(wake.systemSelected)"Планировыч выбран системным голосовым ассистентом." else "Назначьте Планировыч помощником Android вместо текущего ассистента.",
+                    style=MaterialTheme.typography.bodySmall)
+                OutlinedButton(onClick=wake.onSystemSettings,enabled=wake.enabled,modifier=Modifier.fillMaxWidth()) {
+                    Text(if(wake.systemSelected)"Сменить системного ассистента" else "Назначить Планировыч ассистентом")
+                }
+                Text("Аппаратная кодовая фраза недоступна через публичный SDK Android 12+. Выбор ассистента не добавляет её автоматически. Системный жест зависит от телефона.",
+                    style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+            } else {
+                Text("Русская локальная модель загружается один раз (~45 МБ).",
+                    style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                if(wake.listeningMode=="background") {
+                    OutlinedButton(onClick=wake.onAutoOpen,enabled=wake.enabled,modifier=Modifier.fillMaxWidth()) {
+                        Text(if(wake.autoOpen)"Автооткрытие разрешено · Настройки" else "Разрешить автооткрытие приложения")
+                    }
+                    if(!wake.autoOpen)Text("Без разрешения останется тихое уведомление по кодовой фразе.",
+                        style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            if(wake.systemSelected && wake.listeningMode!="system") {
+                Text("Планировыч всё ещё выбран системным помощником Android. При необходимости верните прежнего ассистента.",
+                    style=MaterialTheme.typography.bodySmall)
+                TextButton(onClick=wake.onSystemSettings){Text("Системные настройки ассистента")}
             }
             Spacer(Modifier.height(8.dp))
         }

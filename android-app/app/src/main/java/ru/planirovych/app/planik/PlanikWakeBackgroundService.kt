@@ -17,8 +17,6 @@ import android.os.IBinder
 import android.os.SystemClock
 import android.os.Handler
 import android.os.Looper
-import android.os.PowerManager
-import android.annotation.SuppressLint
 import android.provider.Settings
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -88,8 +86,8 @@ class PlanikWakeBackgroundService : Service() {
                 ContextCompat.checkSelfPermission(context,Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)return false
             val current=activeService
             val prefs=context.getSharedPreferences("planik_foreground_wake",Context.MODE_PRIVATE)
-            val mode=wakeListeningMode(prefs,id)
-            if(activeAccount==id && current?.listeningMode==mode && current.listener!=null) {
+            if(wakeListeningMode(prefs,id)!=WAKE_BACKGROUND)return false
+            if(activeAccount==id && current?.listener!=null) {
                 current.recoverListening()
                 return true
             }
@@ -109,50 +107,18 @@ class PlanikWakeBackgroundService : Service() {
     private val prefs by lazy { getSharedPreferences("planik_foreground_wake",MODE_PRIVATE) }
     private var listener: ForegroundWakeListener?=null
     private var id: String?=null
-    private var listeningMode=WAKE_BACKGROUND
-    private var cpuLock:PowerManager.WakeLock?=null
     private var lastAlert=0L
-    private var pendingLockedWake:Intent?=null
     private val handler=Handler(Looper.getMainLooper())
-    private val gateObserver: () -> Unit = {
-        listener?.refresh()
-        updateCpuLock()
-    }
+    private val gateObserver: () -> Unit = { listener?.refresh() }
     private val screenReceiver=object:BroadcastReceiver(){
         override fun onReceive(context:Context?,intent:Intent?) {
-            // These broadcasts are hints; always query actual keyguard state.
             if(intent?.action==Intent.ACTION_SCREEN_OFF)listener?.refresh()
             else recoverListening()
-            updateCpuLock()
         }
     }
 
-    @SuppressLint("WakelockTimeout")
-    private fun updateCpuLock() {
-        if(listeningMode==WAKE_ALWAYS && id!=null && !PlanikWakeMicGate.busy && hasPermission(this)) {
-            if(cpuLock==null)cpuLock=getSystemService(PowerManager::class.java)
-                .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,"planirovych:planikAlways").apply { setReferenceCounted(false) }
-            // Only the explicitly selected always-on mode keeps the CPU awake.
-            if(cpuLock?.isHeld==false)cpuLock?.acquire()
-        } else releaseCpuLock()
-    }
-    private fun releaseCpuLock() {
-        cpuLock?.let { if(it.isHeld)it.release() }
-        cpuLock=null
-    }
     private fun recoverListening() {
         listener?.resume()
-        updateCpuLock()
-        val pending=pendingLockedWake ?: return
-        if(!PlanikWakeDispatch.pending(pending)) {
-            pendingLockedWake=null
-            return
-        }
-        if(wakeDeviceUnlocked(this)) {
-            pendingLockedWake=null
-            if(Settings.canDrawOverlays(this))runCatching { startActivity(pending) }
-            // Otherwise the existing notification remains tappable.
-        }
     }
 
     override fun onCreate() {
@@ -182,20 +148,18 @@ class PlanikWakeBackgroundService : Service() {
         }
         val account=intent?.getStringExtra(ACCOUNT)
         if(account==null || !prefs.getBoolean("enabled_"+account,false) ||
-            wakeListeningMode(prefs,account)==WAKE_APP || !supported(this) || !hasPermission(this)) {
+            wakeListeningMode(prefs,account)!=WAKE_BACKGROUND || !supported(this) || !hasPermission(this)) {
             stopSelf()
             return START_NOT_STICKY
         }
         if(Build.VERSION.SDK_INT < Build.VERSION_CODES.S) { stopSelf(); return START_NOT_STICKY }
-        val mode=wakeListeningMode(prefs,account)
         try {
             val stop=PendingIntent.getService(this,0,Intent(this,PlanikWakeBackgroundService::class.java).setAction(STOP),
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
             val notification=Notification.Builder(this,CHANNEL)
                 .setSmallIcon(R.drawable.ic_stat_planirovych)
                 .setContentTitle("Планик слушает кодовую фразу")
-                .setContentText(if(mode==WAKE_ALWAYS)"Постоянное локальное распознавание, включая выключенный экран"
-                    else "Локальное распознавание при разблокированном экране")
+                .setContentText("Локальное распознавание при разблокированном экране")
                 .setVisibility(Notification.VISIBILITY_PRIVATE)
                 .setOngoing(true).setOnlyAlertOnce(true)
                 .addAction(Notification.Action.Builder(android.R.drawable.ic_menu_close_clear_cancel,"Выключить фон",stop).build())
@@ -207,23 +171,19 @@ class PlanikWakeBackgroundService : Service() {
             return START_NOT_STICKY
         }
         listener?.pause()
-        releaseCpuLock()
-        pendingLockedWake=null
         id=account
-        listeningMode=mode
         activeAccount=account
         activeService=this
-        listener=ForegroundWakeListener(this,{ status=it },allowLocked=mode==WAKE_ALWAYS) {
+        listener=ForegroundWakeListener(this,{ status=it }) {
             val mode=prefs.getString("action_"+account,"live") ?: "live"
             val unlocked=wakeDeviceUnlocked(this)
-            if(!unlocked || !PlanikWakeDispatch.dispatch(account,mode)) {
+            if(unlocked && !PlanikWakeDispatch.dispatch(account,mode)) {
                 val now=SystemClock.elapsedRealtime()
                 if(lastAlert==0L || now-lastAlert>15_000L) {
                     lastAlert=now
                     val wakeIntent=PlanikWakeDispatch.intent(this,account,mode)
                     // Explicit user-granted permission permits a background
                     // Activity launch; no synthetic overlay or full-screen alert.
-                    if(!unlocked)pendingLockedWake=wakeIntent
                     val attempted=unlocked && Settings.canDrawOverlays(this) &&
                         runCatching { startActivity(wakeIntent); true }.getOrDefault(false)
                     fun fallback() {
@@ -233,8 +193,7 @@ class PlanikWakeBackgroundService : Service() {
                         val alert=Notification.Builder(this,ALERT)
                             .setSmallIcon(R.drawable.ic_stat_planirovych)
                             .setContentTitle("Планик услышал вас")
-                            .setContentText(if(!unlocked)"Разблокируйте устройство для продолжения"
-                                else if(mode=="voice")"Открыть голосовой ввод" else "Начать живое общение")
+                            .setContentText(if(mode=="voice")"Открыть голосовой ввод" else "Начать живое общение")
                             .setVisibility(Notification.VISIBILITY_PRIVATE)
                             .setContentIntent(pending).setAutoCancel(true).setOnlyAlertOnce(true)
                             .setTimeoutAfter(120_000L).build()
@@ -244,7 +203,6 @@ class PlanikWakeBackgroundService : Service() {
                 }
             }
         }.also { it.resume() }
-        updateCpuLock()
         return START_NOT_STICKY
     }
 
@@ -255,8 +213,6 @@ class PlanikWakeBackgroundService : Service() {
         PlanikWakeMicGate.removeObserver(gateObserver)
         unregisterReceiver(screenReceiver)
         getSystemService(NotificationManager::class.java).cancel(ALERT_ID)
-        releaseCpuLock()
-        pendingLockedWake=null
         if(activeService===this) {
             activeAccount=null
             activeService=null

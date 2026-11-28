@@ -560,7 +560,7 @@ internal fun NativeGeneralAiChatPage(
                         sharedArtwork = true,
                         mode = if(financeVariant)financeMode else nativeChatMascotMode(state.busy,state.streamText.isNotBlank(),state.progressStatus),
                         modifier = Modifier.align(Alignment.BottomEnd).alpha(mascotOpacity)
-                            .padding(end = 13.dp, bottom = (composerHeight - 17.dp).coerceAtLeast(0.dp)),
+                            .padding(end = 0.dp, bottom = (composerHeight - 29.dp).coerceAtLeast(0.dp)),
                         onClick = {
                             planikLauncher.launch(PlanikLiveActivity.intent(
                                 context, projectId = project?.id, chatId = thread.id,
