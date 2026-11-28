@@ -131,7 +131,8 @@ test('System panel has stable insets, gesture expansion, markdown, real progress
 test('System voice result includes inline owner-verified proposal cards',async()=>{
   const [panel,cards]=await Promise.all([read(pkg+'planik/PlanikAssistantPanel.kt'),read(pkg+'planik/PlanikPanelProposalCards.kt')]);
   assert.match(panel,/cards.attach\(content,response\)/);
-  assert.match(panel,/if\(cardCount>0\)settle\(true\)/);
+  assert.match(panel,/panel.doOnPreDraw \{ fitResponse\(content\) \}/);
+  assert.match(panel,/content.addOnLayoutChangeListener/);
   assert.match(cards,/repository.updateTaskAiProposal/);
   assert.match(cards,/repository.editTaskAiProposal/);
   assert.match(cards,/put\("revision",revision\)/);
@@ -169,4 +170,21 @@ test('Independent system and phrase opt-ins, smooth waveform and pause endpointe
   assert.match(panel,/button\("Отправить"\)/);
   assert.match(pause,/speechRun>=240L/);
   assert.match(pause,/hasSpeech && lastSpeech>0L && now-lastSpeech>=1800L/);
+});
+
+test('Sheet drag is surface-wide and response height is bounded by natural content',async()=>{
+  const [panel,home]=await Promise.all([read(pkg+'planik/PlanikAssistantPanel.kt'),read(pkg+'feature/home/HomeScreen.kt')]);
+  assert.match(panel,/override fun dispatchTouchEvent\(event:MotionEvent\)/);
+  assert.match(panel,/super.dispatchTouchEvent\(cancel\)/);
+  assert.match(panel,/scrollTarget\?\.canScrollVertically\(direction\)/);
+  assert.match(panel,/if\(scrollTarget is EditText\)eligible=false/);
+  assert.doesNotMatch(panel,/grip.setOnTouchListener/);
+  assert.match(panel,/screenHeight\(\)\*2\/3/);
+  assert.match(panel,/chrome\+content.measuredHeight\+dp\(4\)/);
+  assert.match(panel,/isFillViewport=false/);
+  assert.match(panel,/responseFooter=footer/);
+  assert.match(home,/PlanikVoiceReleaseIntro/);
+  assert.match(home,/getBoolean\("planik_voice_1_0_26_seen",false\)/);
+  assert.match(home,/putBoolean\("planik_voice_1_0_26_seen",true\)/);
+  assert.match(home,/onSettings=\{dismissPlanikIntro\(\);settings=true\}/);
 });
