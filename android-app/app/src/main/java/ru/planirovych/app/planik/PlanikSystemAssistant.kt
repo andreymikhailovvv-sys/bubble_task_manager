@@ -25,7 +25,7 @@ internal object PlanikSystemAssistant {
         val prefs=context.getSharedPreferences("planik_foreground_wake",Context.MODE_PRIVATE)
         val account=prefs.getString(ACCOUNT_KEY,null) ?: return null
         if(!systemAssistantEnabled(prefs,account))return null
-        val action=prefs.getString("system_action_"+account,"live") ?: "live"
+        val action=systemAssistantAction(prefs,account)
         if(action !in listOf("live","voice"))return null
         return Invocation(account,action)
     }

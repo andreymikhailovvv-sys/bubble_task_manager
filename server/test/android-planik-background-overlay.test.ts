@@ -154,7 +154,11 @@ test('Independent system and phrase opt-ins, smooth waveform and pause endpointe
   assert.match(wake,/putBoolean\("enabled_" \+ accountId, value\)/);
   assert.match(wake,/fun migrateWakeSettings/);
   assert.doesNotMatch(wake,/WAKE_SYSTEM/);
-  assert.match(assistant,/getString\("system_action_"\+account,"live"\)/);
+  assert.match(assistant,/systemAssistantAction\(prefs,account\)/);
+  assert.match(wake,/prefs.getString\("system_action_"\+accountId,"live"\)/);
+  assert.match(wake,/DisposableEffect\(preferences, accountId\) \{[\s\S]*?accountId\?\.let \{ migrateWakeSettings\(preferences,it\) \}/);
+  assert.doesNotMatch(wake,/remember\([^)]*\) \{[^\n]*migrateWakeSettings/);
+  assert.match(wake,/mutableStateOf\(accountId != null && preferences.getBoolean\("enabled_" \+ accountId, false\) &&\s*preferences.getString\("mode_" \+ accountId,null\)!="system"\)/);
   assert.match(home,/Switch\(checked=planikWake.systemEnabled/);
   assert.match(home,/Switch\(checked=planikWake.enabled/);
   assert.match(home,/Text\("Эй, Планик"\)\s+Text\("›"/);

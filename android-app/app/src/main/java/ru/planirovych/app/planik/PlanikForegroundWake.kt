@@ -76,10 +76,16 @@ internal fun migrateWakeSettings(prefs:SharedPreferences, accountId:String) {
         .putBoolean("background_" + accountId,false)
         .putBoolean("enabled_" + accountId,false).apply()
 }
-internal fun systemAssistantEnabled(prefs:SharedPreferences,accountId:String):Boolean {
-    migrateWakeSettings(prefs,accountId)
-    return prefs.getBoolean("system_enabled_"+accountId,false)
-}
+// Read legacy values without mutating preferences during composition.
+internal fun systemAssistantEnabled(prefs:SharedPreferences,accountId:String):Boolean =
+    if(prefs.getString("mode_" + accountId,null)=="system")
+        prefs.getBoolean("enabled_" + accountId,false)
+    else prefs.getBoolean("system_enabled_"+accountId,false)
+
+internal fun systemAssistantAction(prefs:SharedPreferences,accountId:String):String =
+    (if(prefs.getString("mode_" + accountId,null)=="system")
+        prefs.getString("action_"+accountId,"live")
+    else prefs.getString("system_action_"+accountId,"live")) ?: "live"
 
 internal fun wakeListeningMode(prefs:SharedPreferences, accountId:String):String =
     when(val stored=prefs.getString("mode_" + accountId, null)) {
@@ -345,11 +351,13 @@ internal fun rememberPlanikWake(accountId: String?, ready: Boolean): PlanikWakeC
     val context = LocalContext.current
     val owner = LocalLifecycleOwner.current
     val preferences = remember(context) { context.getSharedPreferences("planik_foreground_wake", Context.MODE_PRIVATE) }
-    remember(preferences,accountId) { accountId?.let { migrateWakeSettings(preferences,it) } }
     var systemEnabled by remember(accountId) { mutableStateOf(accountId?.let { systemAssistantEnabled(preferences,it) } ?: false) }
-    var systemAction by remember(accountId) { mutableStateOf(preferences.getString("system_action_"+accountId,"live") ?: "live") }
+    var systemAction by remember(accountId) { mutableStateOf(accountId?.let { systemAssistantAction(preferences,it) } ?: "live") }
     var enabled by remember(accountId) {
-        mutableStateOf(accountId != null && preferences.getBoolean("enabled_" + accountId, false))
+        // Legacy system-only consent must never start local capture, even
+        // for the first composition before the migration effect runs.
+        mutableStateOf(accountId != null && preferences.getBoolean("enabled_" + accountId, false) &&
+            preferences.getString("mode_" + accountId,null)!="system")
     }
     var action by remember(accountId) { mutableStateOf(preferences.getString("action_" + accountId, "live") ?: "live") }
     var listeningMode by remember(accountId) {
@@ -378,6 +386,9 @@ internal fun rememberPlanikWake(accountId: String?, ready: Boolean): PlanikWakeC
         onDispose { owner.lifecycle.removeObserver(observer) }
     }
     DisposableEffect(preferences, accountId) {
+        // Persist the migration only after composition commits, before the
+        // subsequent account/lifecycle effects can start either wake route.
+        accountId?.let { migrateWakeSettings(preferences,it) }
         val observer = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
             if (accountId != null && (key == "background_" + accountId || key == "mode_" + accountId))
                 listeningMode = wakeListeningMode(preferences,accountId)
