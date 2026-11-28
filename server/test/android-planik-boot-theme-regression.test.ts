@@ -91,8 +91,8 @@ test('small Planik matches light/dark website palette with tight tap bounds and 
   assert.match(light, /#b8b3ec/);
   assert.match(lightBlink, /#b8b3ec/);
   assert.match(styles, /body\[data-theme='light'\] \.planik-mascot:not\(\.planik-mascot--economic\) \.planik-body-stop-start \{ stop-color: #b8b3ec/);
-  assert.match(build, /versionCode = 25/);
-  assert.match(build, /versionName = "1\.0\.23"/);
+  assert.match(build, /versionCode = 26/);
+  assert.match(build, /versionName = "1\.0\.24"/);
 });
 
 test('native mascot only hides its offline fallback after real transparent pixel coverage',async()=>{

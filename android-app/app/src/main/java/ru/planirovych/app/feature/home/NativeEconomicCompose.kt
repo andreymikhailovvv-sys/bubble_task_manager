@@ -55,7 +55,7 @@ private val economicTabs = listOf(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean,
-    onQuickVoice:()->Unit={},voiceAwaiting:Boolean=false) {
+    onQuickVoice:()->Unit={},voiceAwaiting:Boolean=false,notificationLoanId:String?=null,notificationRequestId:Int=0) {
     val colors = remember(dark) { ecoColors(dark) }
     val context = LocalContext.current
     val api = remember(context) { NetworkModule.api(context) }
@@ -81,6 +81,15 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
     var revision by remember(userId) { mutableIntStateOf(0) }
     var section by remember(userId) { mutableStateOf("overview") }
     var editor by remember(userId) { mutableStateOf<EcoEditorRequest?>(null) }
+    var consumedLoanNotification by remember(userId){mutableIntStateOf(0)}
+    LaunchedEffect(active,snapshot,notificationLoanId,notificationRequestId){
+        val target=notificationLoanId ?: return@LaunchedEffect
+        if(!active || notificationRequestId==consumedLoanNotification)return@LaunchedEffect
+        val record=snapshot?.ecoItems("loans")?.firstOrNull{it.ecoText("id")==target}?:return@LaunchedEffect
+        consumedLoanNotification=notificationRequestId
+        section="debts"
+        editor=EcoEditorRequest("loans",record)
+    }
     var economicMenuOpen by remember { mutableStateOf(false) }
     val economicScrimAlpha by animateFloatAsState(
         targetValue=if(economicMenuOpen)if(dark).29f else .21f else 0f,

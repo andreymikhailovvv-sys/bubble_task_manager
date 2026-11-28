@@ -981,6 +981,8 @@ model SystemNotification {
   subscriptionEmailSentAt DateTime?
   subscriptionDeliveryClaimedAt DateTime?
   subscriptionDeliveryNextAt DateTime?
+  androidActionRef String?
+  androidActionTaken String?
 
   @@index([userId, createdAt])
   @@index([userId, readAt])

@@ -1901,6 +1901,13 @@ export const aiAssistantService = {
         ...(input.telegramReadOwnerId ? { telegramReadOwnerId: input.telegramReadOwnerId } : {})
       }
     });
+    if (input.taskProposalId) {
+      await prisma.systemNotification.upsert({
+        where: { eventKey: 'android-ai-proposal:' + input.taskProposalId }, update: {},
+        create: { userId: input.userId, taskId: input.taskId, eventKey: 'android-ai-proposal:' + input.taskProposalId,
+          androidActionRef: input.taskProposalId, content: 'Планик подготовил изменения в задаче. Откройте ответ для подробностей.' }
+      }).catch(() => {});
+    }
     // Schedule only after the actual assistant reply is persisted. The model
     // has already had the chance to install its own preferred follow-up.
     // Monitoring fallback failures must not turn a saved/paid AI reply into an
@@ -1994,7 +2001,7 @@ export const aiAssistantService = {
   appendGeneralDialogAssistantMessage: async (input: { userId: string; content: string; creditsSpentMilli: number; taskProposalId?: string | null; economicProposals?: ReturnType<typeof economicProposalView>[]; generatedDocument?: GeneratedDocumentMeta | null; webSearchUsed?: boolean; webSources?: TaskWebSource[]; webCitations?: TaskWebCitation[]; telegramSendDraft?: TelegramInlineSendDraft | null; telegramReadDraft?: TelegramReadDraft | null; mailSendDraft?: MailSendDraft | null }) => {
     const content = input.content.trim();
     if (!content) return;
-    return prisma.generalAiMessage.create({ data: { userId: input.userId, role: 'assistant', content, creditsSpentMilli: input.creditsSpentMilli, aiTaskProposalId: input.taskProposalId ?? null,
+    const stored = await prisma.generalAiMessage.create({ data: { userId: input.userId, role: 'assistant', content, creditsSpentMilli: input.creditsSpentMilli, aiTaskProposalId: input.taskProposalId ?? null,
       ...(input.economicProposals?.length ? {
         economicProposalIds: input.economicProposals.map(item=>item.id)
       } : {}),
@@ -2003,6 +2010,18 @@ export const aiAssistantService = {
         mimeType: input.generatedDocument.mimeType, size: input.generatedDocument.size
       } } : {}),
       webSearchUsed: input.webSearchUsed ?? false, ...(input.webSearchUsed ? { webSources: input.webSources ?? [], webCitations: input.webCitations ?? [] } : {}), ...(input.telegramSendDraft ? { telegramSendDraft: { ...input.telegramSendDraft } } : {}), ...(input.telegramReadDraft ? { telegramReadDraft: { ...input.telegramReadDraft } } : {}), ...(input.mailSendDraft ? { mailSendDraft: { ...input.mailSendDraft } } : {}) } });
+    if (input.taskProposalId) {
+      await (async () => {
+        const proposal = await prisma.aiTaskProposal.findFirst({ where: { id: input.taskProposalId!, userId: input.userId }, select: { source: true } });
+        if (!proposal || proposal.source === 'daily_checkup') return;
+        await prisma.systemNotification.upsert({
+          where: { eventKey: 'android-ai-proposal:' + input.taskProposalId }, update: {},
+          create: { userId: input.userId, eventKey: 'android-ai-proposal:' + input.taskProposalId,
+            androidActionRef: input.taskProposalId, content: 'Планик подготовил предложение изменений. Откройте ответ для подробностей.' }
+        });
+      })().catch(() => {});
+    }
+    return stored;
   },
 
   askTaskAssistant: async (input: AskTaskAssistantInput) => {

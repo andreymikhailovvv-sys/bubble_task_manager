@@ -49,6 +49,11 @@ import java.io.File
 class MainActivity:ComponentActivity(){
     companion object{
         const val EXTRA_NOTIFICATION_TASK_ID="planirovych_notification_task"
+        const val EXTRA_NOTIFICATION_ACCOUNT="planirovych_notification_account"
+        const val EXTRA_NOTIFICATION_HABIT_ID="planirovych_notification_habit"
+        const val EXTRA_NOTIFICATION_LOAN_ID="planirovych_notification_loan"
+        const val EXTRA_NOTIFICATION_TASK_CHAT="planirovych_notification_task_chat"
+        const val EXTRA_NOTIFICATION_CHAT_ID="planirovych_notification_chat"
         const val EXTRA_NOTIFICATION_ID="planirovych_notification_id"
         const val EXTRA_OPEN_GENERAL_AI="planirovych_open_general_ai"
         const val EXTRA_QUICK_AI_MODE="planirovych_widget_quick_ai_mode"
@@ -58,6 +63,12 @@ class MainActivity:ComponentActivity(){
         const val EXTRA_CHECK_ANDROID_UPDATE="planirovych_check_android_update"
     }
     private var notificationTaskId by mutableStateOf<String?>(null)
+    private var notificationHabitId by mutableStateOf<String?>(null)
+    private var notificationChatId by mutableStateOf<String?>(null)
+    private var notificationTaskChat by mutableStateOf(false)
+    private var notificationLoanId by mutableStateOf<String?>(null)
+    private var notificationAccount by mutableStateOf<String?>(null)
+    private var notificationRequestId by mutableIntStateOf(0)
     private var openGeneralAi by mutableStateOf(false)
     private var quickAiMode by mutableStateOf<String?>(null)
     private var quickAiRequestId by mutableIntStateOf(0)
@@ -81,6 +92,12 @@ class MainActivity:ComponentActivity(){
 
     private fun applyNavigation(intent:Intent?){
         notificationTaskId=intent?.getStringExtra(EXTRA_NOTIFICATION_TASK_ID)
+        notificationHabitId=intent?.getStringExtra(EXTRA_NOTIFICATION_HABIT_ID)
+        notificationChatId=intent?.getStringExtra(EXTRA_NOTIFICATION_CHAT_ID)
+        notificationTaskChat=intent?.getBooleanExtra(EXTRA_NOTIFICATION_TASK_CHAT,false)==true
+        notificationLoanId=intent?.getStringExtra(EXTRA_NOTIFICATION_LOAN_ID)
+        notificationAccount=intent?.getStringExtra(EXTRA_NOTIFICATION_ACCOUNT)
+        if(notificationAccount!=null)notificationRequestId++
         val widgetMode=if(intent?.action==ACTION_WIDGET_QUICK_AI)
             intent.getStringExtra(EXTRA_QUICK_AI_MODE) else null
         quickAiMode=widgetMode?.takeIf{it==QUICK_AI_TEXT||it==QUICK_AI_VOICE}
@@ -189,6 +206,8 @@ class MainActivity:ComponentActivity(){
                         HomeScreen(vm,dark,notificationTaskId,openGeneralAi,
                             quickAiMode,quickAiRequestId,
                             onQuickAiHandled=::consumeQuickAiCommand,
+                            notificationHabitId=notificationHabitId,notificationChatId=notificationChatId,
+                            notificationAccount=notificationAccount,notificationRequestId=notificationRequestId,notificationTaskChat=notificationTaskChat,notificationLoanId=notificationLoanId,
                             updateAvailable=knownUpdate!=null,
                             onCheckUpdates={lifecycleScope.launch { checkAndroidUpdateNow(manual=true) }})
                     }

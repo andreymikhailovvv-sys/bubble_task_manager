@@ -18,9 +18,9 @@ import androidx.compose.ui.unit.dp
  */
 @Composable
 fun NativeEconomicPage(userId: String?, dark: Boolean, active: Boolean = true,
-    onQuickVoice:()->Unit={},voiceAwaiting:Boolean=false) {
+    onQuickVoice:()->Unit={},voiceAwaiting:Boolean=false,notificationLoanId:String?=null,notificationRequestId:Int=0) {
     EconomicComposePage(userId=userId, dark=dark, active=active,
-        onQuickVoice=onQuickVoice,voiceAwaiting=voiceAwaiting)
+        onQuickVoice=onQuickVoice,voiceAwaiting=voiceAwaiting,notificationLoanId=notificationLoanId,notificationRequestId=notificationRequestId)
 }
 
 @Composable

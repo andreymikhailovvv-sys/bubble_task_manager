@@ -316,7 +316,7 @@ export const habitService = {
     return serializeHabit(habit);
   },
 
-  complete: async (id: string, userId: string, input: CompleteHabitInput) => {
+  complete: async (id: string, userId: string, input: CompleteHabitInput, notificationCompletionId?: string) => {
     const habit = await prisma.habit.findFirstOrThrow({ where: { id, userId, isArchived: false, isAutoCompleted: false } });
     const dateKey = normalizeDateKey(input.dateKey);
     const completed = await prisma.habitCompletion.aggregate({
@@ -329,6 +329,7 @@ export const habitService = {
 
     await prisma.habitCompletion.create({
       data: {
+        ...(notificationCompletionId ? { id: notificationCompletionId } : {}),
         habit: { connect: { id } },
         user: { connect: { id: userId } },
         amount: Math.min(toCompletionAmount(input.amount ?? 1), remainingAmount),

@@ -55,7 +55,7 @@ export async function dispatchEconomicOperationRepeats(now = new Date()): Promis
           const proposals = await saveEconomicProposals(tx, op.userId, msg.id, [{ action, before: null }]);
           await tx.generalAiMessage.create({ data: { userId: op.userId, role: 'assistant', content,
             creditsSpentMilli: 0, economicProposalIds: proposals.map(item => item.id) } });
-          await tx.systemNotification.create({ data: { userId: op.userId, eventKey, content: content + '. ' + amount } });
+          await tx.systemNotification.create({ data: { userId: op.userId, eventKey, androidActionRef: proposals[0]?.id, content: content + '. ' + amount } });
           return true;
         });
         if (!committed) continue;
